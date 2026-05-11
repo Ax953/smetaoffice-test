@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: smetaoffice-test
+    env: node
+    plan: starter
+    buildCommand: npm ci && npm run build
+    startCommand: npm start
+    autoDeploy: false
+    envVars:
+      - key: NODE_ENV
+        value: production
