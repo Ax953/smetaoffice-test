@@ -3,22 +3,56 @@ import { createRoot } from "react-dom/client";
 import "./styles.css";
 
 const roles = [
-  { id: "owner", name: "Владелец", hint: "видит всё" },
-  { id: "director", name: "Руководитель направления", hint: "свои регионы и направления" },
-  { id: "pm", name: "Руководитель проекта", hint: "свои проекты" },
-  { id: "executor", name: "Проектировщик", hint: "свои задачи" },
+  { id: "owner", name: "Владелец", hint: "видит весь холдинг" },
+  { id: "admin", name: "Администратор", hint: "пользователи, роли, справочники" },
+  { id: "deputy", name: "Заместитель", hint: "контроль направлений и регионов" },
+  { id: "director", name: "Руководитель направления", hint: "своё направление и свои регионы" },
+  { id: "regional_manager", name: "Региональный менеджер", hint: "свой регион" },
+  { id: "pm", name: "Руководитель проекта", hint: "свои проекты и исполнители проекта" },
+  { id: "project_manager", name: "Менеджер проекта", hint: "ведение операционных задач" },
+  { id: "sales_manager", name: "Менеджер продаж", hint: "лиды, клиенты, сделки" },
+  { id: "head_of_sales", name: "Руководитель отдела продаж", hint: "продажи и показатели отдела" },
+  { id: "accountant", name: "Бухгалтер", hint: "счета, акты, выплаты" },
+  { id: "finance", name: "Финансы", hint: "деньги, оплаты, задолженность" },
+  { id: "executor", name: "Исполнитель", hint: "только свои этапы и задачи" },
   { id: "partner", name: "Партнёр", hint: "только назначенные работы" },
-  { id: "finance", name: "Финансы", hint: "оплаты, акты, счета" },
 ];
+
+const rolePermissions = {
+  owner: ["viewAll", "viewClient", "viewFinance", "viewProductionBudget", "manageUsers", "manageProjects", "manageExecutors", "assignExecutors", "viewExecutorContacts", "editFinance", "viewOwnerDashboard"],
+  admin: ["viewAll", "viewClient", "manageUsers", "manageProjects", "manageExecutors", "assignExecutors", "viewExecutorContacts", "viewOwnerDashboard"],
+  deputy: ["viewAll", "viewClient", "viewFinance", "viewProductionBudget", "manageProjects", "manageExecutors", "assignExecutors", "viewExecutorContacts", "viewOwnerDashboard"],
+  director: ["viewClient", "viewFinance", "viewProductionBudget", "manageProjects", "manageExecutors", "assignExecutors", "viewExecutorContacts", "viewOwnerDashboard"],
+  regional_manager: ["viewClient", "viewProductionBudget", "manageProjects", "manageExecutors", "assignExecutors", "viewExecutorContacts", "viewOwnerDashboard"],
+  pm: ["viewClient", "viewProductionBudget", "manageProjects", "manageExecutors", "assignExecutors", "viewExecutorContacts"],
+  project_manager: ["viewClient", "manageProjects", "assignExecutors"],
+  sales_manager: ["viewClient", "manageProjects"],
+  head_of_sales: ["viewClient", "manageProjects", "viewOwnerDashboard"],
+  accountant: ["viewFinance", "editFinance"],
+  finance: ["viewFinance", "editFinance"],
+  executor: [],
+  partner: [],
+};
+
+const roleCan = (role, permission) => role === "owner" || (rolePermissions[role] || []).includes(permission);
+const userCan = (user, permission) => roleCan(user?.role, permission);
 
 const API_BASE = import.meta.env.VITE_API_BASE || (window.location.port === "5173" ? "http://127.0.0.1:8787/api" : "/api");
 
 const demoUsers = [
-  { id: "USR-001", login: "owner", password: "owner", role: "owner", name: "Ахмед", status: "active", region: "Все регионы", regions: ["Все регионы"], position: "Основатель / владелец" },
-  { id: "USR-002", login: "director", password: "director", role: "director", name: "Руководитель направления", status: "active", region: "ЧР", regions: ["ЧР", "ДНР", "ЛНР"], position: "Руководитель направления" },
-  { id: "USR-003", login: "pm", password: "pm", role: "pm", name: "Руководитель проекта", status: "active", region: "ДНР", regions: ["ДНР"], position: "Руководитель проекта" },
-  { id: "USR-004", login: "executor", password: "executor", role: "executor", name: "Исполнитель", status: "active", region: "ЧР", regions: ["ЧР"], position: "Исполнитель / проектировщик" },
-  { id: "USR-005", login: "finance", password: "finance", role: "finance", name: "Финансы", status: "active", region: "Все регионы", regions: ["Все регионы"], position: "Финансовый контроль" },
+  { id: "USR-001", login: "owner", password: "owner", role: "owner", name: "Владелец", status: "active", region: "Все регионы", regions: ["Все регионы"], direction: "Все направления", position: "Основатель / владелец" },
+  { id: "USR-002", login: "admin", password: "admin", role: "admin", name: "Администратор системы", status: "active", region: "Все регионы", regions: ["Все регионы"], direction: "Все направления", position: "Администратор SmetaOffice" },
+  { id: "USR-003", login: "deputy", password: "deputy", role: "deputy", name: "Заместитель", status: "active", region: "Все регионы", regions: ["Все регионы"], direction: "Все направления", position: "Заместитель операционного контура" },
+  { id: "USR-004", login: "director", password: "director", role: "director", name: "Руководитель направления", status: "active", region: "ЧР", regions: ["ЧР", "ДНР", "ЛНР"], direction: "Проектный институт", position: "Руководитель направления" },
+  { id: "USR-005", login: "regional", password: "regional", role: "regional_manager", name: "Региональный менеджер", status: "active", region: "Ростов", regions: ["Ростов"], direction: "Все направления", position: "Управляющий региона" },
+  { id: "USR-006", login: "pm", password: "pm", role: "pm", name: "Руководитель проекта", status: "active", region: "ДНР", regions: ["ДНР"], direction: "Проектный институт", position: "Руководитель проекта" },
+  { id: "USR-007", login: "project", password: "project", role: "project_manager", name: "Менеджер проекта", status: "active", region: "ЧР", regions: ["ЧР"], direction: "Дизайн / интерьер", position: "Менеджер проекта" },
+  { id: "USR-008", login: "sales", password: "sales", role: "sales_manager", name: "Менеджер продаж", status: "active", region: "ЧР", regions: ["ЧР"], direction: "Единый центр продаж", position: "Менеджер продаж" },
+  { id: "USR-009", login: "headsales", password: "headsales", role: "head_of_sales", name: "Руководитель отдела продаж", status: "active", region: "Все регионы", regions: ["Все регионы"], direction: "Единый центр продаж", position: "Руководитель отдела продаж" },
+  { id: "USR-010", login: "accountant", password: "accountant", role: "accountant", name: "Бухгалтер", status: "active", region: "Все регионы", regions: ["Все регионы"], direction: "Финансы", position: "Бухгалтер" },
+  { id: "USR-011", login: "finance", password: "finance", role: "finance", name: "Финансист", status: "active", region: "Все регионы", regions: ["Все регионы"], direction: "Финансы", position: "Финансовый контроль" },
+  { id: "USR-012", login: "executor", password: "executor", role: "executor", name: "Исполнитель", status: "active", region: "ЧР", regions: ["ЧР"], direction: "Дизайн / интерьер", position: "Исполнитель / визуализатор", executorId: "EX-063" },
+  { id: "USR-013", login: "partner", password: "partner", role: "partner", name: "Партнёр", status: "active", region: "Ростов", regions: ["Ростов"], direction: "Ремонт / строительство", position: "Партнёр", executorId: "EX-017" },
 ];
 
 const regionOptions = ["Все регионы", "ЧР", "ДНР", "ЛНР", "Ростов", "Москва", "Федеральные проекты"];
@@ -738,6 +772,25 @@ const bitrixMappings = [
   { smeta: "Статус клиенту", bitrix: "Поле сделки + событие", direction: "SmetaOffice → SmetaGo", status: "обязательно" },
 ];
 
+const projectStageTemplates = {
+  "Дизайн-проект": ["Заявка / бриф", "Замеры", "Техническое задание", "Планировочное решение", "Концепция / стиль", "Визуализация", "Рабочая документация", "Ведомости / комплектация", "Проверка руководителем проекта", "Выдача клиенту", "Закрытие проекта"],
+  "Архитектурный проект": ["Заявка", "Исходные данные", "Техническое задание", "Эскиз / концепция", "Архитектурные решения", "Фасады", "АР", "КР", "Инженерные разделы", "Комплектация альбома", "Выдача клиенту", "Закрытие проекта"],
+  "Проектная документация по 87 постановлению": ["Заявка", "Исходные данные", "Обследование", "Изыскания", "Техническое заключение", "Дефектный акт", "ПЗ", "АР", "КР", "ОВ", "ВК", "ЭОМ", "СС", "ПОС", "ОДИ / МОДИ", "Сметная документация", "Внутренняя проверка", "Выдача заказчику", "Сопровождение экспертизы", "Закрытие"],
+  "Обследование / ТЗК / дефектный акт": ["Заявка", "Выезд / обследование", "Фотофиксация", "Обмеры", "Техническое заключение", "Дефектный акт", "Первичная смета", "Передача", "Архив документов"],
+  "Ремонт / строительство": ["Заявка", "Смета / договор", "График", "Аванс", "Черновые работы", "Сети", "Отделочные работы", "Фотоотчёт", "Приёмка", "Исправления", "Закрытие этапа", "Акт", "Закрытие"],
+  "Недвижимость": ["Заявка", "Квалификация", "Подбор объектов", "Показы", "Переговоры", "Проверка документов", "Сделка", "Закрытие"],
+  "Комплектация": ["Заявка", "Исходные данные", "Подбор", "Счета поставщиков", "Согласование заказчика", "Заказ", "Доставка", "Закрытие поставки"],
+};
+
+function makeTemplateSections(projectType) {
+  const template = projectStageTemplates[projectType] || projectStageTemplates["Дизайн-проект"];
+  return template.map((name, index) => ({
+    name, executor: "не назначен", executorId: "", due: "не указан", progress: index === 0 ? 5 : 0,
+    status: index === 0 ? "Новая" : "Ожидает", clientBudget: 0, executorCost: 0, paid: 0, balance: 0,
+    financeStatus: "не рассчитан", yandexLink: "", documents: [], comments: [],
+  }));
+}
+
 const integrationEvents = [
   { time: "10:05", source: "Bitrix24", text: "Новая сделка SG-219 создана как проект в SmetaOffice.", tone: "green" },
   { time: "10:12", source: "SmetaOffice", text: "Задача визуализатору отправлена в Bitrix24 как task.item.add.", tone: "blue" },
@@ -843,6 +896,20 @@ function canAccessRegion(user, project) {
   return userRegions.includes("Все регионы") || userRegions.includes(project.region || project.city);
 }
 
+function canAccessProject(user, project, viewRole = user?.role) {
+  const role = viewRole || user?.role;
+  if (!project || role === "owner") return true;
+  if (roleCan(role, "viewAll")) return true;
+  if (Array.isArray(project.visibleFor) && project.visibleFor.includes(role)) return true;
+  if (role === "executor" || role === "partner") {
+    const executorId = user?.executorId;
+    if (!executorId) return false;
+    const assignedTasks = [...(project.tasks || []), ...(project.sections || [])];
+    return assignedTasks.some((task) => task.executorId === executorId || task.assigneeId === executorId);
+  }
+  return canAccessRegion(user, project);
+}
+
 function cn(...classes) {
   return classes.filter(Boolean).join(" ");
 }
@@ -928,9 +995,12 @@ function projectEconomy(project) {
   const contractAmount = Number(project.contractAmount) || clientBudget || 0;
   const paidByClient = Number(project.paidByClient) || 0;
   const directCosts = Number(project.directCosts) || 0;
+  const plannedExpenses = Number(project.plannedExpenses) || 0;
+  const factualExpenses = Number(project.factualExpenses) || 0;
+  const partnerPayouts = Number(project.partnerPayouts) || 0;
   const productionAllocationPercent = Number(project.productionAllocationPercent) || (Number(project.productionBudget) ? Math.round((Number(project.productionBudget) / Math.max(contractAmount, 1)) * 100) : 35);
   const allocatedProductionBudget = Number(project.productionBudget) || Math.round(contractAmount * (productionAllocationPercent / 100));
-  const realizationCost = executorCost + directCosts;
+  const realizationCost = executorCost + directCosts + factualExpenses + partnerPayouts;
   const pmBudgetLeft = allocatedProductionBudget - realizationCost;
   const companyPlannedGross = contractAmount - allocatedProductionBudget;
   const grossProfit = paidByClient - realizationCost;
@@ -951,6 +1021,9 @@ function projectEconomy(project) {
     contractAmount,
     paidByClient,
     directCosts,
+    plannedExpenses,
+    factualExpenses,
+    partnerPayouts,
     productionAllocationPercent,
     allocatedProductionBudget,
     realizationCost,
@@ -1422,9 +1495,9 @@ function ClientApprovalsCard({ project }) {
 }
 
 function ProjectDetails({ project, role, onTaskStatusChange, onProjectMessage, onAddClientParticipant, session }) {
-  const canSeeMoney = ["owner", "finance"].includes(role);
-  const canSeeProductionBudget = ["owner", "finance", "director", "pm"].includes(role);
-  const canSeeClient = ["owner", "director", "pm", "finance"].includes(role);
+  const canSeeMoney = roleCan(role, "viewFinance");
+  const canSeeProductionBudget = roleCan(role, "viewProductionBudget") || canSeeMoney;
+  const canSeeClient = roleCan(role, "viewClient") || roleCan(role, "manageProjects") || canSeeMoney;
   const economy = projectEconomy(project);
 
   return (
@@ -1833,7 +1906,8 @@ function ExecutorsModule({ role, executors, setExecutors, allTasks = [] }) {
     telegram: "",
     note: "",
   });
-  const canSeeContacts = role === "owner";
+  const canSeeContacts = roleCan(role, "viewExecutorContacts");
+  const canManageExecutors = roleCan(role, "manageExecutors");
   const liveExecutorStats = useMemo(() => {
     const verified = executors.filter((executor) => ["Проверенный", "Сильный", "Эксперт"].includes(executor.status)).length;
     const needsCheck = executors.filter((executor) => ["Новый контакт", "На проверке"].includes(executor.status)).length;
@@ -1862,6 +1936,10 @@ function ExecutorsModule({ role, executors, setExecutors, allTasks = [] }) {
   const selectedExecutorTasks = selectedExecutor ? allTasks.filter((task) => task.executorId === selectedExecutor.id) : [];
 
   function addExecutor() {
+    if (!canManageExecutors) {
+      showAction("Добавлять исполнителей могут владелец, администратор, заместитель, руководитель направления, региональный менеджер или РП");
+      return;
+    }
     const name = form.name.trim();
     if (!name) return;
     const created = {
@@ -1874,6 +1952,11 @@ function ExecutorsModule({ role, executors, setExecutors, allTasks = [] }) {
       status: form.status,
       rating: 50,
       workload: 0,
+      accrued: 0,
+      paid: 0,
+      payable: 0,
+      overdue: 0,
+      activeTasks: 0,
       onTime: 0,
       firstAccept: 0,
       price: "не указан",
@@ -1899,6 +1982,11 @@ function ExecutorsModule({ role, executors, setExecutors, allTasks = [] }) {
       telegram: "",
       note: "",
     });
+  }
+
+  function updateExecutor(executorId, patch) {
+    if (!canManageExecutors) return;
+    setExecutors((items) => items.map((item) => (item.id === executorId ? { ...item, ...patch } : item)));
   }
 
   function addChatMessage(executorId, text) {
@@ -3141,7 +3229,7 @@ function PartnersModule() {
 }
 
 function AdminModule({ users, setUsers, session }) {
-  if (session.role !== "owner") {
+  if (!userCan(session, "manageUsers")) {
     return (
       <>
         <SectionIntro section="admin" />
@@ -3228,7 +3316,7 @@ function AdminModule({ users, setUsers, session }) {
 }
 
 function FinanceModule({ projectItems, role }) {
-  const canSeeFinance = ["owner", "finance"].includes(role);
+  const canSeeFinance = roleCan(role, "viewFinance");
   const summary = financeSummary(projectItems);
 
   if (!canSeeFinance) {
@@ -3350,7 +3438,7 @@ function AnalyticsModule({ projectItems, allTasks, role }) {
   const reviewTasks = allTasks.filter((task) => task.status === "На проверке").length;
   const overdueTasks = allTasks.filter((task) => task.status === "Просрочено").length;
   const summary = financeSummary(projectItems);
-  const canSeeFinance = ["owner", "finance"].includes(role);
+  const canSeeFinance = roleCan(role, "viewFinance");
 
   return (
     <>
@@ -3782,7 +3870,7 @@ function SmetaOfficePrototype() {
     const normalizedQuery = query.trim().toLowerCase();
 
     return projectItems.filter((project) => {
-      const hasAccess = role === "owner" || project.visibleFor.includes(role);
+      const hasAccess = canAccessProject(session, project, role);
       const hasRegionAccess = canAccessRegion(session, project);
       const searchableText = `${project.title} ${project.client} ${project.city} ${project.direction}`.toLowerCase();
       const matchesQuery = normalizedQuery === "" || searchableText.includes(normalizedQuery);
@@ -3797,7 +3885,7 @@ function SmetaOfficePrototype() {
   function chooseFirstAvailable(nextRole = role, nextDirection = direction, nextQuery = query) {
     const normalizedQuery = nextQuery.trim().toLowerCase();
     const firstAvailableProject = projectItems.find((project) => {
-      const hasAccess = nextRole === "owner" || project.visibleFor.includes(nextRole);
+      const hasAccess = canAccessProject(session, project, nextRole);
       const hasRegionAccess = canAccessRegion(session, project);
       const searchableText = `${project.title} ${project.client} ${project.city} ${project.direction}`.toLowerCase();
       const matchesQuery = normalizedQuery === "" || searchableText.includes(normalizedQuery);
@@ -3854,14 +3942,20 @@ function SmetaOfficePrototype() {
         source: "SmetaOffice",
       },
       yandexFolder: projectForm.yandexFolder.trim() || "не привязан",
-      visibleFor: ["owner", "director", "pm", "finance"],
+      visibleFor: ["owner", "admin", "deputy", "director", "regional_manager", "pm", "project_manager", "finance", "accountant"],
       clientStatus: "Заявка принята. Команда уточняет детали проекта.",
       contractAmount: 0,
       paidByClient: 0,
       productionBudget: 0,
+      plannedExpenses: 0,
+      factualExpenses: 0,
+      partnerPayouts: 0,
+      operatingCosts: 0,
+      payrollCosts: 0,
+      paymentStatus: "не оплачен",
       directCosts: 0,
       tasks: [],
-      sections: [],
+      sections: makeTemplateSections(projectForm.projectType),
       clientParticipants: [
         {
           id: `client-${Date.now()}`,
@@ -3889,6 +3983,14 @@ function SmetaOfficePrototype() {
       status: taskForm.status,
       due: taskForm.due.trim() || "не указан",
       yandexLink: taskForm.yandexLink.trim(),
+      clientBudget: 0,
+      executorCost: 0,
+      paid: 0,
+      balance: 0,
+      progress: 0,
+      financeStatus: "не рассчитан",
+      comments: [],
+      documents: taskForm.yandexLink.trim() ? [taskForm.yandexLink.trim()] : [],
     };
     setProjectItems((items) =>
       items.map((project) =>
@@ -3987,7 +4089,7 @@ function SmetaOfficePrototype() {
         </div>
 
         <nav>
-          {menuItems.filter((item) => item.id !== "admin" || session.role === "owner").map((item, index) => (
+          {menuItems.filter((item) => item.id !== "admin" || userCan(session, "manageUsers")).map((item, index) => (
             <button type="button" key={item.id} onClick={() => setActiveSection(item.id)} className={activeSection === item.id ? "current" : ""}>
               <span>{index + 1}</span>
               {item.label}
