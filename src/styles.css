@@ -181,6 +181,25 @@ input.invalid, select.invalid {
 .office-header p { margin: 0 0 6px; color: #64748b; font-size: 14px; }
 .office-header h1 { margin: 0; font-size: clamp(26px, 3vw, 36px); letter-spacing: -.04em; }
 .header-actions { display: flex; align-items: center; gap: 12px; }
+.moscow-clock {
+  display: grid;
+  gap: 5px;
+  min-width: 220px;
+  min-height: 54px;
+  border: 1px solid #dbe5ef;
+  border-radius: 18px;
+  background: #f8fafc;
+  padding: 10px 14px;
+}
+.moscow-clock span {
+  color: #64748b;
+  font-size: 12px;
+}
+.moscow-clock b {
+  color: #0f172a;
+  font-size: 14px;
+  line-height: 1.1;
+}
 .header-actions label {
   display: grid;
   gap: 5px;
@@ -1167,6 +1186,12 @@ h3 { margin: 0; }
   display: grid;
   gap: 12px;
 }
+.section-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: flex-end;
+}
 .stage-editor-head {
   display: grid;
   grid-template-columns: minmax(170px, 1.3fr) minmax(180px, 1.4fr) 120px 130px 80px 140px 140px 130px 100px;
@@ -1196,6 +1221,11 @@ h3 { margin: 0; }
   cursor: not-allowed;
 }
 .stage-editor-wide { grid-column: span 4; }
+.stage-note {
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 900;
+}
 .stage-link,
 .inline-link {
   color: #1d4ed8;
@@ -2287,7 +2317,7 @@ h3 { margin: 0; }
 @media (max-width: 680px) {
   .office-content, .office-header { padding-left: 16px; padding-right: 16px; }
   .header-actions, .filters, .module-head { flex-direction: column; align-items: stretch; }
-  .header-actions label, .filters input, .filters select { width: 100%; min-width: 0; }
+  .header-actions label, .moscow-clock, .filters input, .filters select { width: 100%; min-width: 0; }
   .stats-grid, .projects-list, .drill-card-grid, .card-money-row, .drill-metrics, .info-grid, .bottom-panels, .pipeline, .summary-grid, .executor-groups, .executor-list, .executor-form, .executor-two-cols, .chat-input, .project-chat-input, .mvp-days, .integration-form, .quick-form, .task-create-form, .economy-summary, .production-budget-card, .login-card, .finance-grid, .finance-kpi-list, .org-detail-grid, .mini-kpi-grid, .plan-grid, .focus-grid, .risk-project-strip, .task-command-bar, .task-kanban, .executor-process-grid, .task-inspector-actions, .client-participant-form, .sales-grid, .sales-board, .stage-editor-row, .stage-editor-head { grid-template-columns: 1fr; }
   .wizard-header, .create-project-summary { flex-direction: column; align-items: stretch; }
   .stage-editor-wide { grid-column: auto; }

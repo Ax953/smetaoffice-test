@@ -1137,9 +1137,9 @@ const projectStageTemplates = {
   "Сметная документация": ["Исходные данные", "Ведомости объёмов", "Локальные сметы", "Сводный сметный расчёт", "Проверка", "Выдача", "Корректировка", "Закрытие"],
   "Обследование / техническое заключение": ["Заявка", "Исходные данные", "Выезд / обследование", "Фотофиксация", "Обмеры", "Техническое заключение", "Дефектный акт", "Первичная смета", "Передача", "Закрытие"],
   "Дизайн интерьера": [
-    { name: "Заявка / бриф", due: "готово до старта", progress: 100, status: "Принято" },
-    { name: "Замеры", due: "готово до старта", progress: 100, status: "Принято" },
-    { name: "Техническое задание", due: "готово до старта", progress: 100, status: "Принято" },
+    { name: "Заявка / бриф", due: "готово до старта", progress: 100, status: "Принято", note: "Преддоговорный этап. Отдельно исполнителю не оплачивается." },
+    { name: "Замеры", due: "готово до старта", progress: 100, status: "Принято", note: "Преддоговорный этап. Отдельно исполнителю не оплачивается." },
+    { name: "Техническое задание", due: "готово до старта", progress: 100, status: "Принято", note: "Преддоговорный этап. Отдельно исполнителю не оплачивается." },
     { name: "Планировочное решение", due: "3 рабочих дня" },
     { name: "Меблировка / расстановка", due: "2-3 рабочих дня" },
     { name: "Концепция", due: "3 рабочих дня" },
@@ -1151,9 +1151,9 @@ const projectStageTemplates = {
     { name: "Закрытие", due: "1 рабочий день" },
   ],
   "Архитектурный проект частного дома": [
-    { name: "Заявка / бриф", due: "готово до старта", progress: 100, status: "Принято" },
-    { name: "Замеры / исходные данные", due: "готово до старта", progress: 100, status: "Принято" },
-    { name: "Техническое задание", due: "готово до старта", progress: 100, status: "Принято" },
+    { name: "Заявка / бриф", due: "готово до старта", progress: 100, status: "Принято", note: "Преддоговорный этап. Отдельно исполнителю не оплачивается." },
+    { name: "Замеры / исходные данные", due: "готово до старта", progress: 100, status: "Принято", note: "Преддоговорный этап. Отдельно исполнителю не оплачивается." },
+    { name: "Техническое задание", due: "готово до старта", progress: 100, status: "Принято", note: "Преддоговорный этап. Отдельно исполнителю не оплачивается." },
     { name: "Планировочные решения", due: "3 рабочих дня" },
     { name: "Эскиз / концепция", due: "3 рабочих дня" },
     { name: "Фасады", due: "3 рабочих дня" },
@@ -1534,6 +1534,18 @@ function showAction(message) {
   window.dispatchEvent(new CustomEvent("smeta-action", { detail: message }));
 }
 
+function formatMoscowDateTime(date = new Date()) {
+  return new Intl.DateTimeFormat("ru-RU", {
+    timeZone: "Europe/Moscow",
+    weekday: "short",
+    day: "2-digit",
+    month: "long",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(date);
+}
+
 function toMoneyNumber(value) {
   if (typeof value === "number") return Number.isFinite(value) ? value : 0;
   return Number(String(value || "").replace(/\s/g, "").replace(",", ".")) || 0;
@@ -1599,6 +1611,19 @@ function validateProjectForm(form) {
 
 function projectSections(project) {
   return Array.isArray(project?.sections) ? project.sections : [];
+}
+
+function isBillableProductionStage(section) {
+  const name = String(section?.name || "").toLowerCase();
+  const nonBillable = ["заявка", "бриф", "замер", "исходные", "техническое задание", "тз"];
+  return !nonBillable.some((word) => name.includes(word));
+}
+
+function stageDurationWeight(section) {
+  const due = String(section?.due || "");
+  const numbers = due.match(/\d+/g)?.map(Number) || [];
+  if (!numbers.length) return 1;
+  return Math.max(1, Math.round(numbers.reduce((sum, value) => sum + value, 0) / numbers.length));
 }
 
 function projectEconomy(project) {
@@ -2319,7 +2344,7 @@ function ProjectEditPanel({ project, users, canEdit, onUpdateProject }) {
   );
 }
 
-function ProjectSectionsEditor({ project, sections, executors, canEdit, onUpdateSection, onAddSection, onDeleteSection }) {
+function ProjectSectionsEditor({ project, sections, executors, canEdit, onUpdateSection, onAddSection, onDeleteSection, onDistributeSectionBudget }) {
   const columnLabels = ["Этап / раздел", "Исполнитель", "Срок", "Статус", "%", "Сумма задачи исполнителя, ₽", "Выплачено исполнителю, ₽", "Финстатус", "Действие"];
   return (
     <div className="sections-editor">
@@ -2328,7 +2353,12 @@ function ProjectSectionsEditor({ project, sections, executors, canEdit, onUpdate
           <h3>Редактируемые этапы проекта</h3>
           <p className="section-hint">Этап — крупный блок работы. Задачи создаются внутри этапа ниже в карточке проекта.</p>
         </div>
-        {canEdit ? <button type="button" className="primary" onClick={() => onAddSection(project.id)}>Добавить этап</button> : <span className="muted-chip">Редактирует только владелец / админ</span>}
+        {canEdit ? (
+          <div className="section-actions">
+            <button type="button" className="secondary" onClick={() => onDistributeSectionBudget(project.id)}>Распределить бюджет исполнителя</button>
+            <button type="button" className="primary" onClick={() => onAddSection(project.id)}>Добавить этап</button>
+          </div>
+        ) : <span className="muted-chip">Редактирует только владелец / админ</span>}
       </div>
       <div className="stage-editor-head">
         {columnLabels.map((label) => <span key={label}>{label}</span>)}
@@ -2361,6 +2391,7 @@ function ProjectSectionsEditor({ project, sections, executors, canEdit, onUpdate
             </select>
             <input disabled={!canEdit} className="stage-editor-wide" value={section.yandexLink || ""} onChange={(event) => onUpdateSection(project.id, sectionId, { yandexLink: event.target.value, documents: event.target.value ? [event.target.value] : [] })} placeholder="Ссылка на Яндекс.Диск этапа" />
             <input disabled={!canEdit} className="stage-editor-wide" value={(section.comments || []).join("; ")} onChange={(event) => onUpdateSection(project.id, sectionId, { comments: event.target.value ? [event.target.value] : [] })} placeholder="Комментарий к этапу" />
+            {!isBillableProductionStage(section) ? <span className="stage-note">Без доп. оплаты</span> : null}
             {section.yandexLink ? <a className="stage-link" href={section.yandexLink} rel="noreferrer">Открыть</a> : null}
             <button type="button" className="secondary danger" disabled={!canEdit} onClick={() => onDeleteSection(project.id, sectionId)}>Удалить</button>
           </div>
@@ -2370,7 +2401,7 @@ function ProjectSectionsEditor({ project, sections, executors, canEdit, onUpdate
   );
 }
 
-function ProjectDetails({ project, role, onUpdateProject, onTaskStatusChange, onProjectMessage, onAddClientParticipant, session, onUpdateSection, onAddSection, onDeleteSection, executors, users }) {
+function ProjectDetails({ project, role, onUpdateProject, onTaskStatusChange, onProjectMessage, onAddClientParticipant, session, onUpdateSection, onAddSection, onDeleteSection, onDistributeSectionBudget, executors, users }) {
   const canSeeMoney = roleCan(role, "viewFinance");
   const canSeeProductionBudget = roleCan(role, "viewProductionBudget") || canSeeMoney;
   const canSeeClient = roleCan(role, "viewClient") || roleCan(role, "manageProjects") || canSeeMoney;
@@ -2468,9 +2499,7 @@ function ProjectDetails({ project, role, onUpdateProject, onTaskStatusChange, on
           <Info label="Доступный бюджет" value={money(economy.allocatedProductionBudget)} />
           <Info label="Себестоимость исполнителей" value={money(economy.productionCost)} />
           <Info label="К выплате исполнителям" value={money(Math.max(economy.executorCost - economy.paidToExecutors, 0))} />
-          <Info label="Плановая прибыль" value={money(economy.contractProfit)} />
-          <Info label="Фактическая прибыль" value={money(economy.grossProfit)} />
-          <Info label="Маржинальность план/факт" value={`${economy.contractAmount ? Math.round((economy.contractProfit / economy.contractAmount) * 100) : 0}% / ${economy.margin}%`} />
+          <Info label="Плановая валовая часть компании" value={money(economy.companyPlannedGross)} />
         </div>
 
         {economy.sections.every((section) => !Number(section.clientBudget) && !Number(section.executorCost)) ? (
@@ -2485,6 +2514,7 @@ function ProjectDetails({ project, role, onUpdateProject, onTaskStatusChange, on
           onUpdateSection={onUpdateSection}
           onAddSection={onAddSection}
           onDeleteSection={onDeleteSection}
+          onDistributeSectionBudget={onDistributeSectionBudget}
         />
       </section>
 
@@ -4206,7 +4236,7 @@ function ProjectsModule({
   );
 }
 
-function ProjectDetailModule({ project, role, session, onBack, onDeleteProject, onUpdateProject, onTaskStatusChange, onProjectMessage, onAddClientParticipant, taskForm, setTaskForm, onCreateTask, executors, users, onUpdateSection, onAddSection, onDeleteSection }) {
+function ProjectDetailModule({ project, role, session, onBack, onDeleteProject, onUpdateProject, onTaskStatusChange, onProjectMessage, onAddClientParticipant, taskForm, setTaskForm, onCreateTask, executors, users, onUpdateSection, onAddSection, onDeleteSection, onDistributeSectionBudget }) {
   if (!project) {
     return (
       <>
@@ -4246,6 +4276,7 @@ function ProjectDetailModule({ project, role, session, onBack, onDeleteProject, 
         onUpdateSection={onUpdateSection}
         onAddSection={onAddSection}
         onDeleteSection={onDeleteSection}
+        onDistributeSectionBudget={onDistributeSectionBudget}
         executors={executors}
       />
 
@@ -5064,13 +5095,32 @@ function SmetaOfficePrototype() {
   const [projectForm, setProjectForm] = useState(defaultProjectForm);
   const [taskForm, setTaskForm] = useState({ name: "", sectionName: "", description: "", owner: "", executorId: "", due: "", status: "Новая", yandexLink: "" });
   const [actionNotice, setActionNotice] = useState("");
+  const [moscowNow, setMoscowNow] = useState(() => new Date());
 
   const currentRole = roles.find((item) => item.id === role) ?? roles[0];
   const allTasks = useMemo(() => flattenTasks(projectItems), [projectItems]);
+  const moscowDateTime = useMemo(
+    () =>
+      new Intl.DateTimeFormat("ru-RU", {
+        timeZone: "Europe/Moscow",
+        day: "2-digit",
+        month: "long",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+      }).format(moscowNow),
+    [moscowNow]
+  );
   const effectiveAccessUser = useMemo(() => {
     if (session?.role === role) return session;
     return users.find((user) => user.role === role) || session;
   }, [role, session, users]);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setMoscowNow(new Date()), 1000);
+    return () => window.clearInterval(timer);
+  }, []);
 
   useEffect(() => {
     function handleAction(event) {
@@ -5463,6 +5513,78 @@ function SmetaOfficePrototype() {
     showAction("Этап удалён из карточки проекта");
   }
 
+  function distributeProjectSectionBudget(projectId) {
+    if (!["owner", "admin"].includes(role)) {
+      showAction("Распределять бюджет исполнителя может только владелец или администратор");
+      return;
+    }
+
+    setProjectItems((items) =>
+      items.map((project) => {
+        if (project.id !== projectId) return project;
+
+        const sections = projectSections(project);
+        const billableSections = sections.filter(isBillableProductionStage);
+        if (!billableSections.length) return project;
+
+        const currentExecutorTotal = sections.reduce((sum, section) => sum + (Number(section.executorCost) || 0), 0);
+        const fallbackTotal = Number(project.productionBudget) || Math.round((Number(project.contractAmount) || 0) * 0.35);
+        const distributionTotal = currentExecutorTotal || fallbackTotal;
+        const totalWeight = billableSections.reduce((sum, section) => sum + stageDurationWeight(section), 0) || billableSections.length || 1;
+        const lastBillableKey = billableSections[billableSections.length - 1]?.id || billableSections[billableSections.length - 1]?.name;
+        let allocated = 0;
+
+        const nextSections = sections.map((section) => {
+          const sectionKey = section.id || section.name;
+          const paid = Number(section.paid) || 0;
+
+          if (!isBillableProductionStage(section)) {
+            return {
+              ...section,
+              executorCost: 0,
+              paid,
+              balance: 0,
+              financeStatus: "не оплачивается",
+              progress: Math.max(Number(section.progress) || 0, 100),
+              status: section.status === "Новая" || section.status === "Ожидает" ? "Принято" : section.status,
+            };
+          }
+
+          const amount =
+            sectionKey === lastBillableKey
+              ? Math.max(distributionTotal - allocated, 0)
+              : Math.round((distributionTotal * stageDurationWeight(section)) / totalWeight);
+          allocated += amount;
+
+          return {
+            ...section,
+            executorCost: amount,
+            paid,
+            balance: Math.max(amount - paid, 0),
+            financeStatus: paid >= amount && amount > 0 ? "выплачено" : amount > 0 ? "к выплате" : "не рассчитан",
+          };
+        });
+
+        return {
+          ...project,
+          sections: nextSections,
+          chat: [
+            ...(project.chat || []),
+            {
+              id: `chat-${Date.now()}`,
+              channel: "internal",
+              author: session?.name || "Система",
+              role,
+              text: "Бюджет исполнителя распределён по оплачиваемым этапам. Заявка, бриф, замеры и ТЗ отмечены как преддоговорные.",
+              at: new Intl.DateTimeFormat("ru-RU", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" }).format(new Date()),
+            },
+          ],
+        };
+      })
+    );
+    showAction("Бюджет исполнителя распределён по оплачиваемым этапам");
+  }
+
   function deleteProject(projectId) {
     if (!["owner", "admin"].includes(role)) {
       showAction("Удалять проекты может только владелец или администратор");
@@ -5591,6 +5713,10 @@ function SmetaOfficePrototype() {
             </h1>
           </div>
           <div className="header-actions">
+            <div className="moscow-clock">
+              <span>Москва</span>
+              <b>{moscowDateTime}</b>
+            </div>
             <label>
               Режим просмотра
               <select
@@ -5691,6 +5817,7 @@ function SmetaOfficePrototype() {
               onUpdateSection={updateProjectSection}
               onAddSection={addProjectSection}
               onDeleteSection={deleteProjectSection}
+              onDistributeSectionBudget={distributeProjectSectionBudget}
             />
           ) : null}
 
