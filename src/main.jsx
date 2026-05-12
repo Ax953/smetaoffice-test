@@ -425,6 +425,7 @@ const quickStats = [
 
 const menuItems = [
   { id: "dashboard", label: "Панель управления" },
+  { id: "sales", label: "Продажи / Лиды" },
   { id: "projects", label: "Проекты" },
   { id: "tasks", label: "Задачи" },
   { id: "executors", label: "Исполнители" },
@@ -436,6 +437,244 @@ const menuItems = [
   { id: "client", label: "Клиентское приложение" },
 ];
 const directionOptions = ["Все", "Дизайн", "Проектный", "Ремонт", "Недвижимость", "Изыскания", "Продажи", "Обучение"];
+
+const salesSources = {
+  smetago_app: "SmetaGO приложение",
+  website: "Сайт",
+  phone: "Телефон",
+  whatsapp: "WhatsApp",
+  instagram: "Instagram",
+  partner: "Партнёр",
+  referral: "Рекомендация",
+};
+
+const salesDirections = {
+  real_estate: "Недвижимость",
+  surveys: "Изыскания / обмеры / обследования",
+  design: "Дизайн / архитектура / проектирование",
+  architecture: "Архитектура / проектирование",
+  repair: "Ремонт / строительство",
+  construction: "Строительство",
+  equipment: "Комплектация",
+  service: "Бытовые услуги / сервис",
+  partners: "Партнёры / подключение",
+};
+
+const universalSalesStages = [
+  ["new_lead", "Новый лид"],
+  ["qualified", "Квалифицирован"],
+  ["proposal_sent", "КП отправлено"],
+  ["contract_and_advance", "Договор и аванс"],
+  ["in_progress", "В работе"],
+  ["final_act", "Финал / акт"],
+  ["nps_and_upsell", "NPS / допродажа"],
+  ["archive", "Архив / отказ"],
+];
+
+const bitrixFunnels = {
+  universal: {
+    label: "Универсальная воронка",
+    stages: ["new_lead", "qualified", "proposal_sent", "contract_and_advance", "in_progress", "final_act", "nps_and_upsell", "archive"],
+  },
+  real_estate: {
+    label: "Недвижимость",
+    stages: ["new_lead", "qualified", "objects_selection", "object_showing", "offer_negotiation", "deposit", "legal_check_mortgage", "main_contract", "registration", "commission_payment", "nps", "archive"],
+  },
+  surveys: {
+    label: "Изыскания",
+    stages: ["new_lead", "qualified", "proposal_sent", "contract_advance", "field_work", "report_ready", "final_payment", "commission", "nps", "archive"],
+  },
+  design: {
+    label: "Дизайн / архитектура / проектирование",
+    stages: ["new_lead", "qualified", "brief_and_measurement", "proposal_sent", "contract_advance", "planning", "visualization", "drawings", "internal_check", "final_delivery", "final_payment", "commission", "nps", "transfer_to_repair", "archive"],
+  },
+  repair: {
+    label: "Ремонт / строительство",
+    stages: ["new_lead", "qualified", "measurement_and_estimate", "contract_advance", "work_schedule", "demolition", "rough_work", "engineering_systems", "finishing", "stage_acceptance", "final_act", "commission", "nps_and_upsell", "archive"],
+  },
+  equipment: {
+    label: "Комплектация",
+    stages: ["new_lead", "qualified", "specification", "supplier_quotes", "client_approval", "order_payment", "procurement", "delivery", "installation", "final_act", "commission", "nps", "archive"],
+  },
+  service: {
+    label: "Бытовые услуги / сервис",
+    stages: ["new_lead", "qualified", "service_scope", "price_confirmation", "executor_assigned", "work_in_progress", "client_acceptance", "payment", "nps", "archive"],
+  },
+  partners: {
+    label: "Партнёры / подключение",
+    stages: ["new_lead", "qualified", "partner_check", "terms_agreed", "contract_and_access", "first_orders", "rating_control", "archive"],
+  },
+};
+
+const salesStageLabels = {
+  new_lead: "Новый лид",
+  qualified: "Квалифицирован",
+  proposal_sent: "КП отправлено",
+  contract_and_advance: "Договор и аванс",
+  contract_advance: "Договор / аванс",
+  in_progress: "В работе",
+  final_act: "Финал / акт",
+  nps_and_upsell: "NPS / допродажа",
+  archive: "Архив / отказ",
+  objects_selection: "Подбор объектов",
+  object_showing: "Показы",
+  offer_negotiation: "Переговоры",
+  deposit: "Задаток",
+  legal_check_mortgage: "Проверка / ипотека",
+  main_contract: "Основной договор",
+  registration: "Регистрация",
+  commission_payment: "Комиссия",
+  nps: "NPS",
+  field_work: "Полевые работы",
+  report_ready: "Отчёт готов",
+  final_payment: "Финальная оплата",
+  commission: "Комиссия",
+  brief_and_measurement: "Бриф / замер",
+  planning: "Планировка",
+  visualization: "Визуализация",
+  drawings: "Рабочка",
+  internal_check: "Внутренняя проверка",
+  final_delivery: "Выдача клиенту",
+  transfer_to_repair: "Передача в ремонт",
+  measurement_and_estimate: "Замер / смета",
+  work_schedule: "График работ",
+  demolition: "Демонтаж",
+  rough_work: "Черновые работы",
+  engineering_systems: "Инженерные системы",
+  finishing: "Отделка",
+  stage_acceptance: "Приёмка этапа",
+  specification: "Спецификация",
+  supplier_quotes: "Счета поставщиков",
+  client_approval: "Согласование",
+  order_payment: "Оплата заказа",
+  procurement: "Закупка",
+  delivery: "Доставка",
+  installation: "Монтаж",
+  service_scope: "Объём услуги",
+  price_confirmation: "Подтверждение цены",
+  executor_assigned: "Исполнитель назначен",
+  work_in_progress: "Работа идёт",
+  client_acceptance: "Приёмка клиентом",
+  payment: "Оплата",
+  partner_check: "Проверка партнёра",
+  terms_agreed: "Условия согласованы",
+  contract_and_access: "Договор и доступ",
+  first_orders: "Первые заявки",
+  rating_control: "Контроль рейтинга",
+};
+
+const salesBoardBuckets = [
+  { id: "new", title: "Новые лиды", stages: ["new_lead"] },
+  { id: "sla", title: "Просроченные по SLA", sla: "breached" },
+  { id: "hunter", title: "В работе у Hunter", stages: ["new_lead", "qualified"], requiresHunter: true },
+  { id: "farmer", title: "Переданы Farmer", stages: ["qualified", "brief_and_measurement", "measurement_and_estimate", "objects_selection", "service_scope"], requiresFarmer: true },
+  { id: "proposal", title: "КП отправлено", stages: ["proposal_sent"] },
+  { id: "contract", title: "Договор / аванс", stages: ["contract_and_advance", "contract_advance", "deposit"] },
+  { id: "project", title: "Переведены в проект", projectLinked: true },
+  { id: "archive", title: "Отказ / архив", stages: ["archive"] },
+];
+
+const seedSalesLeads = [
+  {
+    id: "SL-001",
+    source: "smetago_app",
+    city: "Грозный",
+    region: "ЧР",
+    direction: "design",
+    clientName: "Тестовый клиент 01",
+    clientPhone: "+7 *** ***-**-01",
+    clientEmail: "client01@example.test",
+    requestText: "Дизайн-проект квартиры, нужен расчёт сроков и состава проекта.",
+    budget: 240000,
+    area: 96,
+    objectType: "Квартира",
+    status: "open",
+    funnelType: "design",
+    stage: "new_lead",
+    hunterId: "USR-008",
+    hunterName: "Менеджер продаж",
+    farmerId: "",
+    farmerName: "",
+    headOfSalesId: "USR-009",
+    partnerId: "",
+    projectId: "",
+    firstResponseAt: "",
+    createdAt: "2026-05-12T12:00:00.000Z",
+    slaDeadlineAt: "2026-05-12T12:05:00.000Z",
+    qualificationStatus: "warm",
+    refusalReason: "",
+    nextContactAt: "2026-05-12T15:00:00.000Z",
+    lastActivityAt: "2026-05-12T12:00:00.000Z",
+    notes: "Тестовый лид из SmetaGO. Без реальных данных.",
+    history: ["Создан лид из SmetaGO"],
+  },
+  {
+    id: "SL-002",
+    source: "partner",
+    city: "Ростов-на-Дону",
+    region: "Ростов",
+    direction: "repair",
+    clientName: "Тестовый клиент партнёра",
+    clientPhone: "+7 *** ***-**-02",
+    clientEmail: "client02@example.test",
+    requestText: "Ремонт квартиры под ключ, партнёрская заявка.",
+    budget: 2520000,
+    area: 72,
+    objectType: "Квартира",
+    status: "open",
+    funnelType: "repair",
+    stage: "qualified",
+    hunterId: "USR-008",
+    hunterName: "Менеджер продаж",
+    farmerId: "USR-013",
+    farmerName: "Партнёр",
+    headOfSalesId: "USR-009",
+    partnerId: "USR-013",
+    projectId: "SG-206",
+    firstResponseAt: "2026-05-12T12:02:00.000Z",
+    createdAt: "2026-05-12T12:01:00.000Z",
+    slaDeadlineAt: "2026-05-12T12:06:00.000Z",
+    qualificationStatus: "hot",
+    refusalReason: "",
+    nextContactAt: "2026-05-13T10:00:00.000Z",
+    lastActivityAt: "2026-05-12T12:10:00.000Z",
+    notes: "Партнёр видит только свою заявку.",
+    history: ["Создан лид", "Передан Farmer/партнёру", "Связан с проектом SG-206"],
+  },
+  {
+    id: "SL-003",
+    source: "website",
+    city: "Донецк",
+    region: "ДНР",
+    direction: "surveys",
+    clientName: "Тестовый заказчик обследования",
+    clientPhone: "+7 *** ***-**-03",
+    clientEmail: "client03@example.test",
+    requestText: "Нужно обследование здания и дефектный акт.",
+    budget: 3800000,
+    area: 1400,
+    objectType: "Школа",
+    status: "open",
+    funnelType: "surveys",
+    stage: "proposal_sent",
+    hunterId: "USR-008",
+    hunterName: "Менеджер продаж",
+    farmerId: "USR-006",
+    farmerName: "Руководитель проекта",
+    headOfSalesId: "USR-009",
+    partnerId: "",
+    projectId: "SG-181",
+    firstResponseAt: "2026-05-12T12:03:00.000Z",
+    createdAt: "2026-05-12T12:00:30.000Z",
+    slaDeadlineAt: "2026-05-12T12:05:30.000Z",
+    qualificationStatus: "hot",
+    refusalReason: "",
+    nextContactAt: "2026-05-12T16:30:00.000Z",
+    lastActivityAt: "2026-05-12T12:20:00.000Z",
+    notes: "Связано с проектной документацией, без реальных контактов.",
+    history: ["Создан лид", "КП отправлено", "Связан с проектом SG-181"],
+  },
+];
 
 const holdingAreas = [
   {
@@ -834,6 +1073,11 @@ const appScreens = {
     eyebrow: "Сводка владельца",
     desc: "Главный экран: где горит, какие проекты просрочены, кто отвечает и что нужно сделать сегодня.",
   },
+  sales: {
+    title: "Продажи / Лиды",
+    eyebrow: "Зеркало Bitrix24",
+    desc: "Лиды, Hunter, Farmer, РОП, SLA 5 минут, направления и связь с проектами. Это не отдельная CRM, а модель будущей синхронизации с Bitrix24.",
+  },
   projects: {
     title: "Проекты",
     eyebrow: "Операционная база",
@@ -966,14 +1210,14 @@ function canAccessProject(user, project, viewRole = user?.role) {
 }
 
 function sectionAllowed(role, sectionId) {
-  const common = ["dashboard", "projects", "tasks", "analytics", "client"];
+  const common = ["dashboard", "sales", "projects", "tasks", "analytics", "client"];
   if (role === "owner" || role === "deputy") return true;
-  if (role === "admin") return ["dashboard", "projects", "tasks", "executors", "partners", "analytics", "integrations", "admin", "client"].includes(sectionId);
-  if (role === "finance" || role === "accountant") return ["dashboard", "projects", "tasks", "analytics", "finance"].includes(sectionId);
+  if (role === "admin") return ["dashboard", "sales", "projects", "tasks", "executors", "partners", "analytics", "integrations", "admin", "client"].includes(sectionId);
+  if (role === "finance" || role === "accountant") return ["dashboard", "sales", "projects", "tasks", "analytics", "finance"].includes(sectionId);
   if (role === "executor") return ["dashboard", "tasks"].includes(sectionId);
-  if (role === "partner") return ["dashboard", "projects", "tasks", "analytics"].includes(sectionId);
+  if (role === "partner") return ["dashboard", "sales", "projects", "tasks", "analytics"].includes(sectionId);
   if (role === "sales_manager" || role === "head_of_sales") return common.includes(sectionId);
-  return ["dashboard", "projects", "tasks", "executors", "analytics", "client"].includes(sectionId);
+  return ["dashboard", "sales", "projects", "tasks", "executors", "analytics", "client"].includes(sectionId);
 }
 
 function cn(...classes) {
@@ -1044,6 +1288,11 @@ function executorStatusClass(status) {
 
 function money(value) {
   return new Intl.NumberFormat("ru-RU", { style: "currency", currency: "RUB", maximumFractionDigits: 0 }).format(Number(value) || 0);
+}
+
+function formatShortDateTime(value) {
+  if (!value) return "не указано";
+  return new Intl.DateTimeFormat("ru-RU", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" }).format(new Date(value));
 }
 
 function showAction(message) {
@@ -1178,6 +1427,79 @@ function groupToSection(groupName) {
   if (groupName.includes("ПОС")) return "ПОС/ППР/ПОД/ПЗ";
   if (groupName.includes("Смет")) return "Сметы";
   return "Все";
+}
+
+function leadStageLabel(stage) {
+  return salesStageLabels[stage] || stage || "без стадии";
+}
+
+function leadFunnelLabel(lead) {
+  return bitrixFunnels[lead.funnelType]?.label || salesDirections[lead.direction] || "Воронка не указана";
+}
+
+function addMinutesIso(iso, minutes) {
+  const base = iso ? new Date(iso) : new Date();
+  return new Date(base.getTime() + minutes * 60 * 1000).toISOString();
+}
+
+function leadSlaStatus(lead, now = new Date()) {
+  if (lead.firstResponseAt) return "ok";
+  const deadline = lead.slaDeadlineAt ? new Date(lead.slaDeadlineAt) : new Date(addMinutesIso(lead.createdAt, 5));
+  const diff = deadline.getTime() - now.getTime();
+  if (diff <= 0) return "breached";
+  if (diff <= 2 * 60 * 1000) return "warning";
+  return "ok";
+}
+
+function slaText(status) {
+  if (status === "breached") return "SLA нарушен";
+  if (status === "warning") return "SLA скоро";
+  return "SLA в норме";
+}
+
+function slaTone(status) {
+  if (status === "breached") return "red";
+  if (status === "warning") return "yellow";
+  return "green";
+}
+
+function leadCanAccess(user, lead, viewRole = user?.role) {
+  const role = viewRole || user?.role;
+  if (!lead || !user) return false;
+  if (["owner", "admin", "deputy", "head_of_sales"].includes(role)) return true;
+  if (role === "finance" || role === "accountant") return true;
+  if (role === "partner") return lead.partnerId === user.id || lead.farmerId === user.id;
+  if (role === "sales_manager") return lead.hunterId === user.id || lead.farmerId === user.id;
+  if (role === "project_manager" || role === "pm") return lead.farmerId === user.id || lead.projectId;
+  if (role === "director") return user.direction === "Все направления" || salesDirections[lead.direction]?.includes(user.direction) || lead.region === user.region;
+  if (role === "regional_manager") return userRegionList(user).includes(lead.region) || userRegionList(user).includes("Все регионы");
+  return false;
+}
+
+function normalizeSalesLead(lead) {
+  const createdAt = lead.createdAt || new Date().toISOString();
+  return {
+    ...lead,
+    createdAt,
+    slaDeadlineAt: lead.slaDeadlineAt || addMinutesIso(createdAt, 5),
+    history: Array.isArray(lead.history) ? lead.history : [],
+  };
+}
+
+function mergeSalesLeads(leads) {
+  const source = Array.isArray(leads) ? leads : [];
+  const existing = new Set(source.map((lead) => lead.id));
+  const missing = seedSalesLeads.filter((lead) => !existing.has(lead.id));
+  return [...missing, ...source].map(normalizeSalesLead);
+}
+
+function salesLeadStats(leads) {
+  const now = new Date();
+  const breached = leads.filter((lead) => leadSlaStatus(lead, now) === "breached").length;
+  const linked = leads.filter((lead) => lead.projectId).length;
+  const proposal = leads.filter((lead) => lead.stage === "proposal_sent").length;
+  const contract = leads.filter((lead) => ["contract_and_advance", "contract_advance", "deposit"].includes(lead.stage)).length;
+  return { breached, linked, proposal, contract };
 }
 
 function StatCard({ item }) {
@@ -2551,6 +2873,229 @@ function SectionIntro({ section }) {
   );
 }
 
+function SalesLeadsModule({ leads, setSalesLeads, projectItems, users, role, session }) {
+  const [directionFilter, setDirectionFilter] = useState("all");
+  const [regionFilter, setRegionFilter] = useState("all");
+  const [sourceFilter, setSourceFilter] = useState("all");
+  const [slaFilter, setSlaFilter] = useState("all");
+  const [selectedLeadId, setSelectedLeadId] = useState(leads[0]?.id || "");
+  const [transferForm, setTransferForm] = useState({ direction: "design", farmerId: "USR-007", stage: "qualified" });
+  const [projectLinkId, setProjectLinkId] = useState(projectItems[0]?.id || "");
+  const canChangeSales = ["owner", "admin", "deputy", "head_of_sales", "sales_manager"].includes(role);
+  const canSeeMoney = roleCan(role, "viewFinance") || ["owner", "deputy", "head_of_sales", "sales_manager"].includes(role);
+
+  const visibleLeads = useMemo(() => {
+    return leads.filter((lead) => {
+      if (!leadCanAccess(session, lead, role)) return false;
+      const slaStatus = leadSlaStatus(lead);
+      if (directionFilter !== "all" && lead.direction !== directionFilter) return false;
+      if (regionFilter !== "all" && lead.region !== regionFilter) return false;
+      if (sourceFilter !== "all" && lead.source !== sourceFilter) return false;
+      if (slaFilter !== "all" && slaStatus !== slaFilter) return false;
+      return true;
+    });
+  }, [leads, session, role, directionFilter, regionFilter, sourceFilter, slaFilter]);
+
+  const selectedLead = visibleLeads.find((lead) => lead.id === selectedLeadId) || visibleLeads[0] || null;
+  const stats = salesLeadStats(visibleLeads);
+  const farmers = users.filter((user) => ["project_manager", "pm", "sales_manager", "partner", "director", "regional_manager"].includes(user.role));
+
+  function patchLead(leadId, patchFactory) {
+    if (!canChangeSales) {
+      showAction("Менять продажные стадии могут владелец, РОП, админ, заместитель или назначенный Hunter");
+      return;
+    }
+    setSalesLeads((items) =>
+      items.map((lead) => {
+        if (lead.id !== leadId) return lead;
+        const patch = typeof patchFactory === "function" ? patchFactory(lead) : patchFactory;
+        const historyNote = patch.historyNote;
+        const { historyNote: _drop, ...cleanPatch } = patch;
+        return normalizeSalesLead({
+          ...lead,
+          ...cleanPatch,
+          lastActivityAt: new Date().toISOString(),
+          history: [...(lead.history || []), historyNote || "Обновление лида"].filter(Boolean),
+        });
+      })
+    );
+  }
+
+  function markFirstResponse(lead) {
+    patchLead(lead.id, {
+      firstResponseAt: new Date().toISOString(),
+      historyNote: "Hunter отметил первый ответ клиенту",
+    });
+    showAction("Первый ответ зафиксирован. SLA закрыт.");
+  }
+
+  function transferLead(lead) {
+    const farmer = users.find((user) => user.id === transferForm.farmerId);
+    patchLead(lead.id, {
+      direction: transferForm.direction,
+      funnelType: bitrixFunnels[transferForm.direction] ? transferForm.direction : "universal",
+      stage: transferForm.stage,
+      farmerId: farmer?.id || "",
+      farmerName: farmer?.name || "Farmer не назначен",
+      partnerId: farmer?.role === "partner" ? farmer.id : lead.partnerId,
+      historyNote: `Передан в направление: ${salesDirections[transferForm.direction] || transferForm.direction}`,
+    });
+    showAction("Лид передан в направление и закреплён за Farmer");
+  }
+
+  function linkProject(lead) {
+    if (!projectLinkId) return;
+    patchLead(lead.id, {
+      projectId: projectLinkId,
+      stage: ["new_lead", "qualified", "proposal_sent"].includes(lead.stage) ? "contract_and_advance" : lead.stage,
+      historyNote: `Связан с проектом ${projectLinkId}`,
+    });
+    showAction(`Лид связан с проектом ${projectLinkId}`);
+  }
+
+  const bucketLeads = (bucket) =>
+    visibleLeads.filter((lead) => {
+      const slaStatus = leadSlaStatus(lead);
+      if (bucket.sla && slaStatus !== bucket.sla) return false;
+      if (bucket.projectLinked && !lead.projectId) return false;
+      if (bucket.requiresHunter && !lead.hunterId) return false;
+      if (bucket.requiresFarmer && !lead.farmerId) return false;
+      if (bucket.stages && !bucket.stages.includes(lead.stage)) return false;
+      return true;
+    });
+
+  return (
+    <>
+      <SectionIntro section="sales" />
+      <section className="stats-grid">
+        <StatCard item={{ label: "Лиды в доступе", value: String(visibleLeads.length), tone: "blue" }} />
+        <StatCard item={{ label: "SLA нарушен", value: String(stats.breached), tone: stats.breached ? "red" : "green" }} />
+        <StatCard item={{ label: "КП отправлено", value: String(stats.proposal), tone: "orange" }} />
+        <StatCard item={{ label: "Связаны с проектом", value: String(stats.linked), tone: "green" }} />
+      </section>
+
+      <section className="workspace-card">
+        <div className="workspace-head">
+          <div>
+            <h2>Фильтры Bitrix-воронки</h2>
+            <p>Фильтры отражают будущие поля Bitrix24. Реальный API пока не подключён.</p>
+          </div>
+        </div>
+        <div className="filters sales-filters">
+          <select value={directionFilter} onChange={(event) => setDirectionFilter(event.target.value)}>
+            <option value="all">Все направления</option>
+            {Object.entries(salesDirections).map(([id, label]) => <option key={id} value={id}>{label}</option>)}
+          </select>
+          <select value={regionFilter} onChange={(event) => setRegionFilter(event.target.value)}>
+            <option value="all">Все регионы</option>
+            {regionOptions.filter((item) => item !== "Все регионы").map((item) => <option key={item}>{item}</option>)}
+          </select>
+          <select value={sourceFilter} onChange={(event) => setSourceFilter(event.target.value)}>
+            <option value="all">Все источники</option>
+            {Object.entries(salesSources).map(([id, label]) => <option key={id} value={id}>{label}</option>)}
+          </select>
+          <select value={slaFilter} onChange={(event) => setSlaFilter(event.target.value)}>
+            <option value="all">Любой SLA</option>
+            <option value="ok">SLA в норме</option>
+            <option value="warning">SLA скоро</option>
+            <option value="breached">SLA нарушен</option>
+          </select>
+        </div>
+      </section>
+
+      <section className="sales-grid">
+        <div className="office-card">
+          <div className="section-row">
+            <div>
+              <h3>Доска лидов</h3>
+              <p className="section-hint">Это не самостоятельная CRM. Стадии и роли бьются с будущими воронками Bitrix24.</p>
+            </div>
+          </div>
+          <div className="sales-board">
+            {salesBoardBuckets.map((bucket) => {
+              const items = bucketLeads(bucket);
+              return (
+                <div key={bucket.id} className="sales-column">
+                  <strong>{bucket.title}</strong>
+                  <span>{items.length}</span>
+                  {items.slice(0, 4).map((lead) => {
+                    const slaStatus = leadSlaStatus(lead);
+                    return (
+                      <button key={lead.id} type="button" className={selectedLead?.id === lead.id ? "active" : ""} onClick={() => setSelectedLeadId(lead.id)}>
+                        <b>{lead.id}</b>
+                        <em className={cn("risk-chip", slaTone(slaStatus))}>{slaText(slaStatus)}</em>
+                        <small>{salesDirections[lead.direction]} · {lead.region}</small>
+                        <span>{leadStageLabel(lead.stage)}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        <aside className="office-card">
+          <h3>Карточка лида</h3>
+          {selectedLead ? (
+            <div className="lead-details">
+              <div className="chips">
+                <span className="muted-chip">{selectedLead.id}</span>
+                <span className={cn("risk-chip", slaTone(leadSlaStatus(selectedLead)))}>{slaText(leadSlaStatus(selectedLead))}</span>
+              </div>
+              <h4>{selectedLead.clientName}</h4>
+              <p>{selectedLead.requestText}</p>
+              <div className="info-grid compact-info">
+                <Info label="Источник" value={salesSources[selectedLead.source] || selectedLead.source} />
+                <Info label="Воронка" value={leadFunnelLabel(selectedLead)} />
+                <Info label="Стадия" value={leadStageLabel(selectedLead.stage)} />
+                <Info label="Регион" value={selectedLead.region} />
+                <Info label="Hunter" value={selectedLead.hunterName || "не назначен"} />
+                <Info label="Farmer" value={selectedLead.farmerName || "не назначен"} />
+                <Info label="Первый ответ" value={formatShortDateTime(selectedLead.firstResponseAt)} />
+                <Info label="SLA deadline" value={formatShortDateTime(selectedLead.slaDeadlineAt)} />
+                {canSeeMoney ? <Info label="Бюджет" value={money(selectedLead.budget)} /> : null}
+                <Info label="Проект" value={selectedLead.projectId || "не связан"} />
+              </div>
+              <div className="lead-actions">
+                <button type="button" className="primary" onClick={() => markFirstResponse(selectedLead)} disabled={!canChangeSales || Boolean(selectedLead.firstResponseAt)}>Первый ответ</button>
+                <select value={transferForm.direction} onChange={(event) => setTransferForm((next) => ({ ...next, direction: event.target.value }))}>
+                  {Object.entries(salesDirections).map(([id, label]) => <option key={id} value={id}>{label}</option>)}
+                </select>
+                <select value={transferForm.farmerId} onChange={(event) => setTransferForm((next) => ({ ...next, farmerId: event.target.value }))}>
+                  {farmers.map((user) => <option key={user.id} value={user.id}>{user.name} · {roles.find((item) => item.id === user.role)?.name}</option>)}
+                </select>
+                <button type="button" onClick={() => transferLead(selectedLead)} disabled={!canChangeSales}>Передать в направление</button>
+                <select value={projectLinkId} onChange={(event) => setProjectLinkId(event.target.value)}>
+                  {projectItems.map((project) => <option key={project.id} value={project.id}>{project.id} · {project.title}</option>)}
+                </select>
+                <button type="button" onClick={() => linkProject(selectedLead)} disabled={!canChangeSales}>Связать с проектом</button>
+              </div>
+              <div className="auto-list">
+                {(selectedLead.history || []).slice(-5).map((item) => <div key={item}>✓ {item}</div>)}
+              </div>
+            </div>
+          ) : (
+            <div className="empty">Для этой роли нет доступных лидов.</div>
+          )}
+        </aside>
+      </section>
+
+      <section className="office-card">
+        <h3>Стадии по направлениям</h3>
+        <div className="bitrix-stage-map">
+          {Object.entries(bitrixFunnels).map(([id, funnel]) => (
+            <div key={id}>
+              <b>{funnel.label}</b>
+              <span>{funnel.stages.map((stage) => leadStageLabel(stage)).join(" → ")}</span>
+            </div>
+          ))}
+        </div>
+      </section>
+    </>
+  );
+}
+
 function LoginScreen({ users, onLogin, onRegister }) {
   const [login, setLogin] = useState("owner");
   const [password, setPassword] = useState("owner");
@@ -3859,6 +4404,7 @@ function SmetaOfficePrototype() {
   const [projectItems, setProjectItemsState] = useState(() => mergeDemoProductionProjects(readStoredValue("smeta.projects", seedProjects)));
   const [executors, setExecutorsState] = useState(() => readStoredValue("smeta.executors", executorProfiles));
   const [users, setUsersState] = useState(() => readStoredValue("smeta.users", demoUsers));
+  const [salesLeads, setSalesLeadsState] = useState(() => mergeSalesLeads(readStoredValue("smeta.salesLeads", seedSalesLeads)));
   const [selectedId, setSelectedId] = useState(() => readStoredValue("smeta.selectedProjectId", seedProjects[0].id));
   const [activeSection, setActiveSection] = useState("dashboard");
   const [projectForm, setProjectForm] = useState({ title: "", client: "", city: "", region: "ЧР", projectType: "Дизайн-проект", direction: "Дизайн / интерьер", yandexFolder: "" });
@@ -3954,6 +4500,14 @@ function SmetaOfficePrototype() {
       const next = typeof updater === "function" ? updater(current) : updater;
       writeStoredValue("smeta.users", next);
       apiPut("/users", next);
+      return next;
+    });
+  }
+
+  function setSalesLeads(updater) {
+    setSalesLeadsState((current) => {
+      const next = mergeSalesLeads(typeof updater === "function" ? updater(current) : updater);
+      writeStoredValue("smeta.salesLeads", next);
       return next;
     });
   }
@@ -4242,6 +4796,17 @@ function SmetaOfficePrototype() {
           {role !== "executor" && activeSection === "executors" ? <ExecutorsModule role={role} executors={executors} setExecutors={setExecutors} allTasks={visibleTasks} /> : null}
 
           {role !== "executor" && activeSection === "integrations" ? <IntegrationsModule /> : null}
+
+          {role !== "executor" && activeSection === "sales" ? (
+            <SalesLeadsModule
+              leads={salesLeads}
+              setSalesLeads={setSalesLeads}
+              projectItems={projectItems}
+              users={users}
+              role={role}
+              session={effectiveAccessUser}
+            />
+          ) : null}
 
           {role !== "executor" && activeSection === "dashboard" ? (
             <DashboardModule

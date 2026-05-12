@@ -260,6 +260,7 @@ input, select {
 .filters input { width: 230px; }
 .filters select { width: 170px; }
 .filters .primary { white-space: nowrap; }
+.sales-filters select { min-width: 210px; width: auto; }
 .quick-form {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -650,6 +651,96 @@ h3 { margin: 0; }
 }
 .finance-table .good { color: #047857; }
 .finance-table .bad { color: #b91c1c; }
+.sales-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(360px, .6fr);
+  gap: 18px;
+}
+.sales-board {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+.sales-column {
+  min-height: 180px;
+  border: 1px solid #dbe5ef;
+  border-radius: 16px;
+  background: #f8fafc;
+  padding: 12px;
+}
+.sales-column > strong {
+  display: block;
+  color: #0f172a;
+  font-size: 13px;
+}
+.sales-column > span {
+  display: inline-flex;
+  margin: 6px 0 10px;
+  border-radius: 999px;
+  background: #e0eef8;
+  color: #015884;
+  padding: 3px 8px;
+  font-size: 12px;
+  font-weight: 800;
+}
+.sales-column button {
+  width: 100%;
+  display: grid;
+  gap: 6px;
+  text-align: left;
+  border: 1px solid #dbe5ef;
+  border-radius: 14px;
+  background: #fff;
+  padding: 10px;
+  margin-top: 8px;
+  cursor: pointer;
+}
+.sales-column button.active {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, .12);
+}
+.sales-column small,
+.sales-column span {
+  color: #64748b;
+  font-size: 12px;
+}
+.lead-details h4 {
+  margin: 12px 0 6px;
+  font-size: 20px;
+}
+.lead-details p {
+  color: #475569;
+  line-height: 1.55;
+}
+.compact-info {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.lead-actions {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+  margin: 14px 0;
+}
+.lead-actions select,
+.lead-actions button {
+  width: 100%;
+}
+.bitrix-stage-map {
+  display: grid;
+  gap: 10px;
+}
+.bitrix-stage-map > div {
+  display: grid;
+  gap: 6px;
+  border: 1px solid #dbe5ef;
+  background: #f8fafc;
+  border-radius: 14px;
+  padding: 12px;
+}
+.bitrix-stage-map span {
+  color: #64748b;
+  line-height: 1.5;
+}
 .task-table {
   overflow: hidden;
   margin-top: 14px;
@@ -2011,6 +2102,6 @@ h3 { margin: 0; }
   .office-content, .office-header { padding-left: 16px; padding-right: 16px; }
   .header-actions, .filters, .module-head { flex-direction: column; align-items: stretch; }
   .header-actions label, .filters input, .filters select { width: 100%; min-width: 0; }
-  .stats-grid, .projects-list, .drill-card-grid, .card-money-row, .drill-metrics, .info-grid, .bottom-panels, .pipeline, .summary-grid, .executor-groups, .executor-list, .executor-form, .executor-two-cols, .chat-input, .project-chat-input, .mvp-days, .integration-form, .quick-form, .task-create-form, .economy-summary, .production-budget-card, .login-card, .finance-grid, .finance-kpi-list, .org-detail-grid, .mini-kpi-grid, .plan-grid, .focus-grid, .risk-project-strip, .task-command-bar, .task-kanban, .executor-process-grid, .task-inspector-actions, .client-participant-form { grid-template-columns: 1fr; }
+  .stats-grid, .projects-list, .drill-card-grid, .card-money-row, .drill-metrics, .info-grid, .bottom-panels, .pipeline, .summary-grid, .executor-groups, .executor-list, .executor-form, .executor-two-cols, .chat-input, .project-chat-input, .mvp-days, .integration-form, .quick-form, .task-create-form, .economy-summary, .production-budget-card, .login-card, .finance-grid, .finance-kpi-list, .org-detail-grid, .mini-kpi-grid, .plan-grid, .focus-grid, .risk-project-strip, .task-command-bar, .task-kanban, .executor-process-grid, .task-inspector-actions, .client-participant-form, .sales-grid, .sales-board { grid-template-columns: 1fr; }
   .task-table > div, .partner-table > div, .project-account-meta, .mapping-table > div, .sync-log > div, .task-board > div, .analytics-list > div, .sections-table > div:not(.empty), .admin-users-table > div, .finance-table > div, .dashboard-table > div, .dashboard-table > button, .task-status-chart > div, .bitrix-map-table > div, .client-participants-list > div, .approval-list > div { grid-template-columns: 1fr; }
 }
