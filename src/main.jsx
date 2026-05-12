@@ -1044,9 +1044,47 @@ const projectStageTemplates = {
   "Архитектурный проект": ["Заявка", "Исходные данные", "Техническое задание", "Эскиз / концепция", "Архитектурные решения", "Фасады", "АР", "КР", "Инженерные разделы", "Комплектация альбома", "Выдача клиенту", "Закрытие проекта"],
   "Проектная документация по 87 постановлению": ["Заявка", "Исходные данные", "Обследование", "Изыскания", "Техническое заключение", "Дефектный акт", "ПЗ", "АР", "КР", "ОВ", "ВК", "ЭОМ", "СС", "ПОС", "ОДИ / МОДИ", "Сметная документация", "Внутренняя проверка", "Выдача заказчику", "Сопровождение экспертизы", "Закрытие"],
   "Обследование / ТЗК / дефектный акт": ["Заявка", "Выезд / обследование", "Фотофиксация", "Обмеры", "Техническое заключение", "Дефектный акт", "Первичная смета", "Передача", "Архив документов"],
+  "Изыскания": ["Заявка", "Исходные данные", "Выезд", "Геодезия", "Геология", "Камеральная обработка", "Технический отчёт", "Передача заказчику", "Закрытие"],
   "Ремонт / строительство": ["Заявка", "Смета / договор", "График", "Аванс", "Черновые работы", "Сети", "Отделочные работы", "Фотоотчёт", "Приёмка", "Исправления", "Закрытие этапа", "Акт", "Закрытие"],
   "Недвижимость": ["Заявка", "Квалификация", "Подбор объектов", "Показы", "Переговоры", "Проверка документов", "Сделка", "Закрытие"],
   "Комплектация": ["Заявка", "Исходные данные", "Подбор", "Счета поставщиков", "Согласование заказчика", "Заказ", "Доставка", "Закрытие поставки"],
+};
+
+const projectCreationModes = [
+  { id: "existing", label: "Существующий проект" },
+  { id: "new_manual", label: "Новый проект вручную" },
+  { id: "lead_deal", label: "Из лида / сделки" },
+  { id: "owner_direct", label: "Прямой проект владельца" },
+  { id: "referral", label: "Сарафан / рекомендация" },
+  { id: "partner_direct", label: "Партнёр привёл клиента" },
+];
+
+const defaultProjectForm = {
+  creationMode: "existing",
+  title: "",
+  client: "",
+  city: "",
+  region: "ЧР",
+  projectType: "Дизайн-проект",
+  direction: "Дизайн / интерьер",
+  status: "Новая",
+  stage: "Заявка / бриф",
+  progress: 5,
+  risk: "green",
+  deadline: "",
+  sourceComment: "",
+  manager: "",
+  projectManager: "",
+  salesManager: "",
+  director: "",
+  contractAmount: "",
+  paidByClient: "",
+  productionAllocationPercent: 35,
+  productionBudget: "",
+  directCosts: "",
+  operatingCosts: "",
+  payrollCosts: "",
+  yandexFolder: "",
 };
 
 function makeTemplateSections(projectType) {
@@ -1295,6 +1333,19 @@ function formatShortDateTime(value) {
 
 function showAction(message) {
   window.dispatchEvent(new CustomEvent("smeta-action", { detail: message }));
+}
+
+function toMoneyNumber(value) {
+  if (typeof value === "number") return Number.isFinite(value) ? value : 0;
+  return Number(String(value || "").replace(/\s/g, "").replace(",", ".")) || 0;
+}
+
+function canCreateProjectRole(role) {
+  return ["owner", "admin", "deputy", "director", "regional_manager", "pm", "project_manager"].includes(role);
+}
+
+function projectSourceLabel(mode) {
+  return projectCreationModes.find((item) => item.id === mode)?.label || "Ручное создание";
 }
 
 function projectSections(project) {
@@ -3275,6 +3326,8 @@ function ProjectsModule({
   const selectedRegionSummary = useMemo(() => financeSummary(selectedRegionProjects), [selectedRegionProjects]);
 
   const selectedDirectionConfig = regionalDirections.find((item) => item.id === selectedRegionalDirection) || null;
+  const canCreateProject = canCreateProjectRole(role);
+  const currentStageOptions = projectStageTemplates[projectForm.projectType] || projectStageTemplates["Дизайн-проект"];
 
   const regionalDirectionCards = useMemo(() => {
     return regionalDirections.map((item) => {
@@ -3384,38 +3437,157 @@ function ProjectsModule({
             {selectedArea === "central" && selectedCentralCompany ? <button type="button" className="secondary" onClick={() => setSelectedCentralCompany(null)}>К компаниям</button> : null}
             {selectedArea === "regions" && selectedRegion ? <button type="button" className="secondary" onClick={() => { setSelectedRegion(null); setSelectedRegionalDirection(null); setCreateOpen(false); }}>К регионам</button> : null}
             {selectedArea === "regions" && selectedRegion && selectedRegionalDirection ? <button type="button" className="secondary" onClick={() => { setSelectedRegionalDirection(null); setCreateOpen(false); }}>К направлениям</button> : null}
-            {selectedArea === "regions" && selectedRegion && selectedRegionalDirection ? <button type="button" className="primary" onClick={() => setCreateOpen((value) => !value)}>Создать проект</button> : null}
+            {canCreateProject ? <button type="button" className="primary" onClick={() => setCreateOpen((value) => !value)}>{createOpen ? "Закрыть форму" : "Создать проект"}</button> : null}
           </div>
         </div>
 
         {createOpen ? (
           <div className="quick-form">
-            <input value={projectForm.title} onChange={(event) => setProjectForm((next) => ({ ...next, title: event.target.value }))} placeholder="Название проекта" />
-            <input value={projectForm.client} onChange={(event) => setProjectForm((next) => ({ ...next, client: event.target.value }))} placeholder="Клиент" />
-            <input value={projectForm.city} onChange={(event) => setProjectForm((next) => ({ ...next, city: event.target.value }))} placeholder="Город" />
-            <select value={projectForm.region} onChange={(event) => setProjectForm((next) => ({ ...next, region: event.target.value }))}>
-              {regionOptions.filter((region) => region !== "Все регионы").map((region) => (
-                <option key={region} value={region}>{region}</option>
-              ))}
-            </select>
-            <select value={projectForm.projectType} onChange={(event) => setProjectForm((next) => ({ ...next, projectType: event.target.value }))}>
-              <option>Дизайн-проект</option>
-              <option>Архитектурный проект</option>
-              <option>Проектная документация по 87 постановлению</option>
-              <option>Обследование / ТЗК / дефектный акт</option>
-              <option>Изыскания</option>
-              <option>Ремонт / строительство</option>
-            </select>
-            <select value={projectForm.direction} onChange={(event) => setProjectForm((next) => ({ ...next, direction: event.target.value }))}>
-              <option>Дизайн / интерьер</option>
-              <option>Проектный институт</option>
-              <option>Ремонт / строительство</option>
-              <option>Недвижимость</option>
-              <option>Изыскания</option>
-              <option>Обучение</option>
-            </select>
-            <input className="wide" value={projectForm.yandexFolder} onChange={(event) => setProjectForm((next) => ({ ...next, yandexFolder: event.target.value }))} placeholder="Ссылка на папку Яндекс.Диска" />
-            <button type="button" className="primary" onClick={onCreateProject} disabled={!projectForm.title.trim()}>Сохранить проект</button>
+            <div className="quick-form-title">
+              <h3>Регистрация проекта в реестре</h3>
+              <p>Сюда заносим любой проект: из Bitrix, от владельца, по рекомендации, от управляющего или уже существующий в работе.</p>
+            </div>
+            <label>
+              <span>Источник / сценарий</span>
+              <select value={projectForm.creationMode} onChange={(event) => setProjectForm((next) => ({ ...next, creationMode: event.target.value }))}>
+                {projectCreationModes.map((mode) => <option key={mode.id} value={mode.id}>{mode.label}</option>)}
+              </select>
+            </label>
+            <label>
+              <span>Название проекта</span>
+              <input value={projectForm.title} onChange={(event) => setProjectForm((next) => ({ ...next, title: event.target.value }))} placeholder="Например: Дизайн квартиры 113 м²" />
+            </label>
+            <label>
+              <span>Клиент / заказчик</span>
+              <input value={projectForm.client} onChange={(event) => setProjectForm((next) => ({ ...next, client: event.target.value }))} placeholder="ФИО или компания" />
+            </label>
+            <label>
+              <span>Город объекта</span>
+              <input value={projectForm.city} onChange={(event) => setProjectForm((next) => ({ ...next, city: event.target.value }))} placeholder="Город" />
+            </label>
+            <label>
+              <span>Регион учёта</span>
+              <select value={projectForm.region} onChange={(event) => setProjectForm((next) => ({ ...next, region: event.target.value }))}>
+                {regionOptions.filter((region) => region !== "Все регионы").map((region) => (
+                  <option key={region} value={region}>{region}</option>
+                ))}
+              </select>
+            </label>
+            <label>
+              <span>Тип проекта</span>
+              <select
+                value={projectForm.projectType}
+                onChange={(event) => {
+                  const nextType = event.target.value;
+                  const firstStage = projectStageTemplates[nextType]?.[0] || "Заявка";
+                  setProjectForm((next) => ({ ...next, projectType: nextType, stage: firstStage }));
+                }}
+              >
+                {Object.keys(projectStageTemplates).map((type) => <option key={type}>{type}</option>)}
+              </select>
+            </label>
+            <label>
+              <span>Направление</span>
+              <select value={projectForm.direction} onChange={(event) => setProjectForm((next) => ({ ...next, direction: event.target.value }))}>
+                <option>Дизайн / интерьер</option>
+                <option>Проектный институт</option>
+                <option>Ремонт / строительство</option>
+                <option>Недвижимость</option>
+                <option>Изыскания</option>
+                <option>Комплектация</option>
+                <option>Обучение</option>
+              </select>
+            </label>
+            <label>
+              <span>Текущий статус</span>
+              <select value={projectForm.status} onChange={(event) => setProjectForm((next) => ({ ...next, status: event.target.value }))}>
+                <option>Новая</option>
+                <option>В работе</option>
+                <option>На проверке</option>
+                <option>Ожидает клиента</option>
+                <option>Ожидает оплаты</option>
+                <option>Красная зона</option>
+                <option>Завершён</option>
+              </select>
+            </label>
+            <label>
+              <span>Текущий этап</span>
+              <select value={projectForm.stage} onChange={(event) => setProjectForm((next) => ({ ...next, stage: event.target.value }))}>
+                {currentStageOptions.map((stage) => <option key={stage}>{stage}</option>)}
+              </select>
+            </label>
+            <label>
+              <span>Готовность, %</span>
+              <input type="number" min="0" max="100" value={projectForm.progress} onChange={(event) => setProjectForm((next) => ({ ...next, progress: event.target.value }))} />
+            </label>
+            <label>
+              <span>Светофор</span>
+              <select value={projectForm.risk} onChange={(event) => setProjectForm((next) => ({ ...next, risk: event.target.value }))}>
+                <option value="green">В норме</option>
+                <option value="yellow">Есть риск</option>
+                <option value="red">Красная зона</option>
+              </select>
+            </label>
+            <label>
+              <span>Контрольный срок</span>
+              <input value={projectForm.deadline} onChange={(event) => setProjectForm((next) => ({ ...next, deadline: event.target.value }))} placeholder="Например: 20 июня" />
+            </label>
+            <label>
+              <span>Руководитель проекта</span>
+              <input value={projectForm.manager} onChange={(event) => setProjectForm((next) => ({ ...next, manager: event.target.value }))} placeholder="Кто отвечает за проект" />
+            </label>
+            <label>
+              <span>Менеджер проекта</span>
+              <input value={projectForm.projectManager} onChange={(event) => setProjectForm((next) => ({ ...next, projectManager: event.target.value }))} placeholder="Если есть" />
+            </label>
+            <label>
+              <span>Менеджер продаж</span>
+              <input value={projectForm.salesManager} onChange={(event) => setProjectForm((next) => ({ ...next, salesManager: event.target.value }))} placeholder="Если проект пришёл через продажи" />
+            </label>
+            <label>
+              <span>Управляющий / руководитель</span>
+              <input value={projectForm.director} onChange={(event) => setProjectForm((next) => ({ ...next, director: event.target.value }))} placeholder="Управляющий направления" />
+            </label>
+            <label>
+              <span>Сумма договора</span>
+              <input type="number" value={projectForm.contractAmount} onChange={(event) => setProjectForm((next) => ({ ...next, contractAmount: event.target.value }))} placeholder="0" />
+            </label>
+            <label>
+              <span>Оплачено клиентом</span>
+              <input type="number" value={projectForm.paidByClient} onChange={(event) => setProjectForm((next) => ({ ...next, paidByClient: event.target.value }))} placeholder="0" />
+            </label>
+            <label>
+              <span>% бюджета реализации</span>
+              <input type="number" value={projectForm.productionAllocationPercent} onChange={(event) => setProjectForm((next) => ({ ...next, productionAllocationPercent: event.target.value }))} placeholder="35" />
+            </label>
+            <label>
+              <span>Бюджет реализации вручную</span>
+              <input type="number" value={projectForm.productionBudget} onChange={(event) => setProjectForm((next) => ({ ...next, productionBudget: event.target.value }))} placeholder="если отличается от %" />
+            </label>
+            <label>
+              <span>Прямые расходы</span>
+              <input type="number" value={projectForm.directCosts} onChange={(event) => setProjectForm((next) => ({ ...next, directCosts: event.target.value }))} placeholder="0" />
+            </label>
+            <label>
+              <span>Операционные расходы</span>
+              <input type="number" value={projectForm.operatingCosts} onChange={(event) => setProjectForm((next) => ({ ...next, operatingCosts: event.target.value }))} placeholder="0" />
+            </label>
+            <label>
+              <span>Зарплатные расходы</span>
+              <input type="number" value={projectForm.payrollCosts} onChange={(event) => setProjectForm((next) => ({ ...next, payrollCosts: event.target.value }))} placeholder="0" />
+            </label>
+            <label className="wide">
+              <span>Папка Яндекс.Диска</span>
+              <input value={projectForm.yandexFolder} onChange={(event) => setProjectForm((next) => ({ ...next, yandexFolder: event.target.value }))} placeholder="Ссылка на папку проекта" />
+            </label>
+            <label className="wide">
+              <span>Комментарий по источнику / скидке / особым условиям</span>
+              <input value={projectForm.sourceComment} onChange={(event) => setProjectForm((next) => ({ ...next, sourceComment: event.target.value }))} placeholder="Например: пришёл напрямую к владельцу, индивидуальная скидка, переносим существующий проект" />
+            </label>
+            <div className="wide create-project-summary">
+              <span>После сохранения система создаст карточку проекта, шаблон этапов по выбранному типу, финансовую основу и откроет проект для дальнейшего назначения исполнителей.</span>
+              <button type="button" className="primary" onClick={onCreateProject} disabled={!projectForm.title.trim() || !canCreateProject}>Сохранить и открыть проект</button>
+            </div>
           </div>
         ) : null}
 
@@ -4405,7 +4577,7 @@ function SmetaOfficePrototype() {
   const [salesLeads, setSalesLeadsState] = useState(() => mergeSalesLeads(readStoredValue("smeta.salesLeads", seedSalesLeads)));
   const [selectedId, setSelectedId] = useState(() => readStoredValue("smeta.selectedProjectId", ""));
   const [activeSection, setActiveSection] = useState("dashboard");
-  const [projectForm, setProjectForm] = useState({ title: "", client: "", city: "", region: "ЧР", projectType: "Дизайн-проект", direction: "Дизайн / интерьер", yandexFolder: "" });
+  const [projectForm, setProjectForm] = useState(defaultProjectForm);
   const [taskForm, setTaskForm] = useState({ name: "", owner: "", executorId: "", due: "", status: "Новая", yandexLink: "" });
   const [actionNotice, setActionNotice] = useState("");
 
@@ -4557,8 +4729,27 @@ function SmetaOfficePrototype() {
 
   function createProject() {
     const title = projectForm.title.trim();
-    if (!title) return;
+    if (!title || !canCreateProjectRole(role)) return;
     const nextIndex = projectItems.length + 1;
+    const contractAmount = toMoneyNumber(projectForm.contractAmount);
+    const paidByClient = toMoneyNumber(projectForm.paidByClient);
+    const allocationPercent = Number(projectForm.productionAllocationPercent) || 35;
+    const productionBudget = toMoneyNumber(projectForm.productionBudget) || Math.round(contractAmount * (allocationPercent / 100));
+    const directCosts = toMoneyNumber(projectForm.directCosts);
+    const operatingCosts = toMoneyNumber(projectForm.operatingCosts);
+    const payrollCosts = toMoneyNumber(projectForm.payrollCosts);
+    const progress = Math.max(0, Math.min(100, Number(projectForm.progress) || 0));
+    const sections = makeTemplateSections(projectForm.projectType).map((section) => {
+      if (section.name !== projectForm.stage) return section;
+      return {
+        ...section,
+        status: projectForm.status === "Завершён" ? "Принято" : "В работе",
+        progress: Math.max(section.progress, progress),
+      };
+    });
+    const status = projectForm.status || "Новая";
+    const deadline = projectForm.deadline.trim() || "не указан";
+    const source = projectSourceLabel(projectForm.creationMode);
     const created = {
       id: `SG-${String(300 + nextIndex).padStart(3, "0")}`,
       title,
@@ -4570,39 +4761,44 @@ function SmetaOfficePrototype() {
       objectCity: projectForm.city.trim() || "не указан",
       projectType: projectForm.projectType,
       direction: projectForm.direction,
-      manager: "РП не назначен",
+      manager: projectForm.manager.trim() || "РП не назначен",
+      projectManager: projectForm.projectManager.trim() || "",
+      salesManager: projectForm.salesManager.trim() || "",
+      directorName: projectForm.director.trim() || "",
       executor: "—",
       partner: "—",
-      budget: "0 ₽",
-      margin: "0 ₽",
-      status: "Новая",
-      stage: "Квалификация",
-      progress: 5,
-      risk: "green",
-      deadline: "не указан",
-      source: "SmetaOffice",
+      budget: money(contractAmount),
+      margin: money(Math.max(contractAmount - productionBudget - directCosts, 0)),
+      status,
+      stage: projectForm.stage || sections[0]?.name || "Старт",
+      progress,
+      risk: projectForm.risk || "green",
+      deadline,
+      source,
+      sourceComment: projectForm.sourceComment.trim(),
       bitrix: {
         dealId: "",
         dealUrl: "",
         stage: "Не связано",
         syncStatus: "Черновая связь",
-        source: "SmetaOffice",
+        source,
       },
       yandexFolder: projectForm.yandexFolder.trim() || "не привязан",
       visibleFor: ["owner", "admin", "deputy", "director", "regional_manager", "pm", "project_manager", "finance", "accountant"],
-      clientStatus: "Заявка принята. Команда уточняет детали проекта.",
-      contractAmount: 0,
-      paidByClient: 0,
-      productionBudget: 0,
+      clientStatus: status === "В работе" ? `Проект в работе. Текущий этап: ${projectForm.stage}.` : "Проект внесён в систему. Команда уточняет детали.",
+      contractAmount,
+      paidByClient,
+      productionAllocationPercent: allocationPercent,
+      productionBudget,
       plannedExpenses: 0,
       factualExpenses: 0,
       partnerPayouts: 0,
-      operatingCosts: 0,
-      payrollCosts: 0,
-      paymentStatus: "не оплачен",
-      directCosts: 0,
+      operatingCosts,
+      payrollCosts,
+      paymentStatus: paidByClient >= contractAmount && contractAmount > 0 ? "оплачен" : paidByClient > 0 ? "частично оплачен" : "не оплачен",
+      directCosts,
       tasks: [],
-      sections: makeTemplateSections(projectForm.projectType),
+      sections,
       clientParticipants: [
         {
           id: `client-${Date.now()}`,
@@ -4617,7 +4813,7 @@ function SmetaOfficePrototype() {
     };
     setProjectItems((items) => [created, ...items]);
     selectProject(created.id);
-    setProjectForm({ title: "", client: "", city: "", region: "ЧР", projectType: "Дизайн-проект", direction: "Дизайн / интерьер", yandexFolder: "" });
+    setProjectForm(defaultProjectForm);
   }
 
   function createTask(projectId) {
