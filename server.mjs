@@ -94,7 +94,10 @@ async function serveStatic(route, res) {
   try {
     const ext = path.extname(filePath).toLowerCase();
     const content = await readFile(filePath);
-    res.writeHead(200, { "Content-Type": mimeTypes[ext] || "application/octet-stream" });
+    res.writeHead(200, {
+      "Content-Type": mimeTypes[ext] || "application/octet-stream",
+      "Cache-Control": "no-store, max-age=0",
+    });
     res.end(content);
   } catch {
     sendText(res, 404, "Not found");

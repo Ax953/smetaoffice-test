@@ -4399,7 +4399,7 @@ function SmetaOfficePrototype() {
   const [role, setRole] = useState(() => readStoredValue("smeta.session", null)?.role || "owner");
   const [query, setQuery] = useState("");
   const [direction, setDirection] = useState("Все");
-  const [projectItems, setProjectItemsState] = useState(() => mergeDemoProductionProjects(readStoredValue("smeta.projects", seedProjects)));
+  const [projectItems, setProjectItemsState] = useState(() => mergeDemoProductionProjects(readStoredValue("smeta.projects", [])));
   const [executors, setExecutorsState] = useState(() => readStoredValue("smeta.executors", executorProfiles));
   const [users, setUsersState] = useState(() => readStoredValue("smeta.users", demoUsers));
   const [salesLeads, setSalesLeadsState] = useState(() => mergeSalesLeads(readStoredValue("smeta.salesLeads", seedSalesLeads)));
