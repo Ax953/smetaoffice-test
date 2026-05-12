@@ -376,7 +376,37 @@ function mergeDemoProductionProjects(projects) {
   const source = Array.isArray(projects) ? projects : [];
   const existingIds = new Set(source.map((project) => project.id));
   const missing = demoProductionProjects.filter((project) => !existingIds.has(project.id));
-  return missing.length ? [...missing, ...source] : source;
+  const merged = missing.length ? [...missing, ...source] : source;
+  return merged.map(normalizeProjectAccess);
+}
+
+function normalizeProjectAccess(project) {
+  const isProjectInstitute = project.direction === "Проектный институт";
+  const isDesign = project.direction === "Дизайн / интерьер";
+  const isRostov = project.region === "Ростов";
+  const isDnr = project.region === "ДНР";
+  const isSmetaGoLead = project.source === "SmetaGo";
+
+  const defaultsById = {
+    "SG-154": { directorUserId: "USR-007", projectManagerId: "USR-007", salesManagerId: "USR-008" },
+    "SG-181": { directorUserId: "USR-004", pmUserId: "USR-006" },
+    "SG-206": { regionalManagerId: "USR-005", partnerUserId: "USR-013" },
+    "SG-219": { headOfSalesId: "USR-009", salesManagerId: "USR-008", partnerUserId: "USR-013" },
+    "SG-401": { directorUserId: "USR-004", pmUserId: "USR-006" },
+    "SG-402": { directorUserId: "USR-007", projectManagerId: "USR-007", salesManagerId: "USR-008" },
+    "SG-403": { directorUserId: "USR-004", pmUserId: "USR-006" },
+  };
+
+  return {
+    ...project,
+    directorUserId: project.directorUserId || defaultsById[project.id]?.directorUserId || (isProjectInstitute ? "USR-004" : ""),
+    regionalManagerId: project.regionalManagerId || defaultsById[project.id]?.regionalManagerId || (isRostov ? "USR-005" : ""),
+    pmUserId: project.pmUserId || defaultsById[project.id]?.pmUserId || (isDnr || isProjectInstitute ? "USR-006" : ""),
+    projectManagerId: project.projectManagerId || defaultsById[project.id]?.projectManagerId || (isDesign ? "USR-007" : ""),
+    salesManagerId: project.salesManagerId || defaultsById[project.id]?.salesManagerId || (isSmetaGoLead ? "USR-008" : ""),
+    headOfSalesId: project.headOfSalesId || defaultsById[project.id]?.headOfSalesId || (isSmetaGoLead ? "USR-009" : ""),
+    partnerUserId: project.partnerUserId || defaultsById[project.id]?.partnerUserId || "",
+  };
 }
 
 const partners = [
@@ -898,16 +928,52 @@ function canAccessRegion(user, project) {
 
 function canAccessProject(user, project, viewRole = user?.role) {
   const role = viewRole || user?.role;
-  if (!project || role === "owner") return true;
-  if (roleCan(role, "viewAll")) return true;
-  if (Array.isArray(project.visibleFor) && project.visibleFor.includes(role)) return true;
+  if (!project || !user) return false;
+  if (role === "owner") return true;
+  if (role === "admin" || role === "deputy") return true;
+  if (role === "finance" || role === "accountant") return true;
+
   if (role === "executor" || role === "partner") {
     const executorId = user?.executorId;
+    if (role === "partner" && project.partnerUserId === user.id) return true;
     if (!executorId) return false;
     const assignedTasks = [...(project.tasks || []), ...(project.sections || [])];
     return assignedTasks.some((task) => task.executorId === executorId || task.assigneeId === executorId);
   }
+
+  if (!canAccessRegion(user, project)) return false;
+
+  if (role === "director") {
+    return project.directorUserId === user.id || project.direction === user.direction;
+  }
+  if (role === "regional_manager") {
+    return true;
+  }
+  if (role === "pm") {
+    return project.pmUserId === user.id || project.managerId === user.id || project.manager === user.name;
+  }
+  if (role === "project_manager") {
+    return project.projectManagerId === user.id || project.managerId === user.id || project.manager === user.name;
+  }
+  if (role === "sales_manager") {
+    return project.salesManagerId === user.id || project.source === "SmetaGo" || project.direction === "Недвижимость";
+  }
+  if (role === "head_of_sales") {
+    return project.headOfSalesId === user.id || project.source === "SmetaGo" || project.direction === "Недвижимость";
+  }
+
   return canAccessRegion(user, project);
+}
+
+function sectionAllowed(role, sectionId) {
+  const common = ["dashboard", "projects", "tasks", "analytics", "client"];
+  if (role === "owner" || role === "deputy") return true;
+  if (role === "admin") return ["dashboard", "projects", "tasks", "executors", "partners", "analytics", "integrations", "admin", "client"].includes(sectionId);
+  if (role === "finance" || role === "accountant") return ["dashboard", "projects", "tasks", "analytics", "finance"].includes(sectionId);
+  if (role === "executor") return ["dashboard", "tasks"].includes(sectionId);
+  if (role === "partner") return ["dashboard", "projects", "tasks", "analytics"].includes(sectionId);
+  if (role === "sales_manager" || role === "head_of_sales") return common.includes(sectionId);
+  return ["dashboard", "projects", "tasks", "executors", "analytics", "client"].includes(sectionId);
 }
 
 function cn(...classes) {
@@ -3506,6 +3572,8 @@ function ClientAppModule({ projectItems }) {
 
 function DashboardModule({ visibleProjects, selectedProject, setSelectedId, role, session, query, setQuery, direction, setDirection, chooseFirstAvailable, currentRole, onProjectMessage }) {
   const summary = financeSummary(visibleProjects);
+  const canSeeFinance = roleCan(role, "viewFinance");
+  const canSeeProductionBudget = roleCan(role, "viewProductionBudget") || canSeeFinance;
   const visibleTasks = flattenTasks(visibleProjects);
   const redProjects = visibleProjects.filter((project) => project.risk === "red");
   const yellowProjects = visibleProjects.filter((project) => project.risk === "yellow");
@@ -3518,17 +3586,24 @@ function DashboardModule({ visibleProjects, selectedProject, setSelectedId, role
   const productionUsePercent = summary.allocatedProductionBudget ? Math.round((summary.realizationCost / summary.allocatedProductionBudget) * 100) : 0;
   const healthyPercent = visibleProjects.length ? Math.round(((visibleProjects.length - redProjects.length) / visibleProjects.length) * 100) : 0;
 
-  const ownerStats = [
-    { label: "Сумма договоров", value: money(summary.contractAmount), tone: "blue" },
-    { label: "Оплачено клиентами", value: money(summary.paidByClient), tone: "green" },
-    { label: "Валовая прибыль по оплатам", value: money(summary.grossProfit), tone: summary.grossProfit >= 0 ? "green" : "red" },
-    { label: "Красная зона", value: String(redProjects.length), tone: redProjects.length ? "red" : "green" },
-  ];
+  const ownerStats = canSeeFinance
+    ? [
+        { label: "Сумма договоров", value: money(summary.contractAmount), tone: "blue" },
+        { label: "Оплачено клиентами", value: money(summary.paidByClient), tone: "green" },
+        { label: "Валовая прибыль по оплатам", value: money(summary.grossProfit), tone: summary.grossProfit >= 0 ? "green" : "red" },
+        { label: "Красная зона", value: String(redProjects.length), tone: redProjects.length ? "red" : "green" },
+      ]
+    : [
+        { label: "Доступные проекты", value: String(visibleProjects.length), tone: "blue" },
+        { label: "Средний прогресс", value: `${avgProgress}%`, tone: avgProgress >= 60 ? "green" : "yellow" },
+        { label: "Задачи на проверке", value: String(reviewTasks.length), tone: reviewTasks.length ? "yellow" : "green" },
+        { label: "Красная зона", value: String(redProjects.length), tone: redProjects.length ? "red" : "green" },
+      ];
 
   const planCards = [
     { label: "План выполнения", value: `${avgProgress}%`, hint: "средний прогресс проектов", percent: avgProgress, tone: avgProgress >= 70 ? "green" : avgProgress >= 40 ? "yellow" : "red" },
-    { label: "Оплата договоров", value: `${paidPercent}%`, hint: `${money(summary.paidByClient)} из ${money(summary.contractAmount)}`, percent: paidPercent, tone: paidPercent >= 70 ? "green" : paidPercent >= 35 ? "yellow" : "red" },
-    { label: "Освоение бюджета РП", value: `${productionUsePercent}%`, hint: `${money(summary.realizationCost)} из ${money(summary.allocatedProductionBudget)}`, percent: Math.min(productionUsePercent, 100), tone: productionUsePercent <= 80 ? "green" : productionUsePercent <= 100 ? "yellow" : "red" },
+    ...(canSeeFinance ? [{ label: "Оплата договоров", value: `${paidPercent}%`, hint: `${money(summary.paidByClient)} из ${money(summary.contractAmount)}`, percent: paidPercent, tone: paidPercent >= 70 ? "green" : paidPercent >= 35 ? "yellow" : "red" }] : []),
+    ...(canSeeProductionBudget ? [{ label: "Освоение бюджета РП", value: `${productionUsePercent}%`, hint: `${money(summary.realizationCost)} из ${money(summary.allocatedProductionBudget)}`, percent: Math.min(productionUsePercent, 100), tone: productionUsePercent <= 80 ? "green" : productionUsePercent <= 100 ? "yellow" : "red" }] : []),
     { label: "Проекты без пожара", value: `${healthyPercent}%`, hint: `${visibleProjects.length - redProjects.length} из ${visibleProjects.length} не в красной зоне`, percent: healthyPercent, tone: healthyPercent >= 80 ? "green" : healthyPercent >= 60 ? "yellow" : "red" },
   ];
 
@@ -3628,17 +3703,24 @@ function DashboardModule({ visibleProjects, selectedProject, setSelectedId, role
           </div>
         </div>
 
-        <div className="office-card">
-          <h3>Финансовая картина</h3>
-          <div className="finance-flow">
-            <div><span>Сумма договоров</span><b>{money(summary.contractAmount)}</b></div>
-            <div><span>Оплачено клиентами</span><b>{money(summary.paidByClient)}</b></div>
-            <div><span>Задолженность / к получению</span><b>{money(summary.receivable)}</b></div>
-            <div><span>Бюджет реализации РП</span><b>{money(summary.allocatedProductionBudget)}</b></div>
-            <div><span>Плановая валовая прибыль</span><b>{money(summary.companyPlannedGross)}</b></div>
-            <div className="strong"><span>Чистая прибыль по оплатам</span><b>{money(summary.netProfit)}</b></div>
+        {canSeeFinance ? (
+          <div className="office-card">
+            <h3>Финансовая картина</h3>
+            <div className="finance-flow">
+              <div><span>Сумма договоров</span><b>{money(summary.contractAmount)}</b></div>
+              <div><span>Оплачено клиентами</span><b>{money(summary.paidByClient)}</b></div>
+              <div><span>Задолженность / к получению</span><b>{money(summary.receivable)}</b></div>
+              <div><span>Бюджет реализации РП</span><b>{money(summary.allocatedProductionBudget)}</b></div>
+              <div><span>Плановая валовая прибыль</span><b>{money(summary.companyPlannedGross)}</b></div>
+              <div className="strong"><span>Чистая прибыль по оплатам</span><b>{money(summary.netProfit)}</b></div>
+            </div>
           </div>
-        </div>
+        ) : (
+          <div className="office-card">
+            <h3>Доступ ограничен</h3>
+            <p className="section-hint">Финансовая картина скрыта для этой роли. Доступны только операционные показатели, задачи и статусы назначенных проектов.</p>
+          </div>
+        )}
       </section>
 
       <section className="dashboard-grid wide">
@@ -3651,14 +3733,14 @@ function DashboardModule({ visibleProjects, selectedProject, setSelectedId, role
           </div>
           <div className="dashboard-table">
             <div className="dashboard-table-head">
-              <span>Регион</span><span>Проекты</span><span>Договоры</span><span>Оплачено</span><span>Выполнение</span><span>Светофор</span>
+              <span>Регион</span><span>Проекты</span><span>{canSeeFinance ? "Договоры" : "Задачи"}</span><span>{canSeeFinance ? "Оплачено" : "На проверке"}</span><span>Выполнение</span><span>Светофор</span>
             </div>
             {regionRows.map((item) => (
               <button key={item.name} type="button" onClick={() => showAction(`Регион: ${item.name}`)}>
                 <b>{item.name}</b>
                 <span>{item.projects.length}</span>
-                <span>{money(item.economy.contractAmount)}</span>
-                <span>{money(item.economy.paidByClient)}</span>
+                <span>{canSeeFinance ? money(item.economy.contractAmount) : flattenTasks(item.projects).length}</span>
+                <span>{canSeeFinance ? money(item.economy.paidByClient) : flattenTasks(item.projects).filter((task) => task.status === "На проверке").length}</span>
                 <div className="table-progress"><em>{item.progress}%</em><div className="bar"><i className={cn("bar-fill", item.risk)} style={{ width: `${Math.max(4, item.progress)}%` }} /></div></div>
                 <em className={cn("risk-chip", item.risk)}>{riskText(item.risk)}</em>
               </button>
@@ -3680,7 +3762,7 @@ function DashboardModule({ visibleProjects, selectedProject, setSelectedId, role
                 <button key={item.name} type="button" onClick={() => showAction(`Направление: ${item.name}`)}>
                   <div>
                     <b>{item.name}</b>
-                    <span>{item.projects.length} проектов · {money(item.economy.contractAmount)}</span>
+                    <span>{item.projects.length} проектов{canSeeFinance ? ` · ${money(item.economy.contractAmount)}` : ""}</span>
                   </div>
                   <em className={cn("risk-chip", item.risk)}>{riskText(item.risk)}</em>
                   <div className="bar"><i className={cn("bar-fill", item.risk)} style={{ width: `${Math.max(6, percent)}%` }} /></div>
@@ -3785,6 +3867,10 @@ function SmetaOfficePrototype() {
 
   const currentRole = roles.find((item) => item.id === role) ?? roles[0];
   const allTasks = useMemo(() => flattenTasks(projectItems), [projectItems]);
+  const effectiveAccessUser = useMemo(() => {
+    if (session?.role === role) return session;
+    return users.find((user) => user.role === role) || session;
+  }, [role, session, users]);
 
   useEffect(() => {
     function handleAction(event) {
@@ -3839,6 +3925,12 @@ function SmetaOfficePrototype() {
     }
   }, [users, session]);
 
+  useEffect(() => {
+    if (!sectionAllowed(role, activeSection)) {
+      setActiveSection("dashboard");
+    }
+  }, [role, activeSection]);
+
   function setProjectItems(updater) {
     setProjectItemsState((current) => {
       const next = typeof updater === "function" ? updater(current) : updater;
@@ -3870,23 +3962,26 @@ function SmetaOfficePrototype() {
     const normalizedQuery = query.trim().toLowerCase();
 
     return projectItems.filter((project) => {
-      const hasAccess = canAccessProject(session, project, role);
-      const hasRegionAccess = canAccessRegion(session, project);
+      const hasAccess = canAccessProject(effectiveAccessUser, project, role);
+      const hasRegionAccess = canAccessRegion(effectiveAccessUser, project);
       const searchableText = `${project.title} ${project.client} ${project.city} ${project.direction}`.toLowerCase();
       const matchesQuery = normalizedQuery === "" || searchableText.includes(normalizedQuery);
       const matchesDirection = direction === "Все" || project.direction.includes(direction);
 
       return hasAccess && hasRegionAccess && matchesQuery && matchesDirection;
     });
-  }, [projectItems, role, query, direction, session]);
+  }, [projectItems, role, query, direction, effectiveAccessUser]);
+
+  const visibleTasks = useMemo(() => flattenTasks(visibleProjects), [visibleProjects]);
 
   const selectedProject = visibleProjects.find((project) => project.id === selectedId) ?? visibleProjects[0] ?? null;
 
   function chooseFirstAvailable(nextRole = role, nextDirection = direction, nextQuery = query) {
     const normalizedQuery = nextQuery.trim().toLowerCase();
+    const nextAccessUser = session?.role === nextRole ? session : users.find((user) => user.role === nextRole) || session;
     const firstAvailableProject = projectItems.find((project) => {
-      const hasAccess = canAccessProject(session, project, nextRole);
-      const hasRegionAccess = canAccessRegion(session, project);
+      const hasAccess = canAccessProject(nextAccessUser, project, nextRole);
+      const hasRegionAccess = canAccessRegion(nextAccessUser, project);
       const searchableText = `${project.title} ${project.client} ${project.city} ${project.direction}`.toLowerCase();
       const matchesQuery = normalizedQuery === "" || searchableText.includes(normalizedQuery);
       const matchesDirection = nextDirection === "Все" || project.direction.includes(nextDirection);
@@ -4089,7 +4184,7 @@ function SmetaOfficePrototype() {
         </div>
 
         <nav>
-          {menuItems.filter((item) => item.id !== "admin" || userCan(session, "manageUsers")).map((item, index) => (
+          {menuItems.filter((item) => sectionAllowed(role, item.id) && (item.id !== "admin" || userCan(session, "manageUsers"))).map((item, index) => (
             <button type="button" key={item.id} onClick={() => setActiveSection(item.id)} className={activeSection === item.id ? "current" : ""}>
               <span>{index + 1}</span>
               {item.label}
@@ -4144,7 +4239,7 @@ function SmetaOfficePrototype() {
         <div className="office-content">
           {role === "executor" ? <ExecutorPersonalAccount allTasks={allTasks} /> : null}
 
-          {role !== "executor" && activeSection === "executors" ? <ExecutorsModule role={role} executors={executors} setExecutors={setExecutors} allTasks={allTasks} /> : null}
+          {role !== "executor" && activeSection === "executors" ? <ExecutorsModule role={role} executors={executors} setExecutors={setExecutors} allTasks={visibleTasks} /> : null}
 
           {role !== "executor" && activeSection === "integrations" ? <IntegrationsModule /> : null}
 
@@ -4203,10 +4298,10 @@ function SmetaOfficePrototype() {
             />
           ) : null}
 
-          {role !== "executor" && activeSection === "tasks" ? <TasksModule allTasks={allTasks} onTaskStatusChange={changeTaskStatus} executors={executors} /> : null}
+          {role !== "executor" && activeSection === "tasks" ? <TasksModule allTasks={visibleTasks} onTaskStatusChange={changeTaskStatus} executors={executors} /> : null}
           {role !== "executor" && activeSection === "partners" ? <PartnersModule /> : null}
           {role !== "executor" && activeSection === "admin" ? <AdminModule users={users} setUsers={setUsers} session={session} /> : null}
-          {role !== "executor" && activeSection === "analytics" ? <AnalyticsModule projectItems={projectItems} allTasks={allTasks} role={role} /> : null}
+          {role !== "executor" && activeSection === "analytics" ? <AnalyticsModule projectItems={visibleProjects} allTasks={visibleTasks} role={role} /> : null}
           {role !== "executor" && activeSection === "finance" ? <FinanceModule projectItems={projectItems} role={role} /> : null}
           {role !== "executor" && activeSection === "client" ? <ClientAppModule projectItems={projectItems} /> : null}
         </div>
