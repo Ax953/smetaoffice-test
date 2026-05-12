@@ -373,11 +373,9 @@ const demoProductionProjects = [
 ];
 
 function mergeDemoProductionProjects(projects) {
+  const demoProjectIds = new Set(["SG-154", "SG-181", "SG-206", "SG-219", "SG-401", "SG-402", "SG-403"]);
   const source = Array.isArray(projects) ? projects : [];
-  const existingIds = new Set(source.map((project) => project.id));
-  const missing = demoProductionProjects.filter((project) => !existingIds.has(project.id));
-  const merged = missing.length ? [...missing, ...source] : source;
-  return merged.map(normalizeProjectAccess);
+  return source.filter((project) => !demoProjectIds.has(project.id)).map(normalizeProjectAccess);
 }
 
 function normalizeProjectAccess(project) {
@@ -630,7 +628,7 @@ const seedSalesLeads = [
     farmerName: "Партнёр",
     headOfSalesId: "USR-009",
     partnerId: "USR-013",
-    projectId: "SG-206",
+    projectId: "",
     firstResponseAt: "2026-05-12T12:02:00.000Z",
     createdAt: "2026-05-12T12:01:00.000Z",
     slaDeadlineAt: "2026-05-12T12:06:00.000Z",
@@ -639,7 +637,7 @@ const seedSalesLeads = [
     nextContactAt: "2026-05-13T10:00:00.000Z",
     lastActivityAt: "2026-05-12T12:10:00.000Z",
     notes: "Партнёр видит только свою заявку.",
-    history: ["Создан лид", "Передан Farmer/партнёру", "Связан с проектом SG-206"],
+    history: ["Создан лид", "Передан Farmer/партнёру"],
   },
   {
     id: "SL-003",
@@ -663,7 +661,7 @@ const seedSalesLeads = [
     farmerName: "Руководитель проекта",
     headOfSalesId: "USR-009",
     partnerId: "",
-    projectId: "SG-181",
+    projectId: "",
     firstResponseAt: "2026-05-12T12:03:00.000Z",
     createdAt: "2026-05-12T12:00:30.000Z",
     slaDeadlineAt: "2026-05-12T12:05:30.000Z",
@@ -672,7 +670,7 @@ const seedSalesLeads = [
     nextContactAt: "2026-05-12T16:30:00.000Z",
     lastActivityAt: "2026-05-12T12:20:00.000Z",
     notes: "Связано с проектной документацией, без реальных контактов.",
-    history: ["Создан лид", "КП отправлено", "Связан с проектом SG-181"],
+    history: ["Создан лид", "КП отправлено"],
   },
 ];
 
@@ -4405,7 +4403,7 @@ function SmetaOfficePrototype() {
   const [executors, setExecutorsState] = useState(() => readStoredValue("smeta.executors", executorProfiles));
   const [users, setUsersState] = useState(() => readStoredValue("smeta.users", demoUsers));
   const [salesLeads, setSalesLeadsState] = useState(() => mergeSalesLeads(readStoredValue("smeta.salesLeads", seedSalesLeads)));
-  const [selectedId, setSelectedId] = useState(() => readStoredValue("smeta.selectedProjectId", seedProjects[0].id));
+  const [selectedId, setSelectedId] = useState(() => readStoredValue("smeta.selectedProjectId", ""));
   const [activeSection, setActiveSection] = useState("dashboard");
   const [projectForm, setProjectForm] = useState({ title: "", client: "", city: "", region: "ЧР", projectType: "Дизайн-проект", direction: "Дизайн / интерьер", yandexFolder: "" });
   const [taskForm, setTaskForm] = useState({ name: "", owner: "", executorId: "", due: "", status: "Новая", yandexLink: "" });
@@ -4440,7 +4438,7 @@ function SmetaOfficePrototype() {
         apiGet("/users", null),
       ]);
       if (!alive) return;
-      if (Array.isArray(serverProjects) && serverProjects.length) {
+      if (Array.isArray(serverProjects)) {
         const mergedProjects = mergeDemoProductionProjects(serverProjects);
         setProjectItemsState(mergedProjects);
         writeStoredValue("smeta.projects", mergedProjects);
