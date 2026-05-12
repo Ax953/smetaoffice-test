@@ -55,7 +55,27 @@ const demoUsers = [
   { id: "USR-013", login: "partner", password: "partner", role: "partner", name: "Партнёр", status: "active", region: "Ростов", regions: ["Ростов"], direction: "Строительство и ремонт", position: "Партнёр", executorId: "EX-017" },
 ];
 
-const regionOptions = ["Все регионы", "ЧР", "ДНР", "ЛНР", "Ростов", "Москва", "Федеральные проекты"];
+const baseRegions = [
+  { id: "chechnya", name: "Чеченская Республика", city: "Грозный", manager: "Управляющий региона", risk: "green" },
+  { id: "dnr", name: "ДНР", city: "Донецк / Мариуполь", manager: "Региональный руководитель проектов", risk: "yellow" },
+  { id: "rostov", name: "Ростовская область", city: "Ростов-на-Дону", manager: "Управляющий региона", risk: "green" },
+];
+
+const regionOptions = ["Все регионы", ...baseRegions.map((region) => region.name)];
+const regionAliases = {
+  "ЧР": "Чеченская Республика",
+  "Грозный": "Чеченская Республика",
+  "ДНР": "ДНР",
+  "ЛНР": "ДНР",
+  "Ростов": "Ростовская область",
+  "Ростов-на-Дону": "Ростовская область",
+  "Ростовская область": "Ростовская область",
+};
+
+function normalizeRegionName(region) {
+  const value = String(region || "").trim();
+  return regionAliases[value] || value || "Без региона";
+}
 
 const positionOptions = [
   "Не назначена",
@@ -407,11 +427,24 @@ function normalizeProjectAccess(project) {
   };
 }
 
-const partners = [
-  { name: "BuildPro Ростов", category: "Ремонт", rating: 91, active: 4, overdue: 0, level: "Проверенный" },
-  { name: "CityRealty", category: "Недвижимость", rating: 78, active: 2, overdue: 1, level: "Надёжный" },
-  { name: "Геология-Партнёр", category: "Изыскания", rating: 64, active: 1, overdue: 1, level: "Базовый" },
-  { name: "CleanHome", category: "Сервис", rating: 88, active: 0, overdue: 0, level: "Надёжный" },
+const partnerCategoryOptions = [
+  "Агентство недвижимости / риелтор",
+  "Изыскания / геодезия / обследования",
+  "Архитектурное бюро / архитектор",
+  "Дизайн-студия / дизайнер",
+  "Строительная компания / ремонт",
+  "Поставщик материалов / магазин",
+  "Комплектация / мебель / техника",
+  "Бытовой сервис",
+  "Маркетинг / лидогенерация / лендинг",
+  "Другое",
+];
+
+const partnerSeed = [
+  { id: "P-001", name: "BuildPro Ростов", category: "Строительная компания / ремонт", region: "Ростовская область", direction: "Строительство и ремонт", rating: 91, active: 4, overdue: 0, level: "Проверенный", status: "Активен", accrued: 420000, paid: 280000 },
+  { id: "P-002", name: "CityRealty", category: "Агентство недвижимости / риелтор", region: "Ростовская область", direction: "Агентство недвижимости", rating: 78, active: 2, overdue: 1, level: "Надёжный", status: "Активен", accrued: 36000, paid: 0 },
+  { id: "P-003", name: "Геология-Партнёр", category: "Изыскания / геодезия / обследования", region: "ДНР", direction: "Изыскания / обследования / обмеры", rating: 64, active: 1, overdue: 1, level: "Базовый", status: "Проверка", accrued: 120000, paid: 60000 },
+  { id: "P-004", name: "CleanHome", category: "Бытовой сервис", region: "Чеченская Республика", direction: "Бытовые услуги / сервис", rating: 88, active: 0, overdue: 0, level: "Надёжный", status: "Резерв", accrued: 0, paid: 0 },
 ];
 
 const quickStats = [
@@ -756,6 +789,11 @@ const regionalDirections = [
     manager: "Управляющий архитектурой и дизайном",
     hint: "Архитектурные проекты, дизайн-проекты, рабочая документация, визуализация и комплектация.",
     projectDirection: "Бюро архитектуры и дизайна",
+    headcount: 0,
+    payrollMonthly: 0,
+    rentMonthly: 0,
+    otherMonthlyCosts: 0,
+    plannedGrossTarget: 0,
     risk: "green",
     match: (project) => {
       const text = `${project.direction || ""} ${project.projectType || ""}`.toLowerCase();
@@ -768,6 +806,11 @@ const regionalDirections = [
     manager: "Управляющий изысканиями",
     hint: "Локальные выезды, обследования, обмеры, геология, исходные данные и техническое заключение.",
     projectDirection: "Изыскания / обследования / обмеры",
+    headcount: 0,
+    payrollMonthly: 0,
+    rentMonthly: 0,
+    otherMonthlyCosts: 0,
+    plannedGrossTarget: 0,
     risk: "yellow",
     match: (project) => {
       const text = `${project.direction || ""} ${project.projectType || ""} ${(project.sections || []).map((item) => item.name).join(" ")}`.toLowerCase();
@@ -780,6 +823,11 @@ const regionalDirections = [
     manager: "Руководитель продаж региона",
     hint: "Покупка, продажа, аренда, подбор объектов и передача клиента в дизайн / ремонт.",
     projectDirection: "Агентство недвижимости",
+    headcount: 0,
+    payrollMonthly: 0,
+    rentMonthly: 0,
+    otherMonthlyCosts: 0,
+    plannedGrossTarget: 0,
     risk: "green",
     match: (project) => {
       const text = `${project.direction || ""} ${project.projectType || ""} ${project.source || ""}`.toLowerCase();
@@ -792,6 +840,11 @@ const regionalDirections = [
     manager: "Управляющий реализацией",
     hint: "Строительство, ремонт, контроль подрядчиков, фотоотчёты, акты и локальная реализация.",
     projectDirection: "Строительство и ремонт",
+    headcount: 0,
+    payrollMonthly: 0,
+    rentMonthly: 0,
+    otherMonthlyCosts: 0,
+    plannedGrossTarget: 0,
     risk: "yellow",
     match: (project) => {
       const text = `${project.direction || ""} ${project.projectType || ""}`.toLowerCase();
@@ -804,6 +857,11 @@ const regionalDirections = [
     manager: "Управляющий комплектацией",
     hint: "Подбор, закупка, поставка мебели, техники, света, сантехники и материалов.",
     projectDirection: "Комплектация",
+    headcount: 0,
+    payrollMonthly: 0,
+    rentMonthly: 0,
+    otherMonthlyCosts: 0,
+    plannedGrossTarget: 0,
     risk: "green",
     match: (project) => `${project.direction || ""} ${project.projectType || ""}`.toLowerCase().includes("комплектац"),
   },
@@ -813,6 +871,11 @@ const regionalDirections = [
     manager: "Управляющий сервисом",
     hint: "Клининг, мелкий ремонт, установка техники, сервис после ремонта и бытовые задачи.",
     projectDirection: "Бытовые услуги / сервис",
+    headcount: 0,
+    payrollMonthly: 0,
+    rentMonthly: 0,
+    otherMonthlyCosts: 0,
+    plannedGrossTarget: 0,
     risk: "green",
     match: (project) => {
       const text = `${project.direction || ""} ${project.projectType || ""}`.toLowerCase();
@@ -825,6 +888,11 @@ const regionalDirections = [
     manager: "Управляющий обучением",
     hint: "Обучение сотрудников, партнёров и исполнителей по стандартам компании в регионе.",
     projectDirection: "Обучение",
+    headcount: 0,
+    payrollMonthly: 0,
+    rentMonthly: 0,
+    otherMonthlyCosts: 0,
+    plannedGrossTarget: 0,
     risk: "green",
     match: (project) => {
       const text = `${project.direction || ""} ${project.projectType || ""}`.toLowerCase();
@@ -1358,7 +1426,7 @@ function flattenTasks(projectItems) {
       kind: "Задача",
       projectId: project.id,
       projectTitle: project.title,
-      projectRegion: project.region || project.city || "Без региона",
+      projectRegion: normalizeRegionName(project.region || project.city),
       projectManager: project.manager,
       direction: project.direction,
       section: task.sectionName || task.section || project.direction,
@@ -1376,7 +1444,7 @@ function flattenTasks(projectItems) {
       kind: "Раздел",
       projectId: project.id,
       projectTitle: project.title,
-      projectRegion: project.region || project.city || "Без региона",
+      projectRegion: normalizeRegionName(project.region || project.city),
       projectManager: project.manager,
       direction: project.direction,
       section: section.name,
@@ -1396,13 +1464,13 @@ function flattenTasks(projectItems) {
 
 function userRegionList(user) {
   const list = Array.isArray(user?.regions) && user.regions.length ? user.regions : [user?.region].filter(Boolean);
-  return list.length ? list : ["Все регионы"];
+  return list.length ? list.map(normalizeRegionName) : ["Все регионы"];
 }
 
 function canAccessRegion(user, project) {
   if (!user || user.role === "owner") return true;
   const userRegions = userRegionList(user);
-  return userRegions.includes("Все регионы") || userRegions.includes(project.region || project.city);
+  return userRegions.includes("Все регионы") || userRegions.includes(normalizeRegionName(project.region || project.city));
 }
 
 function canAccessProject(user, project, viewRole = user?.role) {
@@ -2590,23 +2658,44 @@ function ProjectDetails({ project, role, onUpdateProject, onTaskStatusChange, on
   );
 }
 
-function PartnerTable() {
+function PartnerTable({ partnerItems, partnerForm, setPartnerForm, onAddPartner, canManagePartners }) {
   return (
     <section className="office-card">
       <div className="section-row">
-        <h3>Партнёры</h3>
-        <button type="button" className="primary" onClick={() => showAction("Открыта заявка на подключение партнёра")}>Подключить</button>
+        <div>
+          <h3>Партнёры</h3>
+          <p className="section-hint">Партнёры делятся по специализации: недвижимость, изыскания, архитектура, дизайн, строительство, поставщики, сервис и маркетинг.</p>
+        </div>
+        <span className="muted-chip">Всего: {partnerItems.length}</span>
       </div>
+      {canManagePartners ? (
+        <div className="quick-form partner-form">
+          <input value={partnerForm.name} onChange={(event) => setPartnerForm((next) => ({ ...next, name: event.target.value }))} placeholder="Название партнёра / ФИО" />
+          <select value={partnerForm.category} onChange={(event) => setPartnerForm((next) => ({ ...next, category: event.target.value }))}>
+            {partnerCategoryOptions.map((category) => <option key={category}>{category}</option>)}
+          </select>
+          <select value={partnerForm.region} onChange={(event) => setPartnerForm((next) => ({ ...next, region: event.target.value }))}>
+            {regionOptions.filter((region) => region !== "Все регионы").map((region) => <option key={region}>{region}</option>)}
+          </select>
+          <select value={partnerForm.direction} onChange={(event) => setPartnerForm((next) => ({ ...next, direction: event.target.value }))}>
+            {directionOptions.filter((item) => item !== "Все").map((direction) => <option key={direction}>{direction}</option>)}
+          </select>
+          <input value={partnerForm.contact} onChange={(event) => setPartnerForm((next) => ({ ...next, contact: event.target.value }))} placeholder="Контакт / телефон / Telegram" />
+          <button type="button" className="primary" onClick={onAddPartner} disabled={!partnerForm.name.trim()}>Добавить партнёра</button>
+        </div>
+      ) : (
+        <p className="section-hint">Добавлять и редактировать партнёров может владелец или администратор.</p>
+      )}
       <div className="partner-table">
-        {partners.map((partner) => (
-          <div key={partner.name}>
+        {partnerItems.map((partner) => (
+          <div key={partner.id || partner.name}>
             <div>
               <b>{partner.name}</b>
-              <span>{partner.category}</span>
+              <span>{partner.category} · {partner.region} · {partner.direction}</span>
             </div>
             <em>{partner.level}</em>
-            <span>Рейтинг {partner.rating}</span>
-            <span>Активно {partner.active}</span>
+            <span>{partner.status || "Активен"} · рейтинг {partner.rating}</span>
+            <span>Активно {partner.active} · к выплате {money(Math.max((Number(partner.accrued) || 0) - (Number(partner.paid) || 0), 0))}</span>
             <strong className={partner.overdue ? "bad" : "good"}>Просрочки {partner.overdue}</strong>
           </div>
         ))}
@@ -3904,8 +3993,21 @@ function ProjectsModule({
 
   const regions = useMemo(() => {
     const map = new Map();
+    baseRegions.forEach((region) => {
+      map.set(region.name, {
+        name: region.name,
+        city: region.city,
+        manager: region.manager,
+        projects: 0,
+        contractAmount: 0,
+        paidByClient: 0,
+        realizationCost: 0,
+        risk: region.risk,
+        directions: new Set(),
+      });
+    });
     searchProjects.forEach((project) => {
-      const key = project.region || project.city || "Без региона";
+      const key = normalizeRegionName(project.region || project.city);
       const economy = projectEconomy(project);
       const item = map.get(key) || { name: key, projects: 0, contractAmount: 0, paidByClient: 0, realizationCost: 0, risk: "green", directions: new Set() };
       item.projects += 1;
@@ -3930,7 +4032,7 @@ function ProjectsModule({
 
   const instituteSummary = useMemo(() => financeSummary(instituteProjects), [instituteProjects]);
   const selectedRegionProjects = useMemo(() => {
-    return searchProjects.filter((project) => (project.region || project.city || "Без региона") === selectedRegion);
+    return searchProjects.filter((project) => normalizeRegionName(project.region || project.city) === selectedRegion);
   }, [searchProjects, selectedRegion]);
 
   const selectedRegionSummary = useMemo(() => financeSummary(selectedRegionProjects), [selectedRegionProjects]);
@@ -3952,7 +4054,7 @@ function ProjectsModule({
   }, [selectedRegionProjects]);
 
   const scopedProjects = visibleProjects.filter((project) => {
-    const projectRegion = project.region || project.city || "Без региона";
+    const projectRegion = normalizeRegionName(project.region || project.city);
     if (selectedArea === "institute") return instituteProjects.some((item) => item.id === project.id);
     if (!selectedDirectionConfig) return false;
     return projectRegion === selectedRegion && selectedDirectionConfig.match(project);
@@ -4163,8 +4265,9 @@ function ProjectsModule({
               <DrillCard
                 key={region.name}
                 title={region.name}
-                subtitle={`Проектов: ${region.projects} · Направлений: ${region.directions.size}`}
+                subtitle={`${region.city || "Регион"} · Проектов: ${region.projects} · Направлений в работе: ${region.directions.size}`}
                 risk={region.risk}
+                manager={region.manager}
                 metrics={[
                   ["Договоры", money(region.contractAmount)],
                   ["Оплачено", money(region.paidByClient)],
@@ -4217,6 +4320,10 @@ function ProjectsModule({
                 <div><span>Регион</span><b>{selectedRegion}</b></div>
                 <div><span>Управляющий</span><b>{selectedDirectionConfig?.manager}</b></div>
                 <div><span>Проектов</span><b>{scopedProjects.length}</b></div>
+                {["owner", "admin"].includes(role) ? <div><span>Штатные единицы</span><b>{selectedDirectionConfig?.headcount || 0}</b></div> : null}
+                {["owner", "admin"].includes(role) ? <div><span>ЗП / месяц</span><b>{money(selectedDirectionConfig?.payrollMonthly || 0)}</b></div> : null}
+                {["owner", "admin"].includes(role) ? <div><span>Аренда / месяц</span><b>{money(selectedDirectionConfig?.rentMonthly || 0)}</b></div> : null}
+                {["owner", "admin"].includes(role) ? <div><span>План валовой части</span><b>{money(selectedDirectionConfig?.plannedGrossTarget || 0)}</b></div> : null}
               </div>
             </div>
             <div className="projects-list project-cards-grid">
@@ -4503,11 +4610,62 @@ function TasksModule({ allTasks, onTaskStatusChange, executors }) {
   );
 }
 
-function PartnersModule() {
+function PartnersModule({ role }) {
+  const [partnerItems, setPartnerItems] = useState(() => readStoredValue("smeta.partners", partnerSeed));
+  const [partnerForm, setPartnerForm] = useState({
+    name: "",
+    category: partnerCategoryOptions[0],
+    region: "Чеченская Республика",
+    direction: "Агентство недвижимости",
+    contact: "",
+  });
+  const canManagePartners = ["owner", "admin"].includes(role);
+
+  function updatePartners(nextItems) {
+    setPartnerItems(nextItems);
+    writeStoredValue("smeta.partners", nextItems);
+  }
+
+  function addPartner() {
+    if (!canManagePartners) {
+      showAction("Добавлять партнёров может только владелец или администратор");
+      return;
+    }
+    const name = partnerForm.name.trim();
+    if (!name) {
+      showAction("Укажи название партнёра или ФИО");
+      return;
+    }
+    const created = {
+      id: `P-${Date.now()}`,
+      name,
+      category: partnerForm.category,
+      region: partnerForm.region,
+      direction: partnerForm.direction,
+      contact: partnerForm.contact.trim(),
+      rating: 50,
+      active: 0,
+      overdue: 0,
+      level: "Новый",
+      status: "Проверка",
+      accrued: 0,
+      paid: 0,
+    };
+    updatePartners([created, ...partnerItems]);
+    setPartnerForm({ name: "", category: partnerCategoryOptions[0], region: "Чеченская Республика", direction: "Агентство недвижимости", contact: "" });
+    showAction("Партнёр добавлен в базу SmetaOffice");
+  }
+
   return (
     <>
       <SectionIntro section="partners" />
-      <PartnerTable />
+      <PartnerTable
+        partnerItems={partnerItems}
+        partnerForm={partnerForm}
+        setPartnerForm={setPartnerForm}
+        onAddPartner={addPartner}
+        canManagePartners={canManagePartners}
+      />
       <section className="summary-grid">
         <div>
           <h3>Что видит партнёр</h3>
@@ -5822,7 +5980,7 @@ function SmetaOfficePrototype() {
           ) : null}
 
           {role !== "executor" && activeSection === "tasks" ? <TasksModule allTasks={visibleTasks} onTaskStatusChange={changeTaskStatus} executors={executors} /> : null}
-          {role !== "executor" && activeSection === "partners" ? <PartnersModule /> : null}
+          {role !== "executor" && activeSection === "partners" ? <PartnersModule role={role} /> : null}
           {role !== "executor" && activeSection === "admin" ? <AdminModule users={users} setUsers={setUsers} session={session} /> : null}
           {role !== "executor" && activeSection === "analytics" ? <AnalyticsModule projectItems={visibleProjects} allTasks={visibleTasks} role={role} /> : null}
           {role !== "executor" && activeSection === "finance" ? <FinanceModule projectItems={projectItems} role={role} /> : null}
