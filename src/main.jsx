@@ -1106,8 +1106,28 @@ const projectDirectionCatalog = {
 };
 
 const projectStageTemplates = {
-  "Проектная документация по 87 постановлению": ["Исходные данные", "Техническое задание", "Обследование", "Изыскания", "Архитектурные решения", "Конструктивные решения", "Инженерные разделы", "Сметная документация", "Внутренняя проверка", "Выдача заказчику", "Сопровождение согласования / экспертизы", "Закрытие проекта"],
-  "Рабочая документация": ["Исходные данные", "Техническое задание", "АР", "КР", "ОВ", "ВК", "ЭОМ", "СС", "Сводная проверка", "Выдача комплекта", "Закрытие"],
+  "Проектная документация по 87 постановлению": [
+    { name: "Исходные данные / договор / бриф", due: "готово до старта", progress: 100, status: "Принято", note: "Без исходных данных проект не запускается." },
+    { name: "Техническое задание", due: "готово до старта", progress: 100, status: "Принято", note: "Фиксируется до начала проектирования." },
+    { name: "Обследование / ТЗК", due: "по отдельному договору", note: "Если требуется восстановление, реконструкция или повреждённое здание." },
+    { name: "Изыскания", due: "по отдельному договору", note: "Самостоятельная услуга; без неё часть ПСД нельзя начинать." },
+    { name: "Эскиз / концепция", due: "по регламенту проекта", note: "Создаётся только если нужен по договору." },
+    { name: "ПЗ — пояснительная записка", due: "по графику ПСД" },
+    { name: "АР — архитектурные решения", due: "по графику ПСД" },
+    { name: "КР — конструктивные решения", due: "по графику ПСД" },
+    { name: "ОВиК — отопление, вентиляция и кондиционирование", due: "по графику ПСД" },
+    { name: "ВК — водоснабжение и канализация", due: "по графику ПСД" },
+    { name: "ЭОМ — электроснабжение и освещение", due: "по графику ПСД" },
+    { name: "СС — слаботочные системы", due: "по графику ПСД" },
+    { name: "ОДИ / МОДИ — доступность инвалидов", due: "по графику ПСД" },
+    { name: "ПОС — проект организации строительства", due: "по графику ПСД" },
+    { name: "СД — сметная документация", due: "по графику ПСД" },
+    { name: "Внутренняя проверка", due: "1-3 рабочих дня" },
+    { name: "Выдача заказчику", due: "1-2 рабочих дня" },
+    { name: "Сопровождение согласования / экспертизы", due: "по факту замечаний" },
+    { name: "Закрытие проекта", due: "1 рабочий день" },
+  ],
+  "Рабочая документация": ["Исходные данные", "Техническое задание", "АР", "КР", "ОВиК", "ВК", "ЭОМ", "СС", "Сводная проверка", "Выдача комплекта", "Закрытие"],
   "Капитальный ремонт": ["Исходные данные", "Обследование", "Дефектный акт", "ТЗК", "Проектные решения", "Сметная документация", "Проверка", "Выдача заказчику", "Сопровождение согласования", "Закрытие"],
   "Реконструкция": ["Исходные данные", "Обследование", "Концепция реконструкции", "АР", "КР", "Инженерные разделы", "Сметы", "Проверка", "Выдача", "Экспертиза", "Закрытие"],
   "Многоквартирный дом": ["Исходные данные", "ТЗ", "ПЗ", "АР", "КР", "ОВ", "ВК", "ЭОМ", "СС", "ПОС", "ОДИ / МОДИ", "Сметы", "Проверка", "Экспертиза", "Закрытие"],
@@ -1116,8 +1136,34 @@ const projectStageTemplates = {
   "Инженерные разделы": ["Исходные данные", "ТЗ", "ОВ", "ВК", "ЭОМ", "СС", "Согласование решений", "Проверка", "Выдача", "Закрытие"],
   "Сметная документация": ["Исходные данные", "Ведомости объёмов", "Локальные сметы", "Сводный сметный расчёт", "Проверка", "Выдача", "Корректировка", "Закрытие"],
   "Обследование / техническое заключение": ["Заявка", "Исходные данные", "Выезд / обследование", "Фотофиксация", "Обмеры", "Техническое заключение", "Дефектный акт", "Первичная смета", "Передача", "Закрытие"],
-  "Дизайн интерьера": ["Заявка / бриф", "Замеры", "Техническое задание", "Планировочное решение", "Концепция", "Визуализация", "Рабочая документация", "Ведомость / комплектация", "Проверка", "Выдача клиенту", "Закрытие"],
-  "Архитектурный проект частного дома": ["Заявка", "Исходные данные", "Техническое задание", "Эскиз / концепция", "Планировочные решения", "Фасады", "Архитектурный раздел", "Конструктивный раздел", "Инженерные вводные", "Проверка", "Выдача клиенту", "Закрытие"],
+  "Дизайн интерьера": [
+    { name: "Заявка / бриф", due: "готово до старта", progress: 100, status: "Принято" },
+    { name: "Замеры", due: "готово до старта", progress: 100, status: "Принято" },
+    { name: "Техническое задание", due: "готово до старта", progress: 100, status: "Принято" },
+    { name: "Планировочное решение", due: "3 рабочих дня" },
+    { name: "Меблировка / расстановка", due: "2-3 рабочих дня" },
+    { name: "Концепция", due: "3 рабочих дня" },
+    { name: "Визуализация", due: "2 рабочих дня на помещение / ракурс" },
+    { name: "Рабочие чертежи", due: "7 рабочих дней" },
+    { name: "Ведомость / комплектация", due: "2-3 рабочих дня" },
+    { name: "Проверка РП", due: "1 рабочий день" },
+    { name: "Выдача клиенту", due: "1-2 рабочих дня" },
+    { name: "Закрытие", due: "1 рабочий день" },
+  ],
+  "Архитектурный проект частного дома": [
+    { name: "Заявка / бриф", due: "готово до старта", progress: 100, status: "Принято" },
+    { name: "Замеры / исходные данные", due: "готово до старта", progress: 100, status: "Принято" },
+    { name: "Техническое задание", due: "готово до старта", progress: 100, status: "Принято" },
+    { name: "Планировочные решения", due: "3 рабочих дня" },
+    { name: "Эскиз / концепция", due: "3 рабочих дня" },
+    { name: "Фасады", due: "3 рабочих дня" },
+    { name: "Архитектурный раздел / АР", due: "7 рабочих дней" },
+    { name: "Конструктивный раздел / КР", due: "по договору, если нужен" },
+    { name: "Инженерные вводные", due: "по договору, если нужны" },
+    { name: "Проверка РП", due: "1 рабочий день" },
+    { name: "Выдача клиенту", due: "1-2 рабочих дня" },
+    { name: "Закрытие", due: "1 рабочий день" },
+  ],
   "Архитектурная концепция": ["Заявка", "Исходные данные", "ТЗ", "Эскиз", "Объёмно-планировочные решения", "Фасады", "Презентация", "Выдача", "Закрытие"],
   "Фасады / экстерьер": ["Заявка", "Исходные данные", "Обмеры", "Концепция фасада", "Визуализация", "Материалы", "Рабочие узлы", "Выдача", "Закрытие"],
   "Конструктивный проект частного дома": ["Исходные данные", "ТЗ", "Расчётная схема", "Фундаменты", "Перекрытия", "Кровля", "Узлы", "Проверка", "Выдача", "Закрытие"],
@@ -1211,6 +1257,8 @@ const defaultProjectForm = {
   paidByClient: "",
   productionAllocationPercent: 35,
   productionBudget: "",
+  salesCommissionPercent: 10,
+  salesCommissionAmount: "",
   directCosts: "",
   operatingCosts: "",
   payrollCosts: "",
@@ -1220,11 +1268,27 @@ const defaultProjectForm = {
 
 function makeTemplateSections(projectType) {
   const template = projectStageTemplates[projectType] || projectStageTemplates["Дизайн интерьера"];
-  return template.map((name, index) => ({
-    id: `stage-${Date.now()}-${index + 1}`, name, executor: "не назначен", executorId: "", due: "не указан", progress: index === 0 ? 5 : 0,
-    status: index === 0 ? "Новая" : "Ожидает", clientBudget: 0, executorCost: 0, paid: 0, balance: 0,
-    financeStatus: "не рассчитан", yandexLink: "", documents: [], comments: [],
-  }));
+  return template.map((item, index) => {
+    const stage = typeof item === "string" ? { name: item } : item;
+    const progress = Number.isFinite(Number(stage.progress)) ? Number(stage.progress) : (index === 0 ? 5 : 0);
+    return {
+      id: `stage-${Date.now()}-${index + 1}`,
+      name: stage.name,
+      executor: "не назначен",
+      executorId: "",
+      due: stage.due || "не указан",
+      progress,
+      status: stage.status || (index === 0 ? "Новая" : "Ожидает"),
+      clientBudget: 0,
+      executorCost: 0,
+      paid: 0,
+      balance: 0,
+      financeStatus: "не рассчитан",
+      yandexLink: "",
+      documents: [],
+      comments: stage.note ? [stage.note] : [],
+    };
+  });
 }
 
 const integrationEvents = [
@@ -1500,7 +1564,8 @@ function firstProjectTypeForDirection(direction) {
 }
 
 function firstStageForType(projectType) {
-  return (projectStageTemplates[projectType] || projectStageTemplates["Дизайн интерьера"] || ["Заявка"])[0];
+  const first = (projectStageTemplates[projectType] || projectStageTemplates["Дизайн интерьера"] || ["Заявка"])[0];
+  return typeof first === "string" ? first : first.name;
 }
 
 function userNameById(users, userId, fallback = "") {
@@ -1548,7 +1613,9 @@ function projectEconomy(project) {
   const partnerPayouts = Number(project.partnerPayouts) || 0;
   const productionAllocationPercent = Number(project.productionAllocationPercent) || (Number(project.productionBudget) ? Math.round((Number(project.productionBudget) / Math.max(contractAmount, 1)) * 100) : 35);
   const allocatedProductionBudget = Number(project.productionBudget) || Math.round(contractAmount * (productionAllocationPercent / 100));
-  const realizationCost = executorCost + directCosts + factualExpenses + partnerPayouts;
+  const salesCommissionPercent = Number(project.salesCommissionPercent) || 0;
+  const salesCommissionAmount = Number(project.salesCommissionAmount) || Math.round(contractAmount * (salesCommissionPercent / 100));
+  const realizationCost = executorCost + directCosts + factualExpenses + partnerPayouts + salesCommissionAmount;
   const pmBudgetLeft = allocatedProductionBudget - realizationCost;
   const companyPlannedGross = contractAmount - allocatedProductionBudget;
   const grossProfit = paidByClient - realizationCost;
@@ -1572,6 +1639,8 @@ function projectEconomy(project) {
     plannedExpenses,
     factualExpenses,
     partnerPayouts,
+    salesCommissionPercent,
+    salesCommissionAmount,
     productionAllocationPercent,
     allocatedProductionBudget,
     realizationCost,
@@ -1598,6 +1667,7 @@ function financeSummary(projectItems) {
       summary.paidByClient += economy.paidByClient;
       summary.executorCost += economy.executorCost;
       summary.directCosts += economy.directCosts;
+      summary.salesCommissionAmount += economy.salesCommissionAmount;
       summary.allocatedProductionBudget += economy.allocatedProductionBudget;
       summary.realizationCost += economy.realizationCost;
       summary.pmBudgetLeft += economy.pmBudgetLeft;
@@ -1620,6 +1690,7 @@ function financeSummary(projectItems) {
       paidByClient: 0,
       executorCost: 0,
       directCosts: 0,
+      salesCommissionAmount: 0,
       allocatedProductionBudget: 0,
       realizationCost: 0,
       pmBudgetLeft: 0,
@@ -1845,7 +1916,7 @@ function Info({ label, value }) {
 
 function ExternalLinkValue({ url, empty = "не привязан" }) {
   if (!url || !String(url).startsWith("http")) return empty;
-  return <a className="inline-link" href={url} target="_blank" rel="noreferrer">Открыть папку</a>;
+  return <a className="inline-link" href={url} rel="noreferrer">Открыть папку</a>;
 }
 
 function projectBitrixLink(project) {
@@ -2121,7 +2192,7 @@ function ClientApprovalsCard({ project }) {
 }
 
 function ProjectSectionsEditor({ project, sections, executors, canEdit, onUpdateSection, onAddSection, onDeleteSection }) {
-  const columnLabels = ["Этап", "Исполнитель", "Срок", "Статус", "%", "Клиенту", "Себестоимость", "Выплачено", "Финстатус", "Действие"];
+  const columnLabels = ["Этап / раздел", "Исполнитель", "Срок", "Статус", "%", "Доля договора, ₽", "Себестоимость исполнителя, ₽", "Выплачено исполнителю, ₽", "Финстатус", "Действие"];
   return (
     <div className="sections-editor">
       <div className="section-row">
@@ -2155,15 +2226,15 @@ function ProjectSectionsEditor({ project, sections, executors, canEdit, onUpdate
               {["Ожидает", "Новая", "В работе", "На проверке", "Правки", "Принято", "Просрочено"].map((status) => <option key={status}>{status}</option>)}
             </select>
             <input disabled={!canEdit} type="number" value={section.progress || 0} onChange={(event) => onUpdateSection(project.id, sectionId, { progress: Number(event.target.value) })} placeholder="%" />
-            <input disabled={!canEdit} type="number" value={section.clientBudget || 0} onChange={(event) => onUpdateSection(project.id, sectionId, { clientBudget: Number(event.target.value) })} placeholder="Цена клиенту" />
-            <input disabled={!canEdit} type="number" value={section.executorCost || 0} onChange={(event) => onUpdateSection(project.id, sectionId, { executorCost: Number(event.target.value), balance: (Number(event.target.value) || 0) - (Number(section.paid) || 0) })} placeholder="Исполнитель" />
-            <input disabled={!canEdit} type="number" value={section.paid || 0} onChange={(event) => onUpdateSection(project.id, sectionId, { paid: Number(event.target.value), balance: (Number(section.executorCost) || 0) - (Number(event.target.value) || 0) })} placeholder="Выплачено" />
+            <input disabled={!canEdit} type="number" value={section.clientBudget || 0} onChange={(event) => onUpdateSection(project.id, sectionId, { clientBudget: Number(event.target.value) })} placeholder="Доля договора, ₽" />
+            <input disabled={!canEdit} type="number" value={section.executorCost || 0} onChange={(event) => onUpdateSection(project.id, sectionId, { executorCost: Number(event.target.value), balance: (Number(event.target.value) || 0) - (Number(section.paid) || 0) })} placeholder="Себестоимость, ₽" />
+            <input disabled={!canEdit} type="number" value={section.paid || 0} onChange={(event) => onUpdateSection(project.id, sectionId, { paid: Number(event.target.value), balance: (Number(section.executorCost) || 0) - (Number(event.target.value) || 0) })} placeholder="Выплачено, ₽" />
             <select disabled={!canEdit} value={section.financeStatus || "не рассчитан"} onChange={(event) => onUpdateSection(project.id, sectionId, { financeStatus: event.target.value })}>
               {["не рассчитан", "план", "счёт", "к выплате", "частично выплачено", "выплачено", "удержание"].map((status) => <option key={status}>{status}</option>)}
             </select>
             <input disabled={!canEdit} className="stage-editor-wide" value={section.yandexLink || ""} onChange={(event) => onUpdateSection(project.id, sectionId, { yandexLink: event.target.value, documents: event.target.value ? [event.target.value] : [] })} placeholder="Ссылка на Яндекс.Диск этапа" />
             <input disabled={!canEdit} className="stage-editor-wide" value={(section.comments || []).join("; ")} onChange={(event) => onUpdateSection(project.id, sectionId, { comments: event.target.value ? [event.target.value] : [] })} placeholder="Комментарий к этапу" />
-            {section.yandexLink ? <a className="stage-link" href={section.yandexLink} target="_blank" rel="noreferrer">Открыть</a> : null}
+            {section.yandexLink ? <a className="stage-link" href={section.yandexLink} rel="noreferrer">Открыть</a> : null}
             <button type="button" className="secondary danger" disabled={!canEdit} onClick={() => onDeleteSection(project.id, sectionId)}>Удалить</button>
           </div>
         );
@@ -2242,7 +2313,12 @@ function ProjectDetails({ project, role, onTaskStatusChange, onProjectMessage, o
             <div>
               <span>Уже распределено по исполнителям</span>
               <b>{money(economy.realizationCost)}</b>
-              <small>сумма всех разделов и прямых затрат</small>
+              <small>себестоимость исполнителей + комиссия единого центра продаж</small>
+            </div>
+            <div>
+              <span>Комиссия единого центра продаж</span>
+              <b>{money(economy.salesCommissionAmount)}</b>
+              <small>{economy.salesCommissionPercent}% от суммы договора, если продажа шла через продажи</small>
             </div>
             <div>
               <span>Остаток бюджета РП</span>
@@ -2262,7 +2338,7 @@ function ProjectDetails({ project, role, onTaskStatusChange, onProjectMessage, o
           <Info label="Оплачено клиентом" value={money(economy.paidByClient)} />
           <Info label="Остаток оплаты клиента" value={money(economy.receivable)} />
           <Info label="Доступный бюджет" value={money(economy.allocatedProductionBudget)} />
-          <Info label="Зарезервировано / факт расходов" value={money(economy.realizationCost)} />
+          <Info label="Себестоимость исполнителей + продажи" value={money(economy.realizationCost)} />
           <Info label="К выплате исполнителям" value={money(Math.max(economy.executorCost - economy.sections.reduce((sum, item) => sum + (Number(item.paid) || 0), 0), 0))} />
           <Info label="Плановая прибыль" value={money(economy.contractProfit)} />
           <Info label="Фактическая прибыль" value={money(economy.grossProfit)} />
@@ -3499,6 +3575,11 @@ function ProjectCreationWizard({ projectForm, setProjectForm, users, onCreatePro
   const projectManagers = roleUserOptions(users, ["project_manager", "pm", "director", "regional_manager"]);
   const salesManagers = roleUserOptions(users, ["sales_manager", "head_of_sales", "owner", "director"]);
   const partners = roleUserOptions(users, ["partner"]);
+  const contractAmount = Number(projectForm.contractAmount) || 0;
+  const productionPercent = Number(projectForm.productionAllocationPercent) || 0;
+  const calculatedProductionBudget = Math.round(contractAmount * (productionPercent / 100));
+  const salesPercent = Number(projectForm.salesCommissionPercent) || 0;
+  const calculatedSalesCommission = Math.round(contractAmount * (salesPercent / 100));
 
   function update(patch) {
     setProjectForm((next) => ({ ...next, ...patch }));
@@ -3551,7 +3632,10 @@ function ProjectCreationWizard({ projectForm, setProjectForm, users, onCreatePro
         <div className="quick-form">
           <div className="quick-form-title"><h3>Шаг 3. Тип проекта / продукт</h3><p>По типу система подставит памятку этапов и создаст редактируемые этапы.</p></div>
           <label className="wide"><span>Тип проекта / продукт</span><select value={projectForm.projectType} onChange={(event) => setProjectTypeValue(event.target.value)}>{projectTypes.map((type) => <option key={type}>{type}</option>)}</select></label>
-          <div className="wide stage-memo"><h4>Памятка этапов</h4><div>{stages.map((stage) => <span key={stage}>{stage}</span>)}</div></div>
+          <div className="wide stage-memo"><h4>Памятка этапов</h4><div>{stages.map((stage) => {
+            const item = typeof stage === "string" ? { name: stage } : stage;
+            return <span key={item.name}>{item.name}{item.due ? ` · ${item.due}` : ""}</span>;
+          })}</div></div>
         </div>
       ) : null}
 
@@ -3567,7 +3651,10 @@ function ProjectCreationWizard({ projectForm, setProjectForm, users, onCreatePro
           <label><span>Клиент</span><input className={!projectForm.client.trim() ? "invalid" : ""} value={projectForm.client} onChange={(event) => update({ client: event.target.value })} placeholder="ФИО или компания" /></label>
           <label><span>Контрольный срок</span><input className={!projectForm.deadline.trim() ? "invalid" : ""} value={projectForm.deadline} onChange={(event) => update({ deadline: event.target.value })} placeholder="Например: 30 июня" /></label>
           <label><span>Текущий статус</span><select value={projectForm.status} onChange={(event) => update({ status: event.target.value })}>{["Новая", "В работе", "На проверке", "Ожидает клиента", "Ожидает оплаты", "Красная зона", "Завершён"].map((status) => <option key={status}>{status}</option>)}</select></label>
-          <label><span>Текущий этап</span><select value={projectForm.stage} onChange={(event) => update({ stage: event.target.value })}>{stages.map((stage) => <option key={stage}>{stage}</option>)}</select></label>
+          <label><span>Текущий этап</span><select value={projectForm.stage} onChange={(event) => update({ stage: event.target.value })}>{stages.map((stage) => {
+            const item = typeof stage === "string" ? { name: stage } : stage;
+            return <option key={item.name} value={item.name}>{item.name}</option>;
+          })}</select></label>
           <label><span>Готовность, %</span><input type="number" min="0" max="100" value={projectForm.progress} onChange={(event) => update({ progress: event.target.value })} /></label>
           <label><span>Светофор</span><select value={projectForm.risk} onChange={(event) => update({ risk: event.target.value })}><option value="green">В норме</option><option value="yellow">Есть риск</option><option value="red">Красная зона</option></select></label>
           <label><span>Руководитель направления</span><select className={!projectForm.directorUserId ? "invalid" : ""} value={projectForm.directorUserId} onChange={(event) => update({ directorUserId: event.target.value })}><option value="">Выбрать пользователя</option>{directors.map((user) => <option key={user.id} value={user.id}>{user.name} · {user.position}</option>)}</select></label>
@@ -3585,9 +3672,14 @@ function ProjectCreationWizard({ projectForm, setProjectForm, users, onCreatePro
           <div className="quick-form-title"><h3>Шаг 5. Финансы, файлы и создание этапов</h3><p>Плановые значения можно уточнить позже. Фактические расходы появятся после заполнения этапов и выплат.</p></div>
           <label><span>Сумма договора</span><input className={!projectForm.contractAmount ? "invalid" : ""} type="number" value={projectForm.contractAmount} onChange={(event) => update({ contractAmount: event.target.value })} placeholder="0" /></label>
           <label><span>Оплачено клиентом</span><input type="number" value={projectForm.paidByClient} onChange={(event) => update({ paidByClient: event.target.value })} placeholder="0" /></label>
-          <label><span>% бюджета реализации</span><input type="number" value={projectForm.productionAllocationPercent} onChange={(event) => update({ productionAllocationPercent: event.target.value })} placeholder="35" /></label>
-          <label><span>Бюджет реализации вручную</span><input type="number" value={projectForm.productionBudget} onChange={(event) => update({ productionBudget: event.target.value })} placeholder="если отличается от %" /></label>
+          <label><span>% бюджета реализации для РП</span><input type="number" value={projectForm.productionAllocationPercent} onChange={(event) => update({ productionAllocationPercent: event.target.value })} placeholder="35" /></label>
+          <label><span>Бюджет реализации вручную, ₽</span><input type="number" value={projectForm.productionBudget} onChange={(event) => update({ productionBudget: event.target.value })} placeholder="сумма в рублях, не %" /></label>
+          <label><span>% единого центра продаж</span><input type="number" value={projectForm.salesCommissionPercent} onChange={(event) => update({ salesCommissionPercent: event.target.value })} placeholder="10" /></label>
+          <label><span>Комиссия продаж вручную, ₽</span><input type="number" value={projectForm.salesCommissionAmount} onChange={(event) => update({ salesCommissionAmount: event.target.value })} placeholder="если отличается от %" /></label>
           <label className="wide"><span>Главная папка Яндекс.Диска</span><input className={!projectForm.yandexFolder.trim() ? "invalid" : ""} value={projectForm.yandexFolder} onChange={(event) => update({ yandexFolder: event.target.value })} placeholder="https://disk.yandex.ru/..." /></label>
+          <div className="wide form-hint">
+            Расчёт: {productionPercent}% бюджета реализации = {money(calculatedProductionBudget)}. Поле “Бюджет реализации вручную, ₽” принимает именно рубли. Комиссия продаж: {salesPercent}% = {money(calculatedSalesCommission)}.
+          </div>
           <div className="wide create-project-summary"><span>Будет создан проект, шаблон этапов по продукту, базовая экономика и системное сообщение в чате проекта.</span><button type="button" className="primary" onClick={onCreateProject} disabled={!canCreateProject}>Сохранить и открыть проект</button></div>
         </div>
       ) : null}
@@ -4384,9 +4476,10 @@ function FinanceModule({ projectItems, role }) {
           <div className="finance-flow">
             <div><span>1. Поступления от проектов (факт)</span><b>{money(summary.paidByClient)}</b></div>
             <div><span>2. Себестоимость исполнителей</span><b>{money(summary.realizationCost)}</b></div>
-            <div><span>3. Валовая прибыль по оплатам</span><b>{money(summary.grossProfit)}</b></div>
-            <div><span>4. Долг перед исполнителями / партнёрами</span><b>{money(summary.payable)}</b></div>
-            <div className="strong"><span>5. База для 67/33</span><b>{money(summary.splitBase)}</b></div>
+            <div><span>3. Комиссия единого центра продаж</span><b>{money(summary.salesCommissionAmount)}</b></div>
+            <div><span>4. Валовая прибыль по оплатам</span><b>{money(summary.grossProfit)}</b></div>
+            <div><span>5. Долг перед исполнителями / партнёрами</span><b>{money(summary.payable)}</b></div>
+            <div className="strong"><span>6. База для 67/33</span><b>{money(summary.splitBase)}</b></div>
           </div>
         </div>
 
@@ -4998,6 +5091,8 @@ function SmetaOfficePrototype() {
     const paidByClient = toMoneyNumber(projectForm.paidByClient);
     const allocationPercent = Number(projectForm.productionAllocationPercent) || 35;
     const productionBudget = toMoneyNumber(projectForm.productionBudget) || Math.round(contractAmount * (allocationPercent / 100));
+    const salesCommissionPercent = Number(projectForm.salesCommissionPercent) || 0;
+    const salesCommissionAmount = toMoneyNumber(projectForm.salesCommissionAmount) || Math.round(contractAmount * (salesCommissionPercent / 100));
     const directCosts = 0;
     const operatingCosts = 0;
     const payrollCosts = 0;
@@ -5065,6 +5160,8 @@ function SmetaOfficePrototype() {
       paidByClient,
       productionAllocationPercent: allocationPercent,
       productionBudget,
+      salesCommissionPercent,
+      salesCommissionAmount,
       plannedExpenses: 0,
       factualExpenses: 0,
       partnerPayouts: 0,
