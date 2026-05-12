@@ -46,13 +46,13 @@ const demoUsers = [
   { id: "USR-004", login: "director", password: "director", role: "director", name: "Руководитель направления", status: "active", region: "ЧР", regions: ["ЧР", "ДНР", "ЛНР"], direction: "Проектный институт", position: "Руководитель направления" },
   { id: "USR-005", login: "regional", password: "regional", role: "regional_manager", name: "Региональный менеджер", status: "active", region: "Ростов", regions: ["Ростов"], direction: "Все направления", position: "Управляющий региона" },
   { id: "USR-006", login: "pm", password: "pm", role: "pm", name: "Руководитель проекта", status: "active", region: "ДНР", regions: ["ДНР"], direction: "Проектный институт", position: "Руководитель проекта" },
-  { id: "USR-007", login: "project", password: "project", role: "project_manager", name: "Менеджер проекта", status: "active", region: "ЧР", regions: ["ЧР"], direction: "Дизайн / интерьер", position: "Менеджер проекта" },
+  { id: "USR-007", login: "project", password: "project", role: "project_manager", name: "Менеджер проекта", status: "active", region: "ЧР", regions: ["ЧР"], direction: "Бюро архитектуры и дизайна", position: "Менеджер проекта" },
   { id: "USR-008", login: "sales", password: "sales", role: "sales_manager", name: "Менеджер продаж", status: "active", region: "ЧР", regions: ["ЧР"], direction: "Единый центр продаж", position: "Менеджер продаж" },
   { id: "USR-009", login: "headsales", password: "headsales", role: "head_of_sales", name: "Руководитель отдела продаж", status: "active", region: "Все регионы", regions: ["Все регионы"], direction: "Единый центр продаж", position: "Руководитель отдела продаж" },
   { id: "USR-010", login: "accountant", password: "accountant", role: "accountant", name: "Бухгалтер", status: "active", region: "Все регионы", regions: ["Все регионы"], direction: "Финансы", position: "Бухгалтер" },
   { id: "USR-011", login: "finance", password: "finance", role: "finance", name: "Финансист", status: "active", region: "Все регионы", regions: ["Все регионы"], direction: "Финансы", position: "Финансовый контроль" },
-  { id: "USR-012", login: "executor", password: "executor", role: "executor", name: "Исполнитель", status: "active", region: "ЧР", regions: ["ЧР"], direction: "Дизайн / интерьер", position: "Исполнитель / визуализатор", executorId: "EX-063" },
-  { id: "USR-013", login: "partner", password: "partner", role: "partner", name: "Партнёр", status: "active", region: "Ростов", regions: ["Ростов"], direction: "Ремонт / строительство", position: "Партнёр", executorId: "EX-017" },
+  { id: "USR-012", login: "executor", password: "executor", role: "executor", name: "Исполнитель", status: "active", region: "ЧР", regions: ["ЧР"], direction: "Бюро архитектуры и дизайна", position: "Исполнитель / визуализатор", executorId: "EX-063" },
+  { id: "USR-013", login: "partner", password: "partner", role: "partner", name: "Партнёр", status: "active", region: "Ростов", regions: ["Ростов"], direction: "Строительство и ремонт", position: "Партнёр", executorId: "EX-017" },
 ];
 
 const regionOptions = ["Все регионы", "ЧР", "ДНР", "ЛНР", "Ростов", "Москва", "Федеральные проекты"];
@@ -380,7 +380,7 @@ function mergeDemoProductionProjects(projects) {
 
 function normalizeProjectAccess(project) {
   const isProjectInstitute = project.direction === "Проектный институт";
-  const isDesign = project.direction === "Дизайн / интерьер";
+  const isDesign = project.direction === "Дизайн / интерьер" || project.direction === "Бюро архитектуры и дизайна";
   const isRostov = project.region === "Ростов";
   const isDnr = project.region === "ДНР";
   const isSmetaGoLead = project.source === "SmetaGo";
@@ -434,7 +434,7 @@ const menuItems = [
   { id: "admin", label: "Админка" },
   { id: "client", label: "Клиентское приложение" },
 ];
-const directionOptions = ["Все", "Дизайн", "Проектный", "Ремонт", "Недвижимость", "Изыскания", "Продажи", "Обучение"];
+const directionOptions = ["Все", "Проектный институт", "Бюро архитектуры и дизайна", "Строительство и ремонт", "Агентство недвижимости", "Изыскания / обследования / обмеры", "Комплектация", "Бытовые услуги / сервис", "Продажи", "Обучение"];
 
 const salesSources = {
   smetago_app: "SmetaGO приложение",
@@ -752,22 +752,22 @@ const centralCompanies = [
 const regionalDirections = [
   {
     id: "architectureDesign",
-    title: "Архитектурное бюро и дизайн-студия",
+    title: "Бюро архитектуры и дизайна",
     manager: "Управляющий архитектурой и дизайном",
     hint: "Архитектурные проекты, дизайн-проекты, рабочая документация, визуализация и комплектация.",
-    projectDirection: "Дизайн / интерьер",
+    projectDirection: "Бюро архитектуры и дизайна",
     risk: "green",
     match: (project) => {
       const text = `${project.direction || ""} ${project.projectType || ""}`.toLowerCase();
-      return text.includes("дизайн") || text.includes("архитектур");
+      return text.includes("бюро архитектуры") || text.includes("дизайн") || text.includes("архитектур") || text.includes("визуализац");
     },
   },
   {
     id: "surveys",
-    title: "Изыскания",
+    title: "Изыскания / обследования / обмеры",
     manager: "Управляющий изысканиями",
     hint: "Локальные выезды, обследования, обмеры, геология, исходные данные и техническое заключение.",
-    projectDirection: "Изыскания",
+    projectDirection: "Изыскания / обследования / обмеры",
     risk: "yellow",
     match: (project) => {
       const text = `${project.direction || ""} ${project.projectType || ""} ${(project.sections || []).map((item) => item.name).join(" ")}`.toLowerCase();
@@ -776,10 +776,10 @@ const regionalDirections = [
   },
   {
     id: "sales",
-    title: "Единый центр продаж",
+    title: "Агентство недвижимости",
     manager: "Руководитель продаж региона",
-    hint: "Продаёт всю линейку услуг, принимает заявки SmetaGo и подключает партнёров, если своих ресурсов не хватает.",
-    projectDirection: "Недвижимость",
+    hint: "Покупка, продажа, аренда, подбор объектов и передача клиента в дизайн / ремонт.",
+    projectDirection: "Агентство недвижимости",
     risk: "green",
     match: (project) => {
       const text = `${project.direction || ""} ${project.projectType || ""} ${project.source || ""}`.toLowerCase();
@@ -788,14 +788,35 @@ const regionalDirections = [
   },
   {
     id: "implementation",
-    title: "Центр реализации проектов",
+    title: "Строительство и ремонт",
     manager: "Управляющий реализацией",
     hint: "Строительство, ремонт, контроль подрядчиков, фотоотчёты, акты и локальная реализация.",
-    projectDirection: "Ремонт / строительство",
+    projectDirection: "Строительство и ремонт",
     risk: "yellow",
     match: (project) => {
       const text = `${project.direction || ""} ${project.projectType || ""}`.toLowerCase();
       return text.includes("ремонт") || text.includes("строитель") || text.includes("реализац");
+    },
+  },
+  {
+    id: "procurement",
+    title: "Комплектация",
+    manager: "Управляющий комплектацией",
+    hint: "Подбор, закупка, поставка мебели, техники, света, сантехники и материалов.",
+    projectDirection: "Комплектация",
+    risk: "green",
+    match: (project) => `${project.direction || ""} ${project.projectType || ""}`.toLowerCase().includes("комплектац"),
+  },
+  {
+    id: "service",
+    title: "Бытовые услуги / сервис",
+    manager: "Управляющий сервисом",
+    hint: "Клининг, мелкий ремонт, установка техники, сервис после ремонта и бытовые задачи.",
+    projectDirection: "Бытовые услуги / сервис",
+    risk: "green",
+    match: (project) => {
+      const text = `${project.direction || ""} ${project.projectType || ""}`.toLowerCase();
+      return text.includes("бытов") || text.includes("сервис") || text.includes("клининг");
     },
   },
   {
@@ -1039,44 +1060,153 @@ const bitrixMappings = [
   { smeta: "Статус клиенту", bitrix: "Поле сделки + событие", direction: "SmetaOffice → SmetaGo", status: "обязательно" },
 ];
 
+const projectDirectionCatalog = {
+  "Проектный институт": {
+    hint: "Серьёзное проектирование зданий и объектов: ПД/РД, разделы, сметы, обследования, согласования.",
+    financeModel: "Бюджет реализации обычно выделяется РП/ГИПу, дальше распределяется по разделам и исполнителям.",
+    roles: ["Руководитель направления", "ГИП", "Руководитель проекта", "Инженеры разделов", "Сметчик"],
+    projectTypes: ["Проектная документация по 87 постановлению", "Рабочая документация", "Капитальный ремонт", "Реконструкция", "Многоквартирный дом", "Административное здание", "Коммерческий объект", "Инженерные разделы", "Сметная документация", "Обследование / техническое заключение"],
+  },
+  "Бюро архитектуры и дизайна": {
+    hint: "Частные и коммерческие объекты: дизайн, архитектура, визуализация, рабочая документация.",
+    financeModel: "Экономика строится по этапам: планировка, визуализация, рабочая документация, ведомости.",
+    roles: ["Руководитель направления", "РП", "Дизайнер", "Архитектор", "Визуализатор", "Чертежник"],
+    projectTypes: ["Дизайн интерьера", "Архитектурный проект частного дома", "Архитектурная концепция", "Фасады / экстерьер", "Конструктивный проект частного дома", "Рабочие чертежи", "Визуализация", "Перепланировка", "Коммерческий интерьер", "Малый коммерческий объект"],
+  },
+  "Строительство и ремонт": {
+    hint: "Реализация: ремонт квартир и коммерции, строительство домов, реконструкция, инженерные работы.",
+    financeModel: "Важно разделять договор, материалы, работы подрядчиков, акты, авансы и фактические расходы.",
+    roles: ["Управляющий реализацией", "Прораб", "РП", "Подрядчик", "Снабжение", "Финансы"],
+    projectTypes: ["Ремонт квартиры", "Ремонт коммерческого помещения", "Строительство частного дома", "Реконструкция", "Отделочные работы", "Инженерные работы", "Черновые работы", "Чистовые работы", "Гарантийные работы"],
+  },
+  "Агентство недвижимости": {
+    hint: "Покупка, продажа, аренда, подбор и сопровождение сделки.",
+    financeModel: "Основные деньги: комиссия, оплачено, партнёрская доля, передача в дизайн/ремонт.",
+    roles: ["РОП", "Hunter", "Farmer", "Партнёр-риелтор", "Юрист"],
+    projectTypes: ["Покупка квартиры", "Продажа квартиры", "Аренда", "Подбор объекта", "Коммерческая недвижимость", "Сопровождение сделки"],
+  },
+  "Изыскания / обследования / обмеры": {
+    hint: "Самостоятельные проекты или подготовительные этапы для проектирования: геология, геодезия, обмеры, ТЗК.",
+    financeModel: "Экономика зависит от выезда, полевых работ, обработки данных и отчёта.",
+    roles: ["Управляющий изысканиями", "Геодезист", "Геолог", "Обследователь", "Обмерщик"],
+    projectTypes: ["Геология", "Геодезия", "Топосъёмка", "Техническое обследование", "Обмеры помещения", "Дефектный акт", "Техническое заключение"],
+  },
+  "Комплектация": {
+    hint: "Подбор, закупка, поставка мебели, техники, света, сантехники, материалов.",
+    financeModel: "Нужно видеть спецификацию, поставщиков, оплату клиента, закуп и маржу.",
+    roles: ["Комплектатор", "Снабжение", "Поставщик", "РП", "Финансы"],
+    projectTypes: ["Комплектация квартиры", "Комплектация дома", "Комплектация коммерческого объекта", "Мебель", "Техника", "Свет", "Сантехника", "Отделочные материалы"],
+  },
+  "Бытовые услуги / сервис": {
+    hint: "Сервис после сдачи объекта и мелкие бытовые задачи.",
+    financeModel: "Малые заявки: цена клиенту, исполнитель, подтверждение клиента, выплата.",
+    roles: ["Сервис-менеджер", "Исполнитель", "Партнёр", "Финансы"],
+    projectTypes: ["Клининг", "Мелкий ремонт", "Установка техники", "Обслуживание кондиционера", "Сантехнические работы", "Электромонтажные мелкие работы", "Сервис после ремонта"],
+  },
+};
+
 const projectStageTemplates = {
-  "Дизайн-проект": ["Заявка / бриф", "Замеры", "Техническое задание", "Планировочное решение", "Концепция / стиль", "Визуализация", "Рабочая документация", "Ведомости / комплектация", "Проверка руководителем проекта", "Выдача клиенту", "Закрытие проекта"],
+  "Проектная документация по 87 постановлению": ["Исходные данные", "Техническое задание", "Обследование", "Изыскания", "Архитектурные решения", "Конструктивные решения", "Инженерные разделы", "Сметная документация", "Внутренняя проверка", "Выдача заказчику", "Сопровождение согласования / экспертизы", "Закрытие проекта"],
+  "Рабочая документация": ["Исходные данные", "Техническое задание", "АР", "КР", "ОВ", "ВК", "ЭОМ", "СС", "Сводная проверка", "Выдача комплекта", "Закрытие"],
+  "Капитальный ремонт": ["Исходные данные", "Обследование", "Дефектный акт", "ТЗК", "Проектные решения", "Сметная документация", "Проверка", "Выдача заказчику", "Сопровождение согласования", "Закрытие"],
+  "Реконструкция": ["Исходные данные", "Обследование", "Концепция реконструкции", "АР", "КР", "Инженерные разделы", "Сметы", "Проверка", "Выдача", "Экспертиза", "Закрытие"],
+  "Многоквартирный дом": ["Исходные данные", "ТЗ", "ПЗ", "АР", "КР", "ОВ", "ВК", "ЭОМ", "СС", "ПОС", "ОДИ / МОДИ", "Сметы", "Проверка", "Экспертиза", "Закрытие"],
+  "Административное здание": ["Исходные данные", "ТЗ", "Обследование", "АР", "КР", "Инженерные разделы", "ПОС", "ОДИ / МОДИ", "Сметы", "Проверка", "Выдача", "Закрытие"],
+  "Коммерческий объект": ["Исходные данные", "ТЗ", "Концепция", "АР", "КР", "Инженерные разделы", "Сметы", "Проверка", "Выдача", "Закрытие"],
+  "Инженерные разделы": ["Исходные данные", "ТЗ", "ОВ", "ВК", "ЭОМ", "СС", "Согласование решений", "Проверка", "Выдача", "Закрытие"],
+  "Сметная документация": ["Исходные данные", "Ведомости объёмов", "Локальные сметы", "Сводный сметный расчёт", "Проверка", "Выдача", "Корректировка", "Закрытие"],
+  "Обследование / техническое заключение": ["Заявка", "Исходные данные", "Выезд / обследование", "Фотофиксация", "Обмеры", "Техническое заключение", "Дефектный акт", "Первичная смета", "Передача", "Закрытие"],
+  "Дизайн интерьера": ["Заявка / бриф", "Замеры", "Техническое задание", "Планировочное решение", "Концепция", "Визуализация", "Рабочая документация", "Ведомость / комплектация", "Проверка", "Выдача клиенту", "Закрытие"],
+  "Архитектурный проект частного дома": ["Заявка", "Исходные данные", "Техническое задание", "Эскиз / концепция", "Планировочные решения", "Фасады", "Архитектурный раздел", "Конструктивный раздел", "Инженерные вводные", "Проверка", "Выдача клиенту", "Закрытие"],
+  "Архитектурная концепция": ["Заявка", "Исходные данные", "ТЗ", "Эскиз", "Объёмно-планировочные решения", "Фасады", "Презентация", "Выдача", "Закрытие"],
+  "Фасады / экстерьер": ["Заявка", "Исходные данные", "Обмеры", "Концепция фасада", "Визуализация", "Материалы", "Рабочие узлы", "Выдача", "Закрытие"],
+  "Конструктивный проект частного дома": ["Исходные данные", "ТЗ", "Расчётная схема", "Фундаменты", "Перекрытия", "Кровля", "Узлы", "Проверка", "Выдача", "Закрытие"],
+  "Рабочие чертежи": ["Исходные данные", "ТЗ", "Обмерный план", "Планы демонтажа/монтажа", "Электрика", "Сантехника", "Развертки", "Ведомости", "Проверка", "Выдача"],
+  "Визуализация": ["Бриф", "Референсы", "Модель", "Черновые ракурсы", "Правки", "Финальные рендеры", "Выдача"],
+  "Перепланировка": ["Заявка", "Исходные данные", "Обмеры", "Варианты планировки", "Согласование", "Комплект чертежей", "Выдача"],
+  "Коммерческий интерьер": ["Бриф", "Замеры", "ТЗ", "Планировка", "Концепция", "Визуализация", "Рабочая документация", "Ведомости", "Выдача"],
+  "Малый коммерческий объект": ["Заявка", "Исходные данные", "Концепция", "АР", "КР при необходимости", "Инженерные вводные", "Проверка", "Выдача"],
+  "Ремонт квартиры": ["Заявка", "Осмотр / замер", "Смета", "Договор", "График работ", "Аванс", "Подготовка объекта", "Демонтаж", "Черновые работы", "Инженерные системы", "Чистовые работы", "Закуп материалов", "Проверка качества", "Сдача этапа", "Акт", "Закрытие объекта"],
+  "Ремонт коммерческого помещения": ["Заявка", "Осмотр", "Смета", "Договор", "График", "Аванс", "Демонтаж", "Черновые работы", "Инженерные системы", "Отделка", "Проверка качества", "Сдача объекта", "Акт", "Закрытие"],
+  "Строительство частного дома": ["Заявка", "Исходные данные", "Смета", "Договор", "График", "Фундамент", "Коробка", "Кровля", "Инженерные системы", "Отделка", "Проверка", "Сдача", "Закрытие"],
+  "Отделочные работы": ["Заявка", "Осмотр", "Смета", "Материалы", "Работы", "Фотоотчёт", "Проверка", "Акт", "Закрытие"],
+  "Инженерные работы": ["Заявка", "Осмотр", "Схема", "Смета", "Закуп", "Монтаж", "Проверка", "Акт", "Закрытие"],
+  "Черновые работы": ["Заявка", "Осмотр", "Смета", "Демонтаж", "Черновой монтаж", "Инженерия", "Проверка", "Акт", "Закрытие"],
+  "Чистовые работы": ["Заявка", "Смета", "Закуп", "Чистовая отделка", "Проверка качества", "Фотоотчёт", "Акт", "Закрытие"],
+  "Гарантийные работы": ["Заявка", "Диагностика", "Назначение исполнителя", "Исправление", "Фотоотчёт", "Подтверждение клиента", "Закрытие"],
+  "Покупка квартиры": ["Новый лид", "Квалификация", "Подбор объектов", "Показ", "Переговоры", "Торг", "Задаток", "Юридическая проверка", "Договор", "Регистрация", "Комиссия", "NPS", "Передача в дизайн / ремонт", "Архив"],
+  "Продажа квартиры": ["Новый лид", "Оценка", "Подготовка объекта", "Реклама", "Показы", "Переговоры", "Задаток", "Договор", "Регистрация", "Комиссия", "Архив"],
+  "Аренда": ["Новый лид", "Квалификация", "Подбор", "Показ", "Договор", "Заселение", "Комиссия", "Архив"],
+  "Подбор объекта": ["Новый лид", "Квалификация", "Подбор", "Показы", "Согласование", "Сделка", "Передача в дизайн / ремонт", "Архив"],
+  "Коммерческая недвижимость": ["Новый лид", "Квалификация", "Подбор", "Показы", "Переговоры", "Проверка", "Договор", "Комиссия", "Архив"],
+  "Сопровождение сделки": ["Заявка", "Проверка документов", "Переговоры", "Договор", "Регистрация", "Закрытие"],
+  "Геология": ["Заявка", "Квалификация", "Исходные данные", "Выезд", "Полевые работы", "Лаборатория", "Обработка данных", "Отчёт", "Проверка", "Выдача", "Закрытие"],
+  "Геодезия": ["Заявка", "Квалификация", "Исходные данные", "Выезд", "Полевые работы", "Камеральная обработка", "Отчёт", "Проверка", "Выдача", "Закрытие"],
+  "Топосъёмка": ["Заявка", "Исходные данные", "Выезд", "Съёмка", "Обработка", "План", "Проверка", "Выдача", "Закрытие"],
+  "Техническое обследование": ["Заявка", "Исходные данные", "Выезд", "Обследование", "Фотофиксация", "Обработка", "Заключение", "Проверка", "Выдача", "Закрытие"],
+  "Обмеры помещения": ["Заявка", "Квалификация", "Выезд", "Обмеры", "План", "Проверка", "Выдача", "Закрытие"],
+  "Дефектный акт": ["Заявка", "Исходные данные", "Выезд", "Фиксация дефектов", "Дефектный акт", "Проверка", "Выдача", "Закрытие"],
+  "Техническое заключение": ["Заявка", "Исходные данные", "Обследование", "Расчёты", "Заключение", "Проверка", "Выдача", "Закрытие"],
+  "Комплектация квартиры": ["Заявка", "Спецификация", "Подбор поставщиков", "Коммерческие предложения", "Согласование с клиентом", "Заказ", "Оплата", "Закуп", "Доставка", "Монтаж / установка", "Закрытие"],
+  "Комплектация дома": ["Заявка", "Спецификация", "Подбор", "КП", "Согласование", "Заказ", "Оплата", "Закуп", "Доставка", "Монтаж", "Закрытие"],
+  "Комплектация коммерческого объекта": ["Заявка", "Спецификация", "Поставщики", "КП", "Согласование", "Заказ", "Оплата", "Логистика", "Монтаж", "Закрытие"],
+  "Мебель": ["Заявка", "Спецификация", "Подбор", "КП", "Согласование", "Заказ", "Доставка", "Монтаж", "Закрытие"],
+  "Техника": ["Заявка", "Спецификация", "Подбор", "КП", "Согласование", "Заказ", "Доставка", "Установка", "Закрытие"],
+  "Свет": ["Заявка", "Спецификация", "Подбор", "КП", "Согласование", "Заказ", "Доставка", "Монтаж", "Закрытие"],
+  "Сантехника": ["Заявка", "Спецификация", "Подбор", "КП", "Согласование", "Заказ", "Доставка", "Монтаж", "Закрытие"],
+  "Отделочные материалы": ["Заявка", "Спецификация", "Подбор", "КП", "Согласование", "Заказ", "Доставка", "Закрытие"],
+  "Клининг": ["Заявка", "Квалификация", "Назначение исполнителя", "Согласование цены", "Выполнение", "Фотоотчёт", "Подтверждение клиента", "Оплата", "Закрытие"],
+  "Мелкий ремонт": ["Заявка", "Квалификация", "Назначение исполнителя", "Согласование цены", "Выполнение", "Фотоотчёт", "Подтверждение клиента", "Оплата", "Закрытие"],
+  "Установка техники": ["Заявка", "Квалификация", "Назначение исполнителя", "Согласование цены", "Установка", "Проверка", "Оплата", "Закрытие"],
+  "Обслуживание кондиционера": ["Заявка", "Квалификация", "Назначение исполнителя", "Сервис", "Фотоотчёт", "Подтверждение клиента", "Оплата", "Закрытие"],
+  "Сантехнические работы": ["Заявка", "Квалификация", "Назначение исполнителя", "Согласование цены", "Работы", "Проверка", "Оплата", "Закрытие"],
+  "Электромонтажные мелкие работы": ["Заявка", "Квалификация", "Назначение исполнителя", "Согласование цены", "Работы", "Проверка", "Оплата", "Закрытие"],
+  "Сервис после ремонта": ["Заявка", "Диагностика", "Назначение исполнителя", "Выполнение", "Фотоотчёт", "Подтверждение клиента", "Закрытие"],
+  "Дизайн-проект": ["Заявка / бриф", "Замеры", "Техническое задание", "Планировочное решение", "Концепция", "Визуализация", "Рабочая документация", "Ведомость / комплектация", "Проверка", "Выдача клиенту", "Закрытие"],
   "Архитектурный проект": ["Заявка", "Исходные данные", "Техническое задание", "Эскиз / концепция", "Архитектурные решения", "Фасады", "АР", "КР", "Инженерные разделы", "Комплектация альбома", "Выдача клиенту", "Закрытие проекта"],
-  "Проектная документация по 87 постановлению": ["Заявка", "Исходные данные", "Обследование", "Изыскания", "Техническое заключение", "Дефектный акт", "ПЗ", "АР", "КР", "ОВ", "ВК", "ЭОМ", "СС", "ПОС", "ОДИ / МОДИ", "Сметная документация", "Внутренняя проверка", "Выдача заказчику", "Сопровождение экспертизы", "Закрытие"],
-  "Обследование / ТЗК / дефектный акт": ["Заявка", "Выезд / обследование", "Фотофиксация", "Обмеры", "Техническое заключение", "Дефектный акт", "Первичная смета", "Передача", "Архив документов"],
   "Изыскания": ["Заявка", "Исходные данные", "Выезд", "Геодезия", "Геология", "Камеральная обработка", "Технический отчёт", "Передача заказчику", "Закрытие"],
   "Ремонт / строительство": ["Заявка", "Смета / договор", "График", "Аванс", "Черновые работы", "Сети", "Отделочные работы", "Фотоотчёт", "Приёмка", "Исправления", "Закрытие этапа", "Акт", "Закрытие"],
   "Недвижимость": ["Заявка", "Квалификация", "Подбор объектов", "Показы", "Переговоры", "Проверка документов", "Сделка", "Закрытие"],
-  "Комплектация": ["Заявка", "Исходные данные", "Подбор", "Счета поставщиков", "Согласование заказчика", "Заказ", "Доставка", "Закрытие поставки"],
 };
 
 const projectCreationModes = [
-  { id: "existing", label: "Существующий проект" },
-  { id: "new_manual", label: "Новый проект вручную" },
-  { id: "lead_deal", label: "Из лида / сделки" },
-  { id: "owner_direct", label: "Прямой проект владельца" },
+  { id: "smetago_app", label: "Приложение SmetaGO" },
+  { id: "direct_client", label: "Прямой клиент" },
   { id: "referral", label: "Сарафан / рекомендация" },
-  { id: "partner_direct", label: "Партнёр привёл клиента" },
+  { id: "partner", label: "Партнёр" },
+  { id: "social", label: "Соцсети" },
+  { id: "website", label: "Сайт" },
+  { id: "phone", label: "Телефон" },
+  { id: "sales_manager", label: "Менеджер сам привёл" },
+  { id: "owner_direct", label: "Владелец сам продал" },
+  { id: "director_direct", label: "Управляющий сам продал" },
+  { id: "bitrix_deal", label: "Сделка Bitrix24" },
+  { id: "existing", label: "Существующий проект / перенос" },
+  { id: "other", label: "Другое" },
 ];
 
 const defaultProjectForm = {
+  wizardStep: 1,
   creationMode: "existing",
   title: "",
   client: "",
+  country: "Россия",
   city: "",
+  address: "",
   region: "ЧР",
-  projectType: "Дизайн-проект",
-  direction: "Дизайн / интерьер",
+  projectType: "Дизайн интерьера",
+  direction: "Бюро архитектуры и дизайна",
   status: "Новая",
   stage: "Заявка / бриф",
   progress: 5,
   risk: "green",
   deadline: "",
   sourceComment: "",
-  manager: "",
-  projectManager: "",
-  salesManager: "",
-  director: "",
+  directorUserId: "",
+  pmUserId: "",
+  projectManagerId: "",
+  salesManagerId: "",
+  partnerUserId: "",
   contractAmount: "",
   paidByClient: "",
   productionAllocationPercent: 35,
@@ -1085,12 +1215,13 @@ const defaultProjectForm = {
   operatingCosts: "",
   payrollCosts: "",
   yandexFolder: "",
+  bitrixDealId: "",
 };
 
 function makeTemplateSections(projectType) {
-  const template = projectStageTemplates[projectType] || projectStageTemplates["Дизайн-проект"];
+  const template = projectStageTemplates[projectType] || projectStageTemplates["Дизайн интерьера"];
   return template.map((name, index) => ({
-    name, executor: "не назначен", executorId: "", due: "не указан", progress: index === 0 ? 5 : 0,
+    id: `stage-${Date.now()}-${index + 1}`, name, executor: "не назначен", executorId: "", due: "не указан", progress: index === 0 ? 5 : 0,
     status: index === 0 ? "Новая" : "Ожидает", clientBudget: 0, executorCost: 0, paid: 0, balance: 0,
     financeStatus: "не рассчитан", yandexLink: "", documents: [], comments: [],
   }));
@@ -1159,21 +1290,25 @@ const appScreens = {
 function flattenTasks(projectItems) {
   return projectItems.flatMap((project) => {
     const operationTasks = (project.tasks || []).map((task, index) => ({
-      id: `${project.id}-T${index + 1}`,
+      id: task.id || `${project.id}-T${index + 1}`,
       kind: "Задача",
       projectId: project.id,
       projectTitle: project.title,
       projectRegion: project.region || project.city || "Без региона",
       projectManager: project.manager,
       direction: project.direction,
-      section: task.section || project.direction,
+      section: task.sectionName || task.section || project.direction,
+      description: task.description || "",
+      documents: task.documents || [],
+      comments: task.comments || [],
+      chat: task.chat || [],
       clientBudget: Number(task.clientBudget) || 0,
       executorCost: Number(task.executorCost) || 0,
       ...task,
     }));
 
     const sectionTasks = projectSections(project).map((section, index) => ({
-      id: `${project.id}-S${index + 1}`,
+      id: section.id || `${project.id}-S${index + 1}`,
       kind: "Раздел",
       projectId: project.id,
       projectTitle: project.title,
@@ -1236,10 +1371,10 @@ function canAccessProject(user, project, viewRole = user?.role) {
     return project.projectManagerId === user.id || project.managerId === user.id || project.manager === user.name;
   }
   if (role === "sales_manager") {
-    return project.salesManagerId === user.id || project.source === "SmetaGo" || project.direction === "Недвижимость";
+    return project.salesManagerId === user.id || project.source === "SmetaGo" || project.direction === "Агентство недвижимости" || project.direction === "Недвижимость";
   }
   if (role === "head_of_sales") {
-    return project.headOfSalesId === user.id || project.source === "SmetaGo" || project.direction === "Недвижимость";
+    return project.headOfSalesId === user.id || project.source === "SmetaGo" || project.direction === "Агентство недвижимости" || project.direction === "Недвижимость";
   }
 
   return canAccessRegion(user, project);
@@ -1348,8 +1483,57 @@ function projectSourceLabel(mode) {
   return projectCreationModes.find((item) => item.id === mode)?.label || "Ручное создание";
 }
 
+function projectDirectionNames() {
+  return Object.keys(projectDirectionCatalog);
+}
+
+function directionConfig(direction) {
+  return projectDirectionCatalog[direction] || projectDirectionCatalog["Бюро архитектуры и дизайна"];
+}
+
+function projectTypesForDirection(direction) {
+  return directionConfig(direction).projectTypes || [];
+}
+
+function firstProjectTypeForDirection(direction) {
+  return projectTypesForDirection(direction)[0] || "Дизайн интерьера";
+}
+
+function firstStageForType(projectType) {
+  return (projectStageTemplates[projectType] || projectStageTemplates["Дизайн интерьера"] || ["Заявка"])[0];
+}
+
+function userNameById(users, userId, fallback = "") {
+  return users.find((user) => user.id === userId)?.name || fallback;
+}
+
+function roleUserOptions(users, roles) {
+  return users.filter((user) => roles.includes(user.role) && user.status !== "disabled");
+}
+
+function validateProjectForm(form) {
+  const required = [
+    ["title", "Название проекта"],
+    ["client", "Клиент"],
+    ["direction", "Направление"],
+    ["projectType", "Тип проекта / продукт"],
+    ["region", "Регион"],
+    ["city", "Город / населённый пункт"],
+    ["address", "Адрес"],
+    ["creationMode", "Источник"],
+    ["contractAmount", "Сумма договора"],
+    ["directorUserId", "Руководитель направления"],
+    ["pmUserId", "Руководитель проекта"],
+    ["deadline", "Контрольный срок"],
+    ["yandexFolder", "Главная папка Яндекс.Диска"],
+  ];
+  return required
+    .filter(([key]) => String(form[key] || "").trim() === "")
+    .map(([, label]) => label);
+}
+
 function projectSections(project) {
-  return Array.isArray(project.sections) ? project.sections : [];
+  return Array.isArray(project?.sections) ? project.sections : [];
 }
 
 function projectEconomy(project) {
@@ -1913,7 +2097,7 @@ function ClientApprovalsCard({ project }) {
           <h3>Согласования клиента</h3>
           <p className="section-hint">Все правки и утверждения фиксируются в проекте, чтобы Bitrix, SmetaOffice и SmetaGo не спорили между собой.</p>
         </div>
-        <button type="button" className="secondary" onClick={() => showAction(`Создан черновик согласования для проекта ${project.id}`)}>Создать согласование</button>
+        <button type="button" className="secondary" onClick={() => showAction("MVP: согласования будут отправляться клиенту через SmetaGO/Bitrix24 после подключения канала")}>MVP: согласование в разработке</button>
       </div>
       <div className="approval-list">
         {approvals.map((approval) => (
@@ -1931,7 +2115,53 @@ function ClientApprovalsCard({ project }) {
   );
 }
 
-function ProjectDetails({ project, role, onTaskStatusChange, onProjectMessage, onAddClientParticipant, session }) {
+function ProjectSectionsEditor({ project, sections, executors, onUpdateSection, onAddSection, onDeleteSection }) {
+  return (
+    <div className="sections-editor">
+      <div className="section-row">
+        <div>
+          <h3>Редактируемые этапы проекта</h3>
+          <p className="section-hint">Этап — крупный блок работы. Задачи создаются внутри этапа ниже в карточке проекта.</p>
+        </div>
+        <button type="button" className="primary" onClick={() => onAddSection(project.id)}>Добавить этап</button>
+      </div>
+      {sections.length ? sections.map((section) => {
+        const sectionId = section.id || section.name;
+        return (
+          <div key={sectionId} className="stage-editor-row">
+            <input value={section.name} onChange={(event) => onUpdateSection(project.id, sectionId, { name: event.target.value })} placeholder="Название этапа" />
+            <select
+              value={section.executorId || ""}
+              onChange={(event) => {
+                const executor = executors.find((item) => item.id === event.target.value);
+                onUpdateSection(project.id, sectionId, { executorId: event.target.value, executor: executor ? executor.name : "не назначен" });
+              }}
+            >
+              <option value="">Исполнитель не назначен</option>
+              {executors.map((executor) => <option key={executor.id} value={executor.id}>{executor.name} · {executor.sections.join(", ")}</option>)}
+            </select>
+            <input value={section.due} onChange={(event) => onUpdateSection(project.id, sectionId, { due: event.target.value })} placeholder="Срок" />
+            <select value={section.status} onChange={(event) => onUpdateSection(project.id, sectionId, { status: event.target.value })}>
+              {["Ожидает", "Новая", "В работе", "На проверке", "Правки", "Принято", "Просрочено"].map((status) => <option key={status}>{status}</option>)}
+            </select>
+            <input type="number" value={section.progress || 0} onChange={(event) => onUpdateSection(project.id, sectionId, { progress: Number(event.target.value) })} placeholder="%" />
+            <input type="number" value={section.clientBudget || 0} onChange={(event) => onUpdateSection(project.id, sectionId, { clientBudget: Number(event.target.value) })} placeholder="Цена клиенту" />
+            <input type="number" value={section.executorCost || 0} onChange={(event) => onUpdateSection(project.id, sectionId, { executorCost: Number(event.target.value), balance: (Number(event.target.value) || 0) - (Number(section.paid) || 0) })} placeholder="Исполнитель" />
+            <input type="number" value={section.paid || 0} onChange={(event) => onUpdateSection(project.id, sectionId, { paid: Number(event.target.value), balance: (Number(section.executorCost) || 0) - (Number(event.target.value) || 0) })} placeholder="Выплачено" />
+            <select value={section.financeStatus || "не рассчитан"} onChange={(event) => onUpdateSection(project.id, sectionId, { financeStatus: event.target.value })}>
+              {["не рассчитан", "план", "счёт", "к выплате", "частично выплачено", "выплачено", "удержание"].map((status) => <option key={status}>{status}</option>)}
+            </select>
+            <input className="stage-editor-wide" value={section.yandexLink || ""} onChange={(event) => onUpdateSection(project.id, sectionId, { yandexLink: event.target.value, documents: event.target.value ? [event.target.value] : [] })} placeholder="Ссылка на Яндекс.Диск этапа" />
+            <input className="stage-editor-wide" value={(section.comments || []).join("; ")} onChange={(event) => onUpdateSection(project.id, sectionId, { comments: event.target.value ? [event.target.value] : [] })} placeholder="Комментарий к этапу" />
+            <button type="button" className="secondary danger" onClick={() => onDeleteSection(project.id, sectionId)}>Удалить</button>
+          </div>
+        );
+      }) : <div className="empty">Этапы пока не созданы.</div>}
+    </div>
+  );
+}
+
+function ProjectDetails({ project, role, onTaskStatusChange, onProjectMessage, onAddClientParticipant, session, onUpdateSection, onAddSection, onDeleteSection, executors }) {
   const canSeeMoney = roleCan(role, "viewFinance");
   const canSeeProductionBudget = roleCan(role, "viewProductionBudget") || canSeeMoney;
   const canSeeClient = roleCan(role, "viewClient") || roleCan(role, "manageProjects") || canSeeMoney;
@@ -1963,6 +2193,7 @@ function ProjectDetails({ project, role, onTaskStatusChange, onProjectMessage, o
           <Info label="РП" value={project.manager} />
           <Info label="Исполнитель" value={project.executor} />
           <Info label="Партнёр" value={project.partner} />
+          <Info label="Адрес" value={[project.country, project.region, project.city, project.address].filter(Boolean).join(", ")} />
           <Info label="Яндекс.Диск" value={project.yandexFolder || "не привязан"} />
         </div>
 
@@ -2018,30 +2249,26 @@ function ProjectDetails({ project, role, onTaskStatusChange, onProjectMessage, o
           <Info label="Сумма договора" value={money(economy.contractAmount)} />
           <Info label="Оплачено клиентом" value={money(economy.paidByClient)} />
           <Info label="Остаток оплаты клиента" value={money(economy.receivable)} />
-          <Info label="К выплате исполнителям" value={money(economy.realizationCost)} />
-          <Info label="Прибыль по факту оплат" value={money(economy.grossProfit)} />
-          <Info label="Маржинальность" value={`${economy.margin}%`} />
+          <Info label="Доступный бюджет" value={money(economy.allocatedProductionBudget)} />
+          <Info label="Зарезервировано / факт расходов" value={money(economy.realizationCost)} />
+          <Info label="К выплате исполнителям" value={money(Math.max(economy.executorCost - economy.sections.reduce((sum, item) => sum + (Number(item.paid) || 0), 0), 0))} />
+          <Info label="Плановая прибыль" value={money(economy.contractProfit)} />
+          <Info label="Фактическая прибыль" value={money(economy.grossProfit)} />
+          <Info label="Маржинальность план/факт" value={`${economy.contractAmount ? Math.round((economy.contractProfit / economy.contractAmount) * 100) : 0}% / ${economy.margin}%`} />
         </div>
 
-        <div className="sections-table">
-          {economy.sections.length ? (
-            economy.sections.map((section) => (
-              <div key={`${project.id}-${section.name}`}>
-                <div>
-                  <b>{section.name}</b>
-                  <span>{section.executor}{section.executorId ? ` · ${section.executorId}` : ""}</span>
-                </div>
-                <span>{section.due}</span>
-                <em className={cn("status", statusClass(section.status))}>{section.status}</em>
-                <strong>{money(section.clientBudget)}</strong>
-                <strong>{money(section.executorCost)}</strong>
-                <strong className="profit">{money((Number(section.clientBudget) || 0) - (Number(section.executorCost) || 0))}</strong>
-              </div>
-            ))
-          ) : (
-            <div className="empty">Разделы пока не добавлены. Для крупных проектов сюда лягут АР, КР, ОВ, ВК, ЭОМ, СС, ПОС, ОДИ, сметы, экспертиза.</div>
-          )}
-        </div>
+        {economy.sections.every((section) => !Number(section.clientBudget) && !Number(section.executorCost)) ? (
+          <div className="form-hint">Суммы этапов пока не заполнены. Заполни бюджет этапов, назначь исполнителей и обнови факт выплат — экономика пересчитается автоматически.</div>
+        ) : null}
+
+        <ProjectSectionsEditor
+          project={project}
+          sections={economy.sections}
+          executors={executors}
+          onUpdateSection={onUpdateSection}
+          onAddSection={onAddSection}
+          onDeleteSection={onDeleteSection}
+        />
       </section>
 
       <div className="details-grid">
@@ -2070,7 +2297,7 @@ function ProjectDetails({ project, role, onTaskStatusChange, onProjectMessage, o
                   <em className={cn("status", statusClass(task.status))}>{task.status}</em>
                 )}
                 <span>{task.due}</span>
-                <button type="button" onClick={() => showAction(`Задача: ${task.name}. Статус: ${task.status}. Срок: ${task.due}`)}>Открыть</button>
+                <button type="button" onClick={() => showAction("Открой раздел «Задачи»: там доступна карточка задачи с этапом, файлами и комментариями")}>Открыть</button>
               </div>
             ))}
           </div>
@@ -2093,7 +2320,7 @@ function ProjectDetails({ project, role, onTaskStatusChange, onProjectMessage, o
           <section className="panel-card client-view">
             <h3>Что видит клиент</h3>
             <p>{project.clientStatus}</p>
-            <button type="button" onClick={() => showAction(`Статус проекта ${project.id} передан в клиентское приложение`)}>Передать статус в приложение →</button>
+            <button type="button" onClick={() => showAction("MVP: передача статуса в SmetaGO будет включена после подключения клиентского API")}>MVP: передача статуса в разработке</button>
           </section>
         </aside>
       </div>
@@ -2101,9 +2328,9 @@ function ProjectDetails({ project, role, onTaskStatusChange, onProjectMessage, o
       <ProjectChat project={project} role={role} session={session} onProjectMessage={onProjectMessage} />
 
       <div className="bottom-panels">
-        <Panel title="Файлы" items={["ТЗ клиента.pdf", "Планировка.dwg", "Смета этапа.xlsx"]} />
-        <Panel title="Отчёты" items={["Фотоотчёт 09.05", "Акт проверки", "Комментарий РП"]} />
-        <Panel title="История действий" items={["Создан проект", "Назначен РП", "Изменён срок этапа"]} />
+        <Panel title="Файлы" items={(project.files || []).map((file) => `${file.type}: ${file.title}`)} />
+        <Panel title="Структура Яндекс.Диска" items={["Главная папка проекта", "Исходные данные", "Чертежи / разделы", "Согласования", "Акты", "Фото / видео"]} />
+        <Panel title="История действий" items={(project.chat || []).slice(-3).map((message) => message.text)} />
       </div>
     </div>
   );
@@ -3249,6 +3476,120 @@ function LoginScreen({ users, onLogin, onRegister }) {
   );
 }
 
+function ProjectCreationWizard({ projectForm, setProjectForm, users, onCreateProject, errors, canCreateProject }) {
+  const step = Number(projectForm.wizardStep) || 1;
+  const selectedDirection = directionConfig(projectForm.direction);
+  const projectTypes = projectTypesForDirection(projectForm.direction);
+  const stages = projectStageTemplates[projectForm.projectType] || [];
+  const directors = roleUserOptions(users, ["owner", "deputy", "director", "regional_manager"]);
+  const projectLeads = roleUserOptions(users, ["pm", "project_manager", "director", "regional_manager", "deputy", "owner"]);
+  const projectManagers = roleUserOptions(users, ["project_manager", "pm", "director", "regional_manager"]);
+  const salesManagers = roleUserOptions(users, ["sales_manager", "head_of_sales", "owner", "director"]);
+  const partners = roleUserOptions(users, ["partner"]);
+
+  function update(patch) {
+    setProjectForm((next) => ({ ...next, ...patch }));
+  }
+
+  function setDirectionValue(direction) {
+    const projectType = firstProjectTypeForDirection(direction);
+    update({ direction, projectType, stage: firstStageForType(projectType) });
+  }
+
+  function setProjectTypeValue(projectType) {
+    update({ projectType, stage: firstStageForType(projectType) });
+  }
+
+  return (
+    <div className="project-wizard">
+      <div className="wizard-header">
+        <div>
+          <h3>Мастер создания проекта</h3>
+          <p>Цепочка: регион и адрес → направление → тип продукта → данные проекта → этапы.</p>
+        </div>
+        <div className="wizard-steps">
+          {[1, 2, 3, 4, 5].map((item) => (
+            <button key={item} type="button" className={step === item ? "active" : ""} onClick={() => update({ wizardStep: item })}>{item}</button>
+          ))}
+        </div>
+      </div>
+
+      {errors.length ? <div className="form-errors"><b>Не заполнено:</b> {errors.join(", ")}</div> : <div className="form-ok">Минимальные обязательные поля заполнены.</div>}
+
+      {step === 1 ? (
+        <div className="quick-form">
+          <div className="quick-form-title"><h3>Шаг 1. Регион, город и адрес</h3><p>Для аналитики отдельно фиксируем страну, регион, город и адрес.</p></div>
+          <label><span>Страна</span><input value={projectForm.country} onChange={(event) => update({ country: event.target.value })} placeholder="Россия" /></label>
+          <label><span>Регион</span><select value={projectForm.region} onChange={(event) => update({ region: event.target.value })}>{regionOptions.filter((region) => region !== "Все регионы").map((region) => <option key={region}>{region}</option>)}</select></label>
+          <label><span>Город / населённый пункт</span><input className={!projectForm.city.trim() ? "invalid" : ""} value={projectForm.city} onChange={(event) => update({ city: event.target.value })} placeholder="Например: Грозный" /></label>
+          <label><span>Полный адрес</span><input className={!projectForm.address.trim() ? "invalid" : ""} value={projectForm.address} onChange={(event) => update({ address: event.target.value })} placeholder="Улица, дом, объект" /></label>
+        </div>
+      ) : null}
+
+      {step === 2 ? (
+        <div className="quick-form">
+          <div className="quick-form-title"><h3>Шаг 2. Направление</h3><p>Направление определяет продукты, этапы, роли и финансовую модель.</p></div>
+          <label className="wide"><span>Направление SmetaGroup</span><select value={projectForm.direction} onChange={(event) => setDirectionValue(event.target.value)}>{projectDirectionNames().map((direction) => <option key={direction}>{direction}</option>)}</select></label>
+          <div className="wide direction-memo"><h4>{projectForm.direction}</h4><p>{selectedDirection.hint}</p><div><b>Роли:</b> {selectedDirection.roles.join(", ")}</div><div><b>Финансы:</b> {selectedDirection.financeModel}</div></div>
+        </div>
+      ) : null}
+
+      {step === 3 ? (
+        <div className="quick-form">
+          <div className="quick-form-title"><h3>Шаг 3. Тип проекта / продукт</h3><p>По типу система подставит памятку этапов и создаст редактируемые этапы.</p></div>
+          <label className="wide"><span>Тип проекта / продукт</span><select value={projectForm.projectType} onChange={(event) => setProjectTypeValue(event.target.value)}>{projectTypes.map((type) => <option key={type}>{type}</option>)}</select></label>
+          <div className="wide stage-memo"><h4>Памятка этапов</h4><div>{stages.map((stage) => <span key={stage}>{stage}</span>)}</div></div>
+        </div>
+      ) : null}
+
+      {step === 4 ? (
+        <div className="quick-form">
+          <div className="quick-form-title">
+            <h3>Шаг 4. Карточка проекта</h3>
+            <p>Ответственные выбираются из зарегистрированных пользователей. Если человека нет, его нужно добавить через админку.</p>
+            <button type="button" className="secondary" onClick={() => showAction("Создание пользователя выполняется в разделе «Админка»; после добавления он появится в списках ответственных")}>Создать / пригласить пользователя</button>
+          </div>
+          <label><span>Источник</span><select value={projectForm.creationMode} onChange={(event) => update({ creationMode: event.target.value })}>{projectCreationModes.map((mode) => <option key={mode.id} value={mode.id}>{mode.label}</option>)}</select></label>
+          <label><span>Название проекта</span><input className={!projectForm.title.trim() ? "invalid" : ""} value={projectForm.title} onChange={(event) => update({ title: event.target.value })} placeholder="Например: ПД школы после обследования" /></label>
+          <label><span>Клиент</span><input className={!projectForm.client.trim() ? "invalid" : ""} value={projectForm.client} onChange={(event) => update({ client: event.target.value })} placeholder="ФИО или компания" /></label>
+          <label><span>Контрольный срок</span><input className={!projectForm.deadline.trim() ? "invalid" : ""} value={projectForm.deadline} onChange={(event) => update({ deadline: event.target.value })} placeholder="Например: 30 июня" /></label>
+          <label><span>Текущий статус</span><select value={projectForm.status} onChange={(event) => update({ status: event.target.value })}>{["Новая", "В работе", "На проверке", "Ожидает клиента", "Ожидает оплаты", "Красная зона", "Завершён"].map((status) => <option key={status}>{status}</option>)}</select></label>
+          <label><span>Текущий этап</span><select value={projectForm.stage} onChange={(event) => update({ stage: event.target.value })}>{stages.map((stage) => <option key={stage}>{stage}</option>)}</select></label>
+          <label><span>Готовность, %</span><input type="number" min="0" max="100" value={projectForm.progress} onChange={(event) => update({ progress: event.target.value })} /></label>
+          <label><span>Светофор</span><select value={projectForm.risk} onChange={(event) => update({ risk: event.target.value })}><option value="green">В норме</option><option value="yellow">Есть риск</option><option value="red">Красная зона</option></select></label>
+          <label><span>Руководитель направления</span><select className={!projectForm.directorUserId ? "invalid" : ""} value={projectForm.directorUserId} onChange={(event) => update({ directorUserId: event.target.value })}><option value="">Выбрать пользователя</option>{directors.map((user) => <option key={user.id} value={user.id}>{user.name} · {user.position}</option>)}</select></label>
+          <label><span>Руководитель проекта</span><select className={!projectForm.pmUserId ? "invalid" : ""} value={projectForm.pmUserId} onChange={(event) => update({ pmUserId: event.target.value })}><option value="">Выбрать пользователя</option>{projectLeads.map((user) => <option key={user.id} value={user.id}>{user.name} · {user.position}</option>)}</select></label>
+          <label><span>Менеджер проекта</span><select value={projectForm.projectManagerId} onChange={(event) => update({ projectManagerId: event.target.value })}><option value="">Отсутствует / позже</option>{projectManagers.map((user) => <option key={user.id} value={user.id}>{user.name} · {user.position}</option>)}</select></label>
+          <label><span>Менеджер продаж</span><select value={projectForm.salesManagerId} onChange={(event) => update({ salesManagerId: event.target.value })}><option value="">Нет / не из продаж</option>{salesManagers.map((user) => <option key={user.id} value={user.id}>{user.name} · {user.position}</option>)}</select></label>
+          <label><span>Партнёр</span><select value={projectForm.partnerUserId} onChange={(event) => update({ partnerUserId: event.target.value })}><option value="">Нет партнёра</option>{partners.map((user) => <option key={user.id} value={user.id}>{user.name} · {user.position}</option>)}</select></label>
+          <label><span>ID сделки Bitrix24</span><input value={projectForm.bitrixDealId} onChange={(event) => update({ bitrixDealId: event.target.value })} placeholder="если проект из сделки" /></label>
+          <label className="wide"><span>Комментарий</span><input value={projectForm.sourceComment} onChange={(event) => update({ sourceComment: event.target.value })} placeholder="Скидка, особые условия, кто продал, почему внесён вручную" /></label>
+        </div>
+      ) : null}
+
+      {step === 5 ? (
+        <div className="quick-form">
+          <div className="quick-form-title"><h3>Шаг 5. Финансы, файлы и создание этапов</h3><p>Плановые значения можно уточнить позже. Фактические расходы появятся после заполнения этапов и выплат.</p></div>
+          <label><span>Сумма договора</span><input className={!projectForm.contractAmount ? "invalid" : ""} type="number" value={projectForm.contractAmount} onChange={(event) => update({ contractAmount: event.target.value })} placeholder="0" /></label>
+          <label><span>Оплачено клиентом</span><input type="number" value={projectForm.paidByClient} onChange={(event) => update({ paidByClient: event.target.value })} placeholder="0" /></label>
+          <label><span>% бюджета реализации</span><input type="number" value={projectForm.productionAllocationPercent} onChange={(event) => update({ productionAllocationPercent: event.target.value })} placeholder="35" /></label>
+          <label><span>Бюджет реализации вручную</span><input type="number" value={projectForm.productionBudget} onChange={(event) => update({ productionBudget: event.target.value })} placeholder="если отличается от %" /></label>
+          <label><span>Прямые расходы</span><input type="number" value={projectForm.directCosts} onChange={(event) => update({ directCosts: event.target.value })} placeholder="0" /></label>
+          <label><span>Операционные расходы</span><input type="number" value={projectForm.operatingCosts} onChange={(event) => update({ operatingCosts: event.target.value })} placeholder="0" /></label>
+          <label><span>Зарплатные расходы</span><input type="number" value={projectForm.payrollCosts} onChange={(event) => update({ payrollCosts: event.target.value })} placeholder="0" /></label>
+          <label className="wide"><span>Главная папка Яндекс.Диска</span><input className={!projectForm.yandexFolder.trim() ? "invalid" : ""} value={projectForm.yandexFolder} onChange={(event) => update({ yandexFolder: event.target.value })} placeholder="https://disk.yandex.ru/..." /></label>
+          <div className="wide create-project-summary"><span>Будет создан проект, шаблон этапов по продукту, базовая экономика и системное сообщение в чате проекта.</span><button type="button" className="primary" onClick={onCreateProject} disabled={!canCreateProject}>Сохранить и открыть проект</button></div>
+        </div>
+      ) : null}
+
+      <div className="wizard-actions">
+        <button type="button" className="secondary" onClick={() => update({ wizardStep: Math.max(1, step - 1) })} disabled={step === 1}>Назад</button>
+        {step < 5 ? <button type="button" className="primary" onClick={() => update({ wizardStep: Math.min(5, step + 1) })}>Дальше</button> : null}
+      </div>
+    </div>
+  );
+}
+
 function ProjectsModule({
   visibleProjects,
   setSelectedId,
@@ -3266,6 +3607,8 @@ function ProjectsModule({
   onCreateTask,
   onTaskStatusChange,
   executors,
+  users,
+  projectFormErrors,
 }) {
   const [selectedArea, setSelectedArea] = useState(null);
   const [selectedCentralCompany, setSelectedCentralCompany] = useState(null);
@@ -3327,7 +3670,6 @@ function ProjectsModule({
 
   const selectedDirectionConfig = regionalDirections.find((item) => item.id === selectedRegionalDirection) || null;
   const canCreateProject = canCreateProjectRole(role);
-  const currentStageOptions = projectStageTemplates[projectForm.projectType] || projectStageTemplates["Дизайн-проект"];
 
   const regionalDirectionCards = useMemo(() => {
     return regionalDirections.map((item) => {
@@ -3442,153 +3784,14 @@ function ProjectsModule({
         </div>
 
         {createOpen ? (
-          <div className="quick-form">
-            <div className="quick-form-title">
-              <h3>Регистрация проекта в реестре</h3>
-              <p>Сюда заносим любой проект: из Bitrix, от владельца, по рекомендации, от управляющего или уже существующий в работе.</p>
-            </div>
-            <label>
-              <span>Источник / сценарий</span>
-              <select value={projectForm.creationMode} onChange={(event) => setProjectForm((next) => ({ ...next, creationMode: event.target.value }))}>
-                {projectCreationModes.map((mode) => <option key={mode.id} value={mode.id}>{mode.label}</option>)}
-              </select>
-            </label>
-            <label>
-              <span>Название проекта</span>
-              <input value={projectForm.title} onChange={(event) => setProjectForm((next) => ({ ...next, title: event.target.value }))} placeholder="Например: Дизайн квартиры 113 м²" />
-            </label>
-            <label>
-              <span>Клиент / заказчик</span>
-              <input value={projectForm.client} onChange={(event) => setProjectForm((next) => ({ ...next, client: event.target.value }))} placeholder="ФИО или компания" />
-            </label>
-            <label>
-              <span>Город объекта</span>
-              <input value={projectForm.city} onChange={(event) => setProjectForm((next) => ({ ...next, city: event.target.value }))} placeholder="Город" />
-            </label>
-            <label>
-              <span>Регион учёта</span>
-              <select value={projectForm.region} onChange={(event) => setProjectForm((next) => ({ ...next, region: event.target.value }))}>
-                {regionOptions.filter((region) => region !== "Все регионы").map((region) => (
-                  <option key={region} value={region}>{region}</option>
-                ))}
-              </select>
-            </label>
-            <label>
-              <span>Тип проекта</span>
-              <select
-                value={projectForm.projectType}
-                onChange={(event) => {
-                  const nextType = event.target.value;
-                  const firstStage = projectStageTemplates[nextType]?.[0] || "Заявка";
-                  setProjectForm((next) => ({ ...next, projectType: nextType, stage: firstStage }));
-                }}
-              >
-                {Object.keys(projectStageTemplates).map((type) => <option key={type}>{type}</option>)}
-              </select>
-            </label>
-            <label>
-              <span>Направление</span>
-              <select value={projectForm.direction} onChange={(event) => setProjectForm((next) => ({ ...next, direction: event.target.value }))}>
-                <option>Дизайн / интерьер</option>
-                <option>Проектный институт</option>
-                <option>Ремонт / строительство</option>
-                <option>Недвижимость</option>
-                <option>Изыскания</option>
-                <option>Комплектация</option>
-                <option>Обучение</option>
-              </select>
-            </label>
-            <label>
-              <span>Текущий статус</span>
-              <select value={projectForm.status} onChange={(event) => setProjectForm((next) => ({ ...next, status: event.target.value }))}>
-                <option>Новая</option>
-                <option>В работе</option>
-                <option>На проверке</option>
-                <option>Ожидает клиента</option>
-                <option>Ожидает оплаты</option>
-                <option>Красная зона</option>
-                <option>Завершён</option>
-              </select>
-            </label>
-            <label>
-              <span>Текущий этап</span>
-              <select value={projectForm.stage} onChange={(event) => setProjectForm((next) => ({ ...next, stage: event.target.value }))}>
-                {currentStageOptions.map((stage) => <option key={stage}>{stage}</option>)}
-              </select>
-            </label>
-            <label>
-              <span>Готовность, %</span>
-              <input type="number" min="0" max="100" value={projectForm.progress} onChange={(event) => setProjectForm((next) => ({ ...next, progress: event.target.value }))} />
-            </label>
-            <label>
-              <span>Светофор</span>
-              <select value={projectForm.risk} onChange={(event) => setProjectForm((next) => ({ ...next, risk: event.target.value }))}>
-                <option value="green">В норме</option>
-                <option value="yellow">Есть риск</option>
-                <option value="red">Красная зона</option>
-              </select>
-            </label>
-            <label>
-              <span>Контрольный срок</span>
-              <input value={projectForm.deadline} onChange={(event) => setProjectForm((next) => ({ ...next, deadline: event.target.value }))} placeholder="Например: 20 июня" />
-            </label>
-            <label>
-              <span>Руководитель проекта</span>
-              <input value={projectForm.manager} onChange={(event) => setProjectForm((next) => ({ ...next, manager: event.target.value }))} placeholder="Кто отвечает за проект" />
-            </label>
-            <label>
-              <span>Менеджер проекта</span>
-              <input value={projectForm.projectManager} onChange={(event) => setProjectForm((next) => ({ ...next, projectManager: event.target.value }))} placeholder="Если есть" />
-            </label>
-            <label>
-              <span>Менеджер продаж</span>
-              <input value={projectForm.salesManager} onChange={(event) => setProjectForm((next) => ({ ...next, salesManager: event.target.value }))} placeholder="Если проект пришёл через продажи" />
-            </label>
-            <label>
-              <span>Управляющий / руководитель</span>
-              <input value={projectForm.director} onChange={(event) => setProjectForm((next) => ({ ...next, director: event.target.value }))} placeholder="Управляющий направления" />
-            </label>
-            <label>
-              <span>Сумма договора</span>
-              <input type="number" value={projectForm.contractAmount} onChange={(event) => setProjectForm((next) => ({ ...next, contractAmount: event.target.value }))} placeholder="0" />
-            </label>
-            <label>
-              <span>Оплачено клиентом</span>
-              <input type="number" value={projectForm.paidByClient} onChange={(event) => setProjectForm((next) => ({ ...next, paidByClient: event.target.value }))} placeholder="0" />
-            </label>
-            <label>
-              <span>% бюджета реализации</span>
-              <input type="number" value={projectForm.productionAllocationPercent} onChange={(event) => setProjectForm((next) => ({ ...next, productionAllocationPercent: event.target.value }))} placeholder="35" />
-            </label>
-            <label>
-              <span>Бюджет реализации вручную</span>
-              <input type="number" value={projectForm.productionBudget} onChange={(event) => setProjectForm((next) => ({ ...next, productionBudget: event.target.value }))} placeholder="если отличается от %" />
-            </label>
-            <label>
-              <span>Прямые расходы</span>
-              <input type="number" value={projectForm.directCosts} onChange={(event) => setProjectForm((next) => ({ ...next, directCosts: event.target.value }))} placeholder="0" />
-            </label>
-            <label>
-              <span>Операционные расходы</span>
-              <input type="number" value={projectForm.operatingCosts} onChange={(event) => setProjectForm((next) => ({ ...next, operatingCosts: event.target.value }))} placeholder="0" />
-            </label>
-            <label>
-              <span>Зарплатные расходы</span>
-              <input type="number" value={projectForm.payrollCosts} onChange={(event) => setProjectForm((next) => ({ ...next, payrollCosts: event.target.value }))} placeholder="0" />
-            </label>
-            <label className="wide">
-              <span>Папка Яндекс.Диска</span>
-              <input value={projectForm.yandexFolder} onChange={(event) => setProjectForm((next) => ({ ...next, yandexFolder: event.target.value }))} placeholder="Ссылка на папку проекта" />
-            </label>
-            <label className="wide">
-              <span>Комментарий по источнику / скидке / особым условиям</span>
-              <input value={projectForm.sourceComment} onChange={(event) => setProjectForm((next) => ({ ...next, sourceComment: event.target.value }))} placeholder="Например: пришёл напрямую к владельцу, индивидуальная скидка, переносим существующий проект" />
-            </label>
-            <div className="wide create-project-summary">
-              <span>После сохранения система создаст карточку проекта, шаблон этапов по выбранному типу, финансовую основу и откроет проект для дальнейшего назначения исполнителей.</span>
-              <button type="button" className="primary" onClick={onCreateProject} disabled={!projectForm.title.trim() || !canCreateProject}>Сохранить и открыть проект</button>
-            </div>
-          </div>
+          <ProjectCreationWizard
+            projectForm={projectForm}
+            setProjectForm={setProjectForm}
+            users={users}
+            onCreateProject={onCreateProject}
+            errors={projectFormErrors}
+            canCreateProject={canCreateProject}
+          />
         ) : null}
 
         {!selectedArea ? (
@@ -3766,7 +3969,7 @@ function ProjectsModule({
   );
 }
 
-function ProjectDetailModule({ project, role, session, onBack, onTaskStatusChange, onProjectMessage, onAddClientParticipant, taskForm, setTaskForm, onCreateTask, executors }) {
+function ProjectDetailModule({ project, role, session, onBack, onTaskStatusChange, onProjectMessage, onAddClientParticipant, taskForm, setTaskForm, onCreateTask, executors, onUpdateSection, onAddSection, onDeleteSection }) {
   if (!project) {
     return (
       <>
@@ -3791,7 +3994,18 @@ function ProjectDetailModule({ project, role, session, onBack, onTaskStatusChang
         <button type="button" className="secondary" onClick={onBack}>Назад к реестру</button>
       </section>
 
-      <ProjectDetails project={project} role={role} session={session} onTaskStatusChange={onTaskStatusChange} onProjectMessage={onProjectMessage} onAddClientParticipant={onAddClientParticipant} />
+      <ProjectDetails
+        project={project}
+        role={role}
+        session={session}
+        onTaskStatusChange={onTaskStatusChange}
+        onProjectMessage={onProjectMessage}
+        onAddClientParticipant={onAddClientParticipant}
+        onUpdateSection={onUpdateSection}
+        onAddSection={onAddSection}
+        onDeleteSection={onDeleteSection}
+        executors={executors}
+      />
 
       <section className="office-card">
         <div className="section-row">
@@ -3803,6 +4017,10 @@ function ProjectDetailModule({ project, role, session, onBack, onTaskStatusChang
         </div>
         <div className="quick-form task-create-form">
           <input value={taskForm.name} onChange={(event) => setTaskForm((next) => ({ ...next, name: event.target.value }))} placeholder="Название задачи / раздела" />
+          <select value={taskForm.sectionName} onChange={(event) => setTaskForm((next) => ({ ...next, sectionName: event.target.value }))}>
+            <option value="">Выбрать этап проекта</option>
+            {projectSections(project).map((section) => <option key={section.id || section.name} value={section.name}>{section.name}</option>)}
+          </select>
           <select
             value={taskForm.executorId}
             onChange={(event) => {
@@ -3825,6 +4043,7 @@ function ProjectDetailModule({ project, role, session, onBack, onTaskStatusChang
             <option>Правки</option>
             <option>Принято</option>
           </select>
+          <input className="wide" value={taskForm.description} onChange={(event) => setTaskForm((next) => ({ ...next, description: event.target.value }))} placeholder="Описание задачи / что должно быть результатом" />
           <input className="wide" value={taskForm.yandexLink} onChange={(event) => setTaskForm((next) => ({ ...next, yandexLink: event.target.value }))} placeholder="Ссылка на Яндекс.Диск по задаче" />
         </div>
       </section>
@@ -3964,6 +4183,7 @@ function TasksModule({ allTasks, onTaskStatusChange, executors }) {
               <p className="section-hint">{selectedTask.projectTitle}</p>
               <div className="finance-kpi-list">
                 <Info label="Проект" value={selectedTask.projectId} />
+                <Info label="Этап" value={selectedTask.section || "Без этапа"} />
                 <Info label="Регион" value={selectedTask.projectRegion} />
                 <Info label="РП" value={selectedTask.projectManager} />
                 <Info label="Исполнитель" value={executorLabel(selectedTask)} />
@@ -3972,9 +4192,33 @@ function TasksModule({ allTasks, onTaskStatusChange, executors }) {
                 <Info label="Бюджет клиента" value={money(selectedTask.clientBudget)} />
                 <Info label="Оплата исполнителю" value={money(selectedTask.executorCost)} />
               </div>
+              <div className="task-card-block">
+                <b>Описание</b>
+                <p>{selectedTask.description || "Описание задачи пока не заполнено."}</p>
+              </div>
+              <div className="task-card-block">
+                <b>Файлы и ссылки</b>
+                {(selectedTask.documents || []).length || selectedTask.yandexLink ? (
+                  <div className="file-link-list">
+                    {[...(selectedTask.documents || []), selectedTask.yandexLink].filter(Boolean).map((item, index) => (
+                      <a key={`${item}-${index}`} href={item} target="_blank" rel="noreferrer">{item}</a>
+                    ))}
+                  </div>
+                ) : (
+                  <p>Файлы не привязаны.</p>
+                )}
+              </div>
+              <div className="task-card-block">
+                <b>Чат / комментарии задачи</b>
+                {(selectedTask.chat || []).length ? (
+                  selectedTask.chat.map((message) => <p key={message.id}>{message.author}: {message.text}</p>)
+                ) : (
+                  <p>MVP: чат задачи будет хранить сообщения исполнителя, РП и системные события. Сейчас комментарии добавляются через карточку проекта.</p>
+                )}
+              </div>
               <div className="task-inspector-actions">
-                <button type="button" className="secondary" onClick={() => showAction(selectedTask.yandexLink ? `Яндекс.Диск: ${selectedTask.yandexLink}` : "К задаче пока не привязана папка Яндекс.Диска")}>Яндекс.Диск</button>
-                <button type="button" className="primary" onClick={() => showAction(`Открыт чат по задаче: ${selectedTask.name}`)}>Чат по задаче</button>
+                <button type="button" className="secondary" onClick={() => selectedTask.yandexLink ? window.open(selectedTask.yandexLink, "_blank", "noopener,noreferrer") : showAction("К задаче пока не привязана папка Яндекс.Диска")}>Открыть Яндекс.Диск</button>
+                <button type="button" className="primary" onClick={() => showAction("MVP: отдельный чат задачи в разработке, сообщения пока фиксируем в проектном чате")}>Чат по задаче</button>
               </div>
             </>
           ) : (
@@ -4578,7 +4822,7 @@ function SmetaOfficePrototype() {
   const [selectedId, setSelectedId] = useState(() => readStoredValue("smeta.selectedProjectId", ""));
   const [activeSection, setActiveSection] = useState("dashboard");
   const [projectForm, setProjectForm] = useState(defaultProjectForm);
-  const [taskForm, setTaskForm] = useState({ name: "", owner: "", executorId: "", due: "", status: "Новая", yandexLink: "" });
+  const [taskForm, setTaskForm] = useState({ name: "", sectionName: "", description: "", owner: "", executorId: "", due: "", status: "Новая", yandexLink: "" });
   const [actionNotice, setActionNotice] = useState("");
 
   const currentRole = roles.find((item) => item.id === role) ?? roles[0];
@@ -4729,7 +4973,16 @@ function SmetaOfficePrototype() {
 
   function createProject() {
     const title = projectForm.title.trim();
-    if (!title || !canCreateProjectRole(role)) return;
+    if (!canCreateProjectRole(role)) {
+      showAction("У этой роли нет права создавать проекты");
+      return;
+    }
+    const errors = validateProjectForm(projectForm);
+    if (errors.length) {
+      setProjectForm((next) => ({ ...next, wizardStep: errors.some((error) => ["Регион", "Город / населённый пункт", "Адрес"].includes(error)) ? 1 : errors.some((error) => ["Направление"].includes(error)) ? 2 : errors.some((error) => ["Тип проекта / продукт"].includes(error)) ? 3 : errors.some((error) => ["Сумма договора", "Главная папка Яндекс.Диска"].includes(error)) ? 5 : 4 }));
+      showAction(`Проект не создан. Не заполнено: ${errors.join(", ")}`);
+      return;
+    }
     const nextIndex = projectItems.length + 1;
     const contractAmount = toMoneyNumber(projectForm.contractAmount);
     const paidByClient = toMoneyNumber(projectForm.paidByClient);
@@ -4750,23 +5003,35 @@ function SmetaOfficePrototype() {
     const status = projectForm.status || "Новая";
     const deadline = projectForm.deadline.trim() || "не указан";
     const source = projectSourceLabel(projectForm.creationMode);
+    const directorName = userNameById(users, projectForm.directorUserId, "Руководитель не назначен");
+    const pmName = userNameById(users, projectForm.pmUserId, "РП не назначен");
+    const projectManagerName = userNameById(users, projectForm.projectManagerId, "");
+    const salesManagerName = userNameById(users, projectForm.salesManagerId, "");
+    const partnerName = userNameById(users, projectForm.partnerUserId, "—");
     const created = {
       id: `SG-${String(300 + nextIndex).padStart(3, "0")}`,
       title,
       client: projectForm.client.trim() || "Новый клиент",
+      country: projectForm.country.trim() || "Россия",
       city: projectForm.city.trim() || "не указан",
+      address: projectForm.address.trim(),
       region: projectForm.region,
       responsibleRegion: projectForm.region,
       objectRegion: projectForm.region,
       objectCity: projectForm.city.trim() || "не указан",
       projectType: projectForm.projectType,
       direction: projectForm.direction,
-      manager: projectForm.manager.trim() || "РП не назначен",
-      projectManager: projectForm.projectManager.trim() || "",
-      salesManager: projectForm.salesManager.trim() || "",
-      directorName: projectForm.director.trim() || "",
+      manager: pmName,
+      directorName,
+      projectManager: projectManagerName,
+      salesManager: salesManagerName,
+      directorUserId: projectForm.directorUserId,
+      pmUserId: projectForm.pmUserId,
+      projectManagerId: projectForm.projectManagerId,
+      salesManagerId: projectForm.salesManagerId,
+      partnerUserId: projectForm.partnerUserId,
       executor: "—",
-      partner: "—",
+      partner: partnerName,
       budget: money(contractAmount),
       margin: money(Math.max(contractAmount - productionBudget - directCosts, 0)),
       status,
@@ -4777,10 +5042,10 @@ function SmetaOfficePrototype() {
       source,
       sourceComment: projectForm.sourceComment.trim(),
       bitrix: {
-        dealId: "",
+        dealId: projectForm.bitrixDealId.trim(),
         dealUrl: "",
-        stage: "Не связано",
-        syncStatus: "Черновая связь",
+        stage: projectForm.creationMode === "bitrix_deal" ? "Договор / Аванс" : "Не связано",
+        syncStatus: projectForm.creationMode === "bitrix_deal" ? "Ожидает API Bitrix24" : "Ручное создание",
         source,
       },
       yandexFolder: projectForm.yandexFolder.trim() || "не привязан",
@@ -4799,6 +5064,9 @@ function SmetaOfficePrototype() {
       directCosts,
       tasks: [],
       sections,
+      files: [
+        { id: `file-${Date.now()}-main`, type: "Папка проекта", title: "Главная папка проекта", url: projectForm.yandexFolder.trim(), scope: "project" },
+      ],
       clientParticipants: [
         {
           id: `client-${Date.now()}`,
@@ -4810,17 +5078,33 @@ function SmetaOfficePrototype() {
         },
       ],
       approvals: [],
+      chat: [
+        {
+          id: `chat-${Date.now()}`,
+          channel: "internal",
+          author: session?.name || "Система",
+          role: role,
+          text: `Проект создан вручную. Источник: ${source}. Направление: ${projectForm.direction}. Тип: ${projectForm.projectType}.`,
+          at: new Intl.DateTimeFormat("ru-RU", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" }).format(new Date()),
+        },
+      ],
     };
     setProjectItems((items) => [created, ...items]);
     selectProject(created.id);
     setProjectForm(defaultProjectForm);
+    showAction(`Проект ${created.id} создан и открыт`);
   }
 
   function createTask(projectId) {
     const name = taskForm.name.trim();
     if (!name) return;
+    const selectedSection = projectSections(projectItems.find((project) => project.id === projectId)).find((section) => section.name === taskForm.sectionName);
     const createdTask = {
+      id: `task-${Date.now()}`,
       name,
+      sectionName: taskForm.sectionName || "Без этапа",
+      sectionId: selectedSection?.id || "",
+      description: taskForm.description?.trim() || "",
       owner: taskForm.owner.trim() || "Не назначен",
       executorId: taskForm.executorId,
       status: taskForm.status,
@@ -4834,6 +5118,8 @@ function SmetaOfficePrototype() {
       financeStatus: "не рассчитан",
       comments: [],
       documents: taskForm.yandexLink.trim() ? [taskForm.yandexLink.trim()] : [],
+      chat: [],
+      history: [{ at: new Date().toISOString(), text: "Задача создана" }],
     };
     setProjectItems((items) =>
       items.map((project) =>
@@ -4847,7 +5133,47 @@ function SmetaOfficePrototype() {
           : project
       )
     );
-    setTaskForm({ name: "", owner: "", executorId: "", due: "", status: "Новая", yandexLink: "" });
+    setTaskForm({ name: "", sectionName: "", description: "", owner: "", executorId: "", due: "", status: "Новая", yandexLink: "" });
+  }
+
+  function updateProjectSection(projectId, sectionId, patch) {
+    setProjectItems((items) =>
+      items.map((project) =>
+        project.id === projectId
+          ? {
+              ...project,
+              sections: projectSections(project).map((section) => (section.id || section.name) === sectionId ? { ...section, ...patch } : section),
+            }
+          : project
+      )
+    );
+  }
+
+  function addProjectSection(projectId) {
+    const created = {
+      id: `stage-${Date.now()}`,
+      name: "Новый этап",
+      executor: "не назначен",
+      executorId: "",
+      due: "не указан",
+      progress: 0,
+      status: "Новая",
+      clientBudget: 0,
+      executorCost: 0,
+      paid: 0,
+      balance: 0,
+      financeStatus: "не рассчитан",
+      yandexLink: "",
+      documents: [],
+      comments: [],
+    };
+    setProjectItems((items) => items.map((project) => project.id === projectId ? { ...project, sections: [...projectSections(project), created] } : project));
+    showAction("Этап добавлен. Его можно переименовать и назначить исполнителя.");
+  }
+
+  function deleteProjectSection(projectId, sectionId) {
+    setProjectItems((items) => items.map((project) => project.id === projectId ? { ...project, sections: projectSections(project).filter((section) => (section.id || section.name) !== sectionId) } : project));
+    showAction("Этап удалён из карточки проекта");
   }
 
   function changeTaskStatus(projectId, taskName, status) {
@@ -5038,6 +5364,8 @@ function SmetaOfficePrototype() {
               onCreateTask={createTask}
               onTaskStatusChange={changeTaskStatus}
               executors={executors}
+              users={users}
+              projectFormErrors={validateProjectForm(projectForm)}
             />
           ) : null}
 
@@ -5054,6 +5382,9 @@ function SmetaOfficePrototype() {
               setTaskForm={setTaskForm}
               onCreateTask={createTask}
               executors={executors}
+              onUpdateSection={updateProjectSection}
+              onAddSection={addProjectSection}
+              onDeleteSection={deleteProjectSection}
             />
           ) : null}
 
