@@ -1603,9 +1603,9 @@ function projectSections(project) {
 
 function projectEconomy(project) {
   const sections = projectSections(project);
-  const clientBudget = sections.reduce((sum, item) => sum + (Number(item.clientBudget) || 0), 0);
   const executorCost = sections.reduce((sum, item) => sum + (Number(item.executorCost) || 0), 0);
-  const contractAmount = Number(project.contractAmount) || clientBudget || 0;
+  const paidToExecutors = sections.reduce((sum, item) => sum + (Number(item.paid) || 0), 0);
+  const contractAmount = Number(project.contractAmount) || 0;
   const paidByClient = Number(project.paidByClient) || 0;
   const directCosts = 0;
   const plannedExpenses = Number(project.plannedExpenses) || 0;
@@ -1615,9 +1615,10 @@ function projectEconomy(project) {
   const allocatedProductionBudget = Number(project.productionBudget) || Math.round(contractAmount * (productionAllocationPercent / 100));
   const salesCommissionPercent = Number(project.salesCommissionPercent) || 0;
   const salesCommissionAmount = Number(project.salesCommissionAmount) || Math.round(contractAmount * (salesCommissionPercent / 100));
-  const realizationCost = executorCost + directCosts + factualExpenses + partnerPayouts + salesCommissionAmount;
-  const pmBudgetLeft = allocatedProductionBudget - realizationCost;
-  const companyPlannedGross = contractAmount - allocatedProductionBudget;
+  const productionCost = executorCost + partnerPayouts;
+  const realizationCost = productionCost + salesCommissionAmount;
+  const pmBudgetLeft = allocatedProductionBudget - productionCost;
+  const companyPlannedGross = contractAmount - allocatedProductionBudget - salesCommissionAmount;
   const grossProfit = paidByClient - realizationCost;
   const contractProfit = contractAmount - realizationCost;
   const receivable = Math.max(contractAmount - paidByClient, 0);
@@ -1631,8 +1632,10 @@ function projectEconomy(project) {
 
   return {
     sections,
-    clientBudget,
+    clientBudget: 0,
     executorCost,
+    paidToExecutors,
+    productionCost,
     contractAmount,
     paidByClient,
     directCosts,
@@ -1965,12 +1968,20 @@ function Panel({ title, items }) {
     <div className="panel-card">
       <h3>{title}</h3>
       <div className="panel-list">
-        {items.map((item) => (
-          <button key={item} type="button" onClick={() => showAction(`Открыт раздел: ${item}`)}>
-            <span>{item}</span>
-            <b>›</b>
-          </button>
-        ))}
+        {items.map((item) => {
+          const value = typeof item === "string" ? { label: item } : item;
+          return value.url ? (
+            <a key={value.label} href={value.url} rel="noreferrer">
+              <span>{value.label}</span>
+              <b>›</b>
+            </a>
+          ) : (
+            <button key={value.label} type="button" onClick={() => showAction(value.action || `Открыт раздел: ${value.label}`)}>
+              <span>{value.label}</span>
+              <b>›</b>
+            </button>
+          );
+        })}
       </div>
     </div>
   );
@@ -2191,8 +2202,125 @@ function ClientApprovalsCard({ project }) {
   );
 }
 
+function ProjectEditPanel({ project, users, canEdit, onUpdateProject }) {
+  const [form, setForm] = useState(() => ({
+    title: project.title || "",
+    client: project.client || "",
+    region: project.region || "ЧР",
+    city: project.city || "",
+    address: project.address || "",
+    status: project.status || "Новая",
+    stage: project.stage || "",
+    progress: Number(project.progress) || 0,
+    risk: project.risk || "green",
+    deadline: project.deadline || "",
+    yandexFolder: project.yandexFolder === "не привязан" ? "" : project.yandexFolder || "",
+    contractAmount: Number(project.contractAmount) || 0,
+    paidByClient: Number(project.paidByClient) || 0,
+    productionAllocationPercent: Number(project.productionAllocationPercent) || 35,
+    productionBudget: Number(project.productionBudget) || 0,
+    salesCommissionPercent: Number(project.salesCommissionPercent) || 0,
+    salesCommissionAmount: Number(project.salesCommissionAmount) || 0,
+    pmUserId: project.pmUserId || "",
+    projectManagerId: project.projectManagerId || "",
+    salesManagerId: project.salesManagerId || "",
+  }));
+
+  useEffect(() => {
+    setForm({
+      title: project.title || "",
+      client: project.client || "",
+      region: project.region || "ЧР",
+      city: project.city || "",
+      address: project.address || "",
+      status: project.status || "Новая",
+      stage: project.stage || "",
+      progress: Number(project.progress) || 0,
+      risk: project.risk || "green",
+      deadline: project.deadline || "",
+      yandexFolder: project.yandexFolder === "не привязан" ? "" : project.yandexFolder || "",
+      contractAmount: Number(project.contractAmount) || 0,
+      paidByClient: Number(project.paidByClient) || 0,
+      productionAllocationPercent: Number(project.productionAllocationPercent) || 35,
+      productionBudget: Number(project.productionBudget) || 0,
+      salesCommissionPercent: Number(project.salesCommissionPercent) || 0,
+      salesCommissionAmount: Number(project.salesCommissionAmount) || 0,
+      pmUserId: project.pmUserId || "",
+      projectManagerId: project.projectManagerId || "",
+      salesManagerId: project.salesManagerId || "",
+    });
+  }, [project.id]);
+
+  if (!canEdit) return null;
+
+  const projectStages = projectSections(project).map((section) => section.name);
+  const projectLeads = roleUserOptions(users, ["pm", "project_manager", "director", "regional_manager", "deputy", "owner"]);
+  const salesManagers = roleUserOptions(users, ["sales_manager", "head_of_sales", "owner", "director"]);
+  const calculatedProductionBudget = Math.round((Number(form.contractAmount) || 0) * ((Number(form.productionAllocationPercent) || 0) / 100));
+  const calculatedSalesCommission = Math.round((Number(form.contractAmount) || 0) * ((Number(form.salesCommissionPercent) || 0) / 100));
+
+  function update(patch) {
+    setForm((next) => ({ ...next, ...patch }));
+  }
+
+  function save() {
+    const contractAmount = Number(form.contractAmount) || 0;
+    const paidByClient = Number(form.paidByClient) || 0;
+    const productionAllocationPercent = Number(form.productionAllocationPercent) || 0;
+    const productionBudget = Number(form.productionBudget) || Math.round(contractAmount * (productionAllocationPercent / 100));
+    const salesCommissionPercent = Number(form.salesCommissionPercent) || 0;
+    const salesCommissionAmount = Number(form.salesCommissionAmount) || Math.round(contractAmount * (salesCommissionPercent / 100));
+    onUpdateProject(project.id, {
+      ...form,
+      progress: Math.max(0, Math.min(100, Number(form.progress) || 0)),
+      contractAmount,
+      paidByClient,
+      productionAllocationPercent,
+      productionBudget,
+      salesCommissionPercent,
+      salesCommissionAmount,
+      yandexFolder: form.yandexFolder.trim() || "не привязан",
+    });
+  }
+
+  return (
+    <section className="office-card project-edit-card">
+      <div className="section-row">
+        <div>
+          <h3>Редактирование проекта</h3>
+          <p className="section-hint">Здесь админ/владелец исправляет ошибочно внесённые данные: договор, оплату клиента, бюджет РП, комиссию продаж и ссылку на Яндекс.Диск.</p>
+        </div>
+        <button type="button" className="primary" onClick={save}>Сохранить изменения</button>
+      </div>
+      <div className="quick-form">
+        <label><span>Название проекта</span><input value={form.title} onChange={(event) => update({ title: event.target.value })} /></label>
+        <label><span>Клиент</span><input value={form.client} onChange={(event) => update({ client: event.target.value })} /></label>
+        <label><span>Регион</span><select value={form.region} onChange={(event) => update({ region: event.target.value })}>{regionOptions.filter((region) => region !== "Все регионы").map((region) => <option key={region}>{region}</option>)}</select></label>
+        <label><span>Город</span><input value={form.city} onChange={(event) => update({ city: event.target.value })} /></label>
+        <label className="wide"><span>Адрес</span><input value={form.address} onChange={(event) => update({ address: event.target.value })} /></label>
+        <label><span>Статус</span><select value={form.status} onChange={(event) => update({ status: event.target.value })}>{["Новая", "В работе", "На проверке", "Ожидает клиента", "Ожидает оплаты", "Красная зона", "Завершён"].map((status) => <option key={status}>{status}</option>)}</select></label>
+        <label><span>Текущий этап</span><select value={form.stage} onChange={(event) => update({ stage: event.target.value })}>{projectStages.map((stage) => <option key={stage}>{stage}</option>)}</select></label>
+        <label><span>Готовность, %</span><input type="number" value={form.progress} onChange={(event) => update({ progress: event.target.value })} /></label>
+        <label><span>Светофор</span><select value={form.risk} onChange={(event) => update({ risk: event.target.value })}><option value="green">В норме</option><option value="yellow">Есть риск</option><option value="red">Красная зона</option></select></label>
+        <label><span>Контрольный срок</span><input value={form.deadline} onChange={(event) => update({ deadline: event.target.value })} /></label>
+        <label><span>Руководитель проекта</span><select value={form.pmUserId} onChange={(event) => update({ pmUserId: event.target.value })}><option value="">Не назначен</option>{projectLeads.map((user) => <option key={user.id} value={user.id}>{user.name} · {user.position}</option>)}</select></label>
+        <label><span>Менеджер проекта</span><select value={form.projectManagerId} onChange={(event) => update({ projectManagerId: event.target.value })}><option value="">Не назначен</option>{projectLeads.map((user) => <option key={user.id} value={user.id}>{user.name} · {user.position}</option>)}</select></label>
+        <label><span>Менеджер продаж</span><select value={form.salesManagerId} onChange={(event) => update({ salesManagerId: event.target.value })}><option value="">Нет / не из продаж</option>{salesManagers.map((user) => <option key={user.id} value={user.id}>{user.name} · {user.position}</option>)}</select></label>
+        <label><span>Сумма договора, ₽</span><input type="number" value={form.contractAmount} onChange={(event) => update({ contractAmount: event.target.value })} /></label>
+        <label><span>Оплачено клиентом, ₽</span><input type="number" value={form.paidByClient} onChange={(event) => update({ paidByClient: event.target.value })} /></label>
+        <label><span>% бюджета РП</span><input type="number" value={form.productionAllocationPercent} onChange={(event) => update({ productionAllocationPercent: event.target.value })} /></label>
+        <label><span>Бюджет РП вручную, ₽</span><input type="number" value={form.productionBudget} onChange={(event) => update({ productionBudget: event.target.value })} /></label>
+        <label><span>% единого центра продаж</span><input type="number" value={form.salesCommissionPercent} onChange={(event) => update({ salesCommissionPercent: event.target.value })} /></label>
+        <label><span>Комиссия продаж вручную, ₽</span><input type="number" value={form.salesCommissionAmount} onChange={(event) => update({ salesCommissionAmount: event.target.value })} /></label>
+        <label className="wide"><span>Главная папка Яндекс.Диска</span><input value={form.yandexFolder} onChange={(event) => update({ yandexFolder: event.target.value })} /></label>
+        <div className="wide form-hint">Расчёт по текущим полям: бюджет РП {money(calculatedProductionBudget)} по проценту; комиссия продаж {money(calculatedSalesCommission)} по проценту. Если вручную указана сумма в ₽, она перебивает процентный расчёт.</div>
+      </div>
+    </section>
+  );
+}
+
 function ProjectSectionsEditor({ project, sections, executors, canEdit, onUpdateSection, onAddSection, onDeleteSection }) {
-  const columnLabels = ["Этап / раздел", "Исполнитель", "Срок", "Статус", "%", "Доля договора, ₽", "Себестоимость исполнителя, ₽", "Выплачено исполнителю, ₽", "Финстатус", "Действие"];
+  const columnLabels = ["Этап / раздел", "Исполнитель", "Срок", "Статус", "%", "Сумма задачи исполнителя, ₽", "Выплачено исполнителю, ₽", "Финстатус", "Действие"];
   return (
     <div className="sections-editor">
       <div className="section-row">
@@ -2226,8 +2354,7 @@ function ProjectSectionsEditor({ project, sections, executors, canEdit, onUpdate
               {["Ожидает", "Новая", "В работе", "На проверке", "Правки", "Принято", "Просрочено"].map((status) => <option key={status}>{status}</option>)}
             </select>
             <input disabled={!canEdit} type="number" value={section.progress || 0} onChange={(event) => onUpdateSection(project.id, sectionId, { progress: Number(event.target.value) })} placeholder="%" />
-            <input disabled={!canEdit} type="number" value={section.clientBudget || 0} onChange={(event) => onUpdateSection(project.id, sectionId, { clientBudget: Number(event.target.value) })} placeholder="Доля договора, ₽" />
-            <input disabled={!canEdit} type="number" value={section.executorCost || 0} onChange={(event) => onUpdateSection(project.id, sectionId, { executorCost: Number(event.target.value), balance: (Number(event.target.value) || 0) - (Number(section.paid) || 0) })} placeholder="Себестоимость, ₽" />
+            <input disabled={!canEdit} type="number" value={section.executorCost || 0} onChange={(event) => onUpdateSection(project.id, sectionId, { executorCost: Number(event.target.value), balance: (Number(event.target.value) || 0) - (Number(section.paid) || 0) })} placeholder="Сумма задачи, ₽" />
             <input disabled={!canEdit} type="number" value={section.paid || 0} onChange={(event) => onUpdateSection(project.id, sectionId, { paid: Number(event.target.value), balance: (Number(section.executorCost) || 0) - (Number(event.target.value) || 0) })} placeholder="Выплачено, ₽" />
             <select disabled={!canEdit} value={section.financeStatus || "не рассчитан"} onChange={(event) => onUpdateSection(project.id, sectionId, { financeStatus: event.target.value })}>
               {["не рассчитан", "план", "счёт", "к выплате", "частично выплачено", "выплачено", "удержание"].map((status) => <option key={status}>{status}</option>)}
@@ -2243,7 +2370,7 @@ function ProjectSectionsEditor({ project, sections, executors, canEdit, onUpdate
   );
 }
 
-function ProjectDetails({ project, role, onTaskStatusChange, onProjectMessage, onAddClientParticipant, session, onUpdateSection, onAddSection, onDeleteSection, executors }) {
+function ProjectDetails({ project, role, onUpdateProject, onTaskStatusChange, onProjectMessage, onAddClientParticipant, session, onUpdateSection, onAddSection, onDeleteSection, executors, users }) {
   const canSeeMoney = roleCan(role, "viewFinance");
   const canSeeProductionBudget = roleCan(role, "viewProductionBudget") || canSeeMoney;
   const canSeeClient = roleCan(role, "viewClient") || roleCan(role, "manageProjects") || canSeeMoney;
@@ -2294,6 +2421,7 @@ function ProjectDetails({ project, role, onTaskStatusChange, onProjectMessage, o
       <BitrixBridgeCard project={project} />
       <ClientParticipantsCard project={project} onAddParticipant={onAddClientParticipant} />
       <ClientApprovalsCard project={project} />
+      <ProjectEditPanel project={project} users={users} canEdit={canAdminProject} onUpdateProject={onUpdateProject} />
 
       <section className="office-card economy-card">
         <div className="section-row">
@@ -2312,8 +2440,8 @@ function ProjectDetails({ project, role, onTaskStatusChange, onProjectMessage, o
             </div>
             <div>
               <span>Уже распределено по исполнителям</span>
-              <b>{money(economy.realizationCost)}</b>
-              <small>себестоимость исполнителей + комиссия единого центра продаж</small>
+              <b>{money(economy.productionCost)}</b>
+              <small>только суммы задач исполнителям внутри бюджета РП</small>
             </div>
             <div>
               <span>Комиссия единого центра продаж</span>
@@ -2338,8 +2466,8 @@ function ProjectDetails({ project, role, onTaskStatusChange, onProjectMessage, o
           <Info label="Оплачено клиентом" value={money(economy.paidByClient)} />
           <Info label="Остаток оплаты клиента" value={money(economy.receivable)} />
           <Info label="Доступный бюджет" value={money(economy.allocatedProductionBudget)} />
-          <Info label="Себестоимость исполнителей + продажи" value={money(economy.realizationCost)} />
-          <Info label="К выплате исполнителям" value={money(Math.max(economy.executorCost - economy.sections.reduce((sum, item) => sum + (Number(item.paid) || 0), 0), 0))} />
+          <Info label="Себестоимость исполнителей" value={money(economy.productionCost)} />
+          <Info label="К выплате исполнителям" value={money(Math.max(economy.executorCost - economy.paidToExecutors, 0))} />
           <Info label="Плановая прибыль" value={money(economy.contractProfit)} />
           <Info label="Фактическая прибыль" value={money(economy.grossProfit)} />
           <Info label="Маржинальность план/факт" value={`${economy.contractAmount ? Math.round((economy.contractProfit / economy.contractAmount) * 100) : 0}% / ${economy.margin}%`} />
@@ -2417,9 +2545,16 @@ function ProjectDetails({ project, role, onTaskStatusChange, onProjectMessage, o
       <ProjectChat project={project} role={role} session={session} onProjectMessage={onProjectMessage} />
 
       <div className="bottom-panels">
-        <Panel title="Файлы" items={(project.files || []).map((file) => `${file.type}: ${file.title}`)} />
-        <Panel title="Структура Яндекс.Диска" items={["Главная папка проекта", "Исходные данные", "Чертежи / разделы", "Согласования", "Акты", "Фото / видео"]} />
-        <Panel title="История действий" items={(project.chat || []).slice(-3).map((message) => message.text)} />
+        <Panel title="Файлы" items={(project.files || []).map((file) => ({ label: `${file.type}: ${file.title}`, url: file.url }))} />
+        <Panel
+          title="Структура Яндекс.Диска"
+          items={["Главная папка проекта", "Исходные данные", "Чертежи / разделы", "Согласования", "Акты", "Фото / видео"].map((label) => ({
+            label,
+            url: project.yandexFolder && project.yandexFolder.startsWith("http") ? project.yandexFolder : "",
+            action: "Папка Яндекс.Диска не привязана к проекту",
+          }))}
+        />
+        <Panel title="История действий" items={(project.chat || []).slice(-3).map((message) => ({ label: message.text, action: "История действий будет вынесена в отдельный журнал" }))} />
       </div>
     </div>
   );
@@ -4071,7 +4206,7 @@ function ProjectsModule({
   );
 }
 
-function ProjectDetailModule({ project, role, session, onBack, onDeleteProject, onTaskStatusChange, onProjectMessage, onAddClientParticipant, taskForm, setTaskForm, onCreateTask, executors, onUpdateSection, onAddSection, onDeleteSection }) {
+function ProjectDetailModule({ project, role, session, onBack, onDeleteProject, onUpdateProject, onTaskStatusChange, onProjectMessage, onAddClientParticipant, taskForm, setTaskForm, onCreateTask, executors, users, onUpdateSection, onAddSection, onDeleteSection }) {
   if (!project) {
     return (
       <>
@@ -4103,6 +4238,8 @@ function ProjectDetailModule({ project, role, session, onBack, onDeleteProject, 
         project={project}
         role={role}
         session={session}
+        users={users}
+        onUpdateProject={onUpdateProject}
         onTaskStatusChange={onTaskStatusChange}
         onProjectMessage={onProjectMessage}
         onAddClientParticipant={onAddClientParticipant}
@@ -5256,6 +5393,49 @@ function SmetaOfficePrototype() {
     );
   }
 
+  function updateProject(projectId, patch) {
+    if (!["owner", "admin"].includes(role)) {
+      showAction("Редактировать проект может только владелец или администратор");
+      return;
+    }
+    setProjectItems((items) =>
+      items.map((project) => {
+        if (project.id !== projectId) return project;
+        const next = { ...project, ...patch };
+        const economy = projectEconomy(next);
+        return {
+          ...next,
+          budget: money(economy.contractAmount),
+          margin: money(economy.contractProfit),
+          manager: userNameById(users, next.pmUserId, next.manager || "РП не назначен"),
+          projectManager: userNameById(users, next.projectManagerId, next.projectManager || ""),
+          salesManager: userNameById(users, next.salesManagerId, next.salesManager || ""),
+          objectRegion: next.region,
+          responsibleRegion: next.region,
+          objectCity: next.city,
+          files: [
+            ...(next.files || []).filter((file) => file.type !== "Папка проекта"),
+            ...(next.yandexFolder && next.yandexFolder.startsWith("http")
+              ? [{ id: `file-main-${next.id}`, type: "Папка проекта", title: "Главная папка проекта", url: next.yandexFolder, scope: "project" }]
+              : []),
+          ],
+          chat: [
+            ...(next.chat || []),
+            {
+              id: `chat-${Date.now()}`,
+              channel: "internal",
+              author: session?.name || "Система",
+              role,
+              text: "Данные проекта отредактированы администратором.",
+              at: new Intl.DateTimeFormat("ru-RU", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" }).format(new Date()),
+            },
+          ],
+        };
+      })
+    );
+    showAction("Проект обновлён");
+  }
+
   function addProjectSection(projectId) {
     const created = {
       id: `stage-${Date.now()}`,
@@ -5499,6 +5679,7 @@ function SmetaOfficePrototype() {
               session={session}
               onBack={backToProjects}
               onDeleteProject={deleteProject}
+              onUpdateProject={updateProject}
               onTaskStatusChange={changeTaskStatus}
               onProjectMessage={addProjectMessage}
               onAddClientParticipant={addClientParticipant}
@@ -5506,6 +5687,7 @@ function SmetaOfficePrototype() {
               setTaskForm={setTaskForm}
               onCreateTask={createTask}
               executors={executors}
+              users={users}
               onUpdateSection={updateProjectSection}
               onAddSection={addProjectSection}
               onDeleteSection={deleteProjectSection}
