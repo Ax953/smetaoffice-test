@@ -1542,9 +1542,9 @@ function projectEconomy(project) {
   const executorCost = sections.reduce((sum, item) => sum + (Number(item.executorCost) || 0), 0);
   const contractAmount = Number(project.contractAmount) || clientBudget || 0;
   const paidByClient = Number(project.paidByClient) || 0;
-  const directCosts = Number(project.directCosts) || 0;
+  const directCosts = 0;
   const plannedExpenses = Number(project.plannedExpenses) || 0;
-  const factualExpenses = Number(project.factualExpenses) || 0;
+  const factualExpenses = 0;
   const partnerPayouts = Number(project.partnerPayouts) || 0;
   const productionAllocationPercent = Number(project.productionAllocationPercent) || (Number(project.productionBudget) ? Math.round((Number(project.productionBudget) / Math.max(contractAmount, 1)) * 100) : 35);
   const allocatedProductionBudget = Number(project.productionBudget) || Math.round(contractAmount * (productionAllocationPercent / 100));
@@ -1554,8 +1554,8 @@ function projectEconomy(project) {
   const grossProfit = paidByClient - realizationCost;
   const contractProfit = contractAmount - realizationCost;
   const receivable = Math.max(contractAmount - paidByClient, 0);
-  const operatingCosts = Number(project.operatingCosts) || Math.round(paidByClient * 0.08);
-  const payrollCosts = Number(project.payrollCosts) || Math.round(paidByClient * 0.12);
+  const operatingCosts = 0;
+  const payrollCosts = 0;
   const netProfit = grossProfit - operatingCosts - payrollCosts;
   const splitBase = Math.max(netProfit, 0);
   const companyShare = Math.round(splitBase * 0.67);
@@ -1843,6 +1843,11 @@ function Info({ label, value }) {
   );
 }
 
+function ExternalLinkValue({ url, empty = "не привязан" }) {
+  if (!url || !String(url).startsWith("http")) return empty;
+  return <a className="inline-link" href={url} target="_blank" rel="noreferrer">Открыть папку</a>;
+}
+
 function projectBitrixLink(project) {
   const bitrix = project.bitrix || {};
   return {
@@ -2115,7 +2120,8 @@ function ClientApprovalsCard({ project }) {
   );
 }
 
-function ProjectSectionsEditor({ project, sections, executors, onUpdateSection, onAddSection, onDeleteSection }) {
+function ProjectSectionsEditor({ project, sections, executors, canEdit, onUpdateSection, onAddSection, onDeleteSection }) {
+  const columnLabels = ["Этап", "Исполнитель", "Срок", "Статус", "%", "Клиенту", "Себестоимость", "Выплачено", "Финстатус", "Действие"];
   return (
     <div className="sections-editor">
       <div className="section-row">
@@ -2123,14 +2129,18 @@ function ProjectSectionsEditor({ project, sections, executors, onUpdateSection, 
           <h3>Редактируемые этапы проекта</h3>
           <p className="section-hint">Этап — крупный блок работы. Задачи создаются внутри этапа ниже в карточке проекта.</p>
         </div>
-        <button type="button" className="primary" onClick={() => onAddSection(project.id)}>Добавить этап</button>
+        {canEdit ? <button type="button" className="primary" onClick={() => onAddSection(project.id)}>Добавить этап</button> : <span className="muted-chip">Редактирует только владелец / админ</span>}
+      </div>
+      <div className="stage-editor-head">
+        {columnLabels.map((label) => <span key={label}>{label}</span>)}
       </div>
       {sections.length ? sections.map((section) => {
         const sectionId = section.id || section.name;
         return (
           <div key={sectionId} className="stage-editor-row">
-            <input value={section.name} onChange={(event) => onUpdateSection(project.id, sectionId, { name: event.target.value })} placeholder="Название этапа" />
+            <input disabled={!canEdit} value={section.name} onChange={(event) => onUpdateSection(project.id, sectionId, { name: event.target.value })} placeholder="Название этапа" />
             <select
+              disabled={!canEdit}
               value={section.executorId || ""}
               onChange={(event) => {
                 const executor = executors.find((item) => item.id === event.target.value);
@@ -2140,20 +2150,21 @@ function ProjectSectionsEditor({ project, sections, executors, onUpdateSection, 
               <option value="">Исполнитель не назначен</option>
               {executors.map((executor) => <option key={executor.id} value={executor.id}>{executor.name} · {executor.sections.join(", ")}</option>)}
             </select>
-            <input value={section.due} onChange={(event) => onUpdateSection(project.id, sectionId, { due: event.target.value })} placeholder="Срок" />
-            <select value={section.status} onChange={(event) => onUpdateSection(project.id, sectionId, { status: event.target.value })}>
+            <input disabled={!canEdit} value={section.due} onChange={(event) => onUpdateSection(project.id, sectionId, { due: event.target.value })} placeholder="Срок" />
+            <select disabled={!canEdit} value={section.status} onChange={(event) => onUpdateSection(project.id, sectionId, { status: event.target.value })}>
               {["Ожидает", "Новая", "В работе", "На проверке", "Правки", "Принято", "Просрочено"].map((status) => <option key={status}>{status}</option>)}
             </select>
-            <input type="number" value={section.progress || 0} onChange={(event) => onUpdateSection(project.id, sectionId, { progress: Number(event.target.value) })} placeholder="%" />
-            <input type="number" value={section.clientBudget || 0} onChange={(event) => onUpdateSection(project.id, sectionId, { clientBudget: Number(event.target.value) })} placeholder="Цена клиенту" />
-            <input type="number" value={section.executorCost || 0} onChange={(event) => onUpdateSection(project.id, sectionId, { executorCost: Number(event.target.value), balance: (Number(event.target.value) || 0) - (Number(section.paid) || 0) })} placeholder="Исполнитель" />
-            <input type="number" value={section.paid || 0} onChange={(event) => onUpdateSection(project.id, sectionId, { paid: Number(event.target.value), balance: (Number(section.executorCost) || 0) - (Number(event.target.value) || 0) })} placeholder="Выплачено" />
-            <select value={section.financeStatus || "не рассчитан"} onChange={(event) => onUpdateSection(project.id, sectionId, { financeStatus: event.target.value })}>
+            <input disabled={!canEdit} type="number" value={section.progress || 0} onChange={(event) => onUpdateSection(project.id, sectionId, { progress: Number(event.target.value) })} placeholder="%" />
+            <input disabled={!canEdit} type="number" value={section.clientBudget || 0} onChange={(event) => onUpdateSection(project.id, sectionId, { clientBudget: Number(event.target.value) })} placeholder="Цена клиенту" />
+            <input disabled={!canEdit} type="number" value={section.executorCost || 0} onChange={(event) => onUpdateSection(project.id, sectionId, { executorCost: Number(event.target.value), balance: (Number(event.target.value) || 0) - (Number(section.paid) || 0) })} placeholder="Исполнитель" />
+            <input disabled={!canEdit} type="number" value={section.paid || 0} onChange={(event) => onUpdateSection(project.id, sectionId, { paid: Number(event.target.value), balance: (Number(section.executorCost) || 0) - (Number(event.target.value) || 0) })} placeholder="Выплачено" />
+            <select disabled={!canEdit} value={section.financeStatus || "не рассчитан"} onChange={(event) => onUpdateSection(project.id, sectionId, { financeStatus: event.target.value })}>
               {["не рассчитан", "план", "счёт", "к выплате", "частично выплачено", "выплачено", "удержание"].map((status) => <option key={status}>{status}</option>)}
             </select>
-            <input className="stage-editor-wide" value={section.yandexLink || ""} onChange={(event) => onUpdateSection(project.id, sectionId, { yandexLink: event.target.value, documents: event.target.value ? [event.target.value] : [] })} placeholder="Ссылка на Яндекс.Диск этапа" />
-            <input className="stage-editor-wide" value={(section.comments || []).join("; ")} onChange={(event) => onUpdateSection(project.id, sectionId, { comments: event.target.value ? [event.target.value] : [] })} placeholder="Комментарий к этапу" />
-            <button type="button" className="secondary danger" onClick={() => onDeleteSection(project.id, sectionId)}>Удалить</button>
+            <input disabled={!canEdit} className="stage-editor-wide" value={section.yandexLink || ""} onChange={(event) => onUpdateSection(project.id, sectionId, { yandexLink: event.target.value, documents: event.target.value ? [event.target.value] : [] })} placeholder="Ссылка на Яндекс.Диск этапа" />
+            <input disabled={!canEdit} className="stage-editor-wide" value={(section.comments || []).join("; ")} onChange={(event) => onUpdateSection(project.id, sectionId, { comments: event.target.value ? [event.target.value] : [] })} placeholder="Комментарий к этапу" />
+            {section.yandexLink ? <a className="stage-link" href={section.yandexLink} target="_blank" rel="noreferrer">Открыть</a> : null}
+            <button type="button" className="secondary danger" disabled={!canEdit} onClick={() => onDeleteSection(project.id, sectionId)}>Удалить</button>
           </div>
         );
       }) : <div className="empty">Этапы пока не созданы.</div>}
@@ -2165,6 +2176,7 @@ function ProjectDetails({ project, role, onTaskStatusChange, onProjectMessage, o
   const canSeeMoney = roleCan(role, "viewFinance");
   const canSeeProductionBudget = roleCan(role, "viewProductionBudget") || canSeeMoney;
   const canSeeClient = roleCan(role, "viewClient") || roleCan(role, "manageProjects") || canSeeMoney;
+  const canAdminProject = ["owner", "admin"].includes(role);
   const economy = projectEconomy(project);
 
   return (
@@ -2194,7 +2206,7 @@ function ProjectDetails({ project, role, onTaskStatusChange, onProjectMessage, o
           <Info label="Исполнитель" value={project.executor} />
           <Info label="Партнёр" value={project.partner} />
           <Info label="Адрес" value={[project.country, project.region, project.city, project.address].filter(Boolean).join(", ")} />
-          <Info label="Яндекс.Диск" value={project.yandexFolder || "не привязан"} />
+          <Info label="Яндекс.Диск" value={<ExternalLinkValue url={project.yandexFolder} />} />
         </div>
 
         <div className="progress-block large">
@@ -2265,6 +2277,7 @@ function ProjectDetails({ project, role, onTaskStatusChange, onProjectMessage, o
           project={project}
           sections={economy.sections}
           executors={executors}
+          canEdit={canAdminProject}
           onUpdateSection={onUpdateSection}
           onAddSection={onAddSection}
           onDeleteSection={onDeleteSection}
@@ -3574,9 +3587,6 @@ function ProjectCreationWizard({ projectForm, setProjectForm, users, onCreatePro
           <label><span>Оплачено клиентом</span><input type="number" value={projectForm.paidByClient} onChange={(event) => update({ paidByClient: event.target.value })} placeholder="0" /></label>
           <label><span>% бюджета реализации</span><input type="number" value={projectForm.productionAllocationPercent} onChange={(event) => update({ productionAllocationPercent: event.target.value })} placeholder="35" /></label>
           <label><span>Бюджет реализации вручную</span><input type="number" value={projectForm.productionBudget} onChange={(event) => update({ productionBudget: event.target.value })} placeholder="если отличается от %" /></label>
-          <label><span>Прямые расходы</span><input type="number" value={projectForm.directCosts} onChange={(event) => update({ directCosts: event.target.value })} placeholder="0" /></label>
-          <label><span>Операционные расходы</span><input type="number" value={projectForm.operatingCosts} onChange={(event) => update({ operatingCosts: event.target.value })} placeholder="0" /></label>
-          <label><span>Зарплатные расходы</span><input type="number" value={projectForm.payrollCosts} onChange={(event) => update({ payrollCosts: event.target.value })} placeholder="0" /></label>
           <label className="wide"><span>Главная папка Яндекс.Диска</span><input className={!projectForm.yandexFolder.trim() ? "invalid" : ""} value={projectForm.yandexFolder} onChange={(event) => update({ yandexFolder: event.target.value })} placeholder="https://disk.yandex.ru/..." /></label>
           <div className="wide create-project-summary"><span>Будет создан проект, шаблон этапов по продукту, базовая экономика и системное сообщение в чате проекта.</span><button type="button" className="primary" onClick={onCreateProject} disabled={!canCreateProject}>Сохранить и открыть проект</button></div>
         </div>
@@ -3969,7 +3979,7 @@ function ProjectsModule({
   );
 }
 
-function ProjectDetailModule({ project, role, session, onBack, onTaskStatusChange, onProjectMessage, onAddClientParticipant, taskForm, setTaskForm, onCreateTask, executors, onUpdateSection, onAddSection, onDeleteSection }) {
+function ProjectDetailModule({ project, role, session, onBack, onDeleteProject, onTaskStatusChange, onProjectMessage, onAddClientParticipant, taskForm, setTaskForm, onCreateTask, executors, onUpdateSection, onAddSection, onDeleteSection }) {
   if (!project) {
     return (
       <>
@@ -3991,7 +4001,10 @@ function ProjectDetailModule({ project, role, session, onBack, onTaskStatusChang
           <h3>{project.title}</h3>
           <p className="section-hint">{project.projectType || project.direction} · {project.region || project.city} · РП: {project.manager}</p>
         </div>
-        <button type="button" className="secondary" onClick={onBack}>Назад к реестру</button>
+        <div className="project-open-actions">
+          {["owner", "admin"].includes(role) ? <button type="button" className="secondary danger" onClick={() => onDeleteProject(project.id)}>Удалить проект</button> : null}
+          <button type="button" className="secondary" onClick={onBack}>Назад к реестру</button>
+        </div>
       </section>
 
       <ProjectDetails
@@ -4370,11 +4383,10 @@ function FinanceModule({ projectItems, role }) {
           <h3>Финансовая логика месяца</h3>
           <div className="finance-flow">
             <div><span>1. Поступления от проектов (факт)</span><b>{money(summary.paidByClient)}</b></div>
-            <div><span>2. Переменные затраты / реализация</span><b>{money(summary.realizationCost)}</b></div>
-            <div><span>3. Прибыль до постоянных</span><b>{money(summary.grossProfit)}</b></div>
-            <div><span>4. Постоянные расходы</span><b>{money(summary.operatingCosts)}</b></div>
-            <div><span>5. ФОТ направления</span><b>{money(summary.payrollCosts)}</b></div>
-            <div className="strong"><span>6. База для 67/33</span><b>{money(summary.splitBase)}</b></div>
+            <div><span>2. Себестоимость исполнителей</span><b>{money(summary.realizationCost)}</b></div>
+            <div><span>3. Валовая прибыль по оплатам</span><b>{money(summary.grossProfit)}</b></div>
+            <div><span>4. Долг перед исполнителями / партнёрами</span><b>{money(summary.payable)}</b></div>
+            <div className="strong"><span>5. База для 67/33</span><b>{money(summary.splitBase)}</b></div>
           </div>
         </div>
 
@@ -4411,7 +4423,7 @@ function FinanceModule({ projectItems, role }) {
         <div className="section-row">
           <div>
             <h3>Проекты и деньги</h3>
-            <p className="section-hint">Колонки идут по смыслу Excel-отчёта: договор, факт оплат, остаток, реализация/себестоимость, прибыль до постоянных, фикс/ФОТ, чистая база и деление 67/33.</p>
+            <p className="section-hint">Колонки идут по смыслу Excel-отчёта: договор, факт оплат, остаток, бюджет реализации, себестоимость исполнителей, остаток бюджета, валовая прибыль и деление 67/33. Зарплаты и операционные затраты в проект не вносим.</p>
           </div>
         </div>
         <div className="finance-table">
@@ -4425,8 +4437,7 @@ function FinanceModule({ projectItems, role }) {
             <strong>Бюджет РП</strong>
             <strong>Реализация</strong>
             <strong>Остаток РП</strong>
-            <strong>До постоянных</strong>
-            <strong>Фикс+ФОТ</strong>
+            <strong>Валовая прибыль</strong>
             <strong>База 67/33</strong>
             <strong>Компания 67%</strong>
             <strong>Упр. 33%</strong>
@@ -4445,7 +4456,6 @@ function FinanceModule({ projectItems, role }) {
                 <strong>{money(economy.realizationCost)}</strong>
                 <strong className={economy.pmBudgetLeft >= 0 ? "good" : "bad"}>{money(economy.pmBudgetLeft)}</strong>
                 <strong className={economy.grossProfit >= 0 ? "good" : "bad"}>{money(economy.grossProfit)}</strong>
-                <strong>{money(economy.operatingCosts + economy.payrollCosts)}</strong>
                 <strong className={economy.splitBase > 0 ? "good" : "bad"}>{money(economy.splitBase)}</strong>
                 <strong>{money(economy.companyShare)}</strong>
                 <strong>{money(economy.managerShare)}</strong>
@@ -4988,9 +4998,9 @@ function SmetaOfficePrototype() {
     const paidByClient = toMoneyNumber(projectForm.paidByClient);
     const allocationPercent = Number(projectForm.productionAllocationPercent) || 35;
     const productionBudget = toMoneyNumber(projectForm.productionBudget) || Math.round(contractAmount * (allocationPercent / 100));
-    const directCosts = toMoneyNumber(projectForm.directCosts);
-    const operatingCosts = toMoneyNumber(projectForm.operatingCosts);
-    const payrollCosts = toMoneyNumber(projectForm.payrollCosts);
+    const directCosts = 0;
+    const operatingCosts = 0;
+    const payrollCosts = 0;
     const progress = Math.max(0, Math.min(100, Number(projectForm.progress) || 0));
     const sections = makeTemplateSections(projectForm.projectType).map((section) => {
       if (section.name !== projectForm.stage) return section;
@@ -5174,6 +5184,22 @@ function SmetaOfficePrototype() {
   function deleteProjectSection(projectId, sectionId) {
     setProjectItems((items) => items.map((project) => project.id === projectId ? { ...project, sections: projectSections(project).filter((section) => (section.id || section.name) !== sectionId) } : project));
     showAction("Этап удалён из карточки проекта");
+  }
+
+  function deleteProject(projectId) {
+    if (!["owner", "admin"].includes(role)) {
+      showAction("Удалять проекты может только владелец или администратор");
+      return;
+    }
+    const project = projectItems.find((item) => item.id === projectId);
+    const confirmed = window.confirm(`Удалить проект ${project?.title || projectId}? Действие уберёт проект из локального реестра SmetaOffice.`);
+    if (!confirmed) return;
+    const remaining = projectItems.filter((item) => item.id !== projectId);
+    setProjectItems(remaining);
+    setSelectedId(remaining[0]?.id || "");
+    writeStoredValue("smeta.selectedProjectId", remaining[0]?.id || "");
+    setActiveSection("projects");
+    showAction("Проект удалён из реестра");
   }
 
   function changeTaskStatus(projectId, taskName, status) {
@@ -5375,6 +5401,7 @@ function SmetaOfficePrototype() {
               role={role}
               session={session}
               onBack={backToProjects}
+              onDeleteProject={deleteProject}
               onTaskStatusChange={changeTaskStatus}
               onProjectMessage={addProjectMessage}
               onAddClientParticipant={addClientParticipant}
