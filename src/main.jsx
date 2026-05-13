@@ -4610,8 +4610,7 @@ function TasksModule({ allTasks, onTaskStatusChange, executors }) {
   );
 }
 
-function PartnersModule({ role }) {
-  const [partnerItems, setPartnerItems] = useState(() => readStoredValue("smeta.partners", partnerSeed));
+function PartnersModule({ role, partnerItems, setPartnerItems }) {
   const [partnerForm, setPartnerForm] = useState({
     name: "",
     category: partnerCategoryOptions[0],
@@ -4750,6 +4749,25 @@ function AdminModule({ users, setUsers, session }) {
               </select>
             </div>
           ))}
+        </div>
+
+        <div className="admin-directory-grid">
+          <div>
+            <b>Справочник регионов</b>
+            <span>{baseRegions.length} региона: {baseRegions.map((region) => region.name).join(", ")}</span>
+          </div>
+          <div>
+            <b>Справочник направлений</b>
+            <span>{projectDirectionNames().length} направлений SmetaGroup</span>
+          </div>
+          <div>
+            <b>Типы проектов</b>
+            <span>{Object.keys(projectStageTemplates).length} шаблонов этапов</span>
+          </div>
+          <div>
+            <b>Категории партнёров</b>
+            <span>{partnerCategoryOptions.length} категорий партнёрской сети</span>
+          </div>
         </div>
       </section>
 
@@ -5248,6 +5266,7 @@ function SmetaOfficePrototype() {
   const [executors, setExecutorsState] = useState(() => readStoredValue("smeta.executors", executorProfiles));
   const [users, setUsersState] = useState(() => readStoredValue("smeta.users", demoUsers));
   const [salesLeads, setSalesLeadsState] = useState(() => mergeSalesLeads(readStoredValue("smeta.salesLeads", seedSalesLeads)));
+  const [partners, setPartnersState] = useState(() => readStoredValue("smeta.partners", partnerSeed));
   const [selectedId, setSelectedId] = useState(() => readStoredValue("smeta.selectedProjectId", ""));
   const [activeSection, setActiveSection] = useState("dashboard");
   const [projectForm, setProjectForm] = useState(defaultProjectForm);
@@ -5296,10 +5315,12 @@ function SmetaOfficePrototype() {
   useEffect(() => {
     let alive = true;
     async function loadServerState() {
-      const [serverProjects, serverExecutors, serverUsers] = await Promise.all([
+      const [serverProjects, serverExecutors, serverUsers, serverPartners, serverSalesLeads] = await Promise.all([
         apiGet("/projects", null),
         apiGet("/executors", null),
         apiGet("/users", null),
+        apiGet("/partners", null),
+        apiGet("/sales-leads", null),
       ]);
       if (!alive) return;
       if (Array.isArray(serverProjects)) {
@@ -5315,6 +5336,18 @@ function SmetaOfficePrototype() {
       if (Array.isArray(serverUsers) && serverUsers.length) {
         setUsersState(serverUsers);
         writeStoredValue("smeta.users", serverUsers);
+      }
+      if (Array.isArray(serverPartners)) {
+        const nextPartners = serverPartners.length ? serverPartners : partnerSeed;
+        setPartnersState(nextPartners);
+        writeStoredValue("smeta.partners", nextPartners);
+        if (!serverPartners.length) apiPut("/partners", nextPartners);
+      }
+      if (Array.isArray(serverSalesLeads)) {
+        const nextSalesLeads = mergeSalesLeads(serverSalesLeads);
+        setSalesLeadsState(nextSalesLeads);
+        writeStoredValue("smeta.salesLeads", nextSalesLeads);
+        if (nextSalesLeads.length !== serverSalesLeads.length) apiPut("/sales-leads", nextSalesLeads);
       }
     }
     loadServerState();
@@ -5370,6 +5403,16 @@ function SmetaOfficePrototype() {
     setSalesLeadsState((current) => {
       const next = mergeSalesLeads(typeof updater === "function" ? updater(current) : updater);
       writeStoredValue("smeta.salesLeads", next);
+      apiPut("/sales-leads", next);
+      return next;
+    });
+  }
+
+  function setPartners(updater) {
+    setPartnersState((current) => {
+      const next = typeof updater === "function" ? updater(current) : updater;
+      writeStoredValue("smeta.partners", next);
+      apiPut("/partners", next);
       return next;
     });
   }
@@ -5980,7 +6023,7 @@ function SmetaOfficePrototype() {
           ) : null}
 
           {role !== "executor" && activeSection === "tasks" ? <TasksModule allTasks={visibleTasks} onTaskStatusChange={changeTaskStatus} executors={executors} /> : null}
-          {role !== "executor" && activeSection === "partners" ? <PartnersModule role={role} /> : null}
+          {role !== "executor" && activeSection === "partners" ? <PartnersModule role={role} partnerItems={partners} setPartnerItems={setPartners} /> : null}
           {role !== "executor" && activeSection === "admin" ? <AdminModule users={users} setUsers={setUsers} session={session} /> : null}
           {role !== "executor" && activeSection === "analytics" ? <AnalyticsModule projectItems={visibleProjects} allTasks={visibleTasks} role={role} /> : null}
           {role !== "executor" && activeSection === "finance" ? <FinanceModule projectItems={projectItems} role={role} /> : null}

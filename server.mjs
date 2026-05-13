@@ -15,6 +15,17 @@ const defaultDb = {
   projects: [],
   executors: [],
   users: [],
+  partners: [],
+  salesLeads: [],
+  directories: {
+    regions: [],
+    directions: [],
+    projectTypes: [],
+    partnerCategories: [],
+    stageTemplates: {},
+    financeTemplates: {},
+    updatedAt: "",
+  },
   integrationSettings: { webhookUrl: "", syncMode: "manual", lastCheck: "не запускалась" },
   syncLog: [],
 };
@@ -119,7 +130,19 @@ const server = http.createServer(async (req, res) => {
     const db = await readDb();
 
     if (req.method === "GET" && route === "/api/health") {
-      sendJson(res, 200, { ok: true, service: "SmetaOffice API" });
+      sendJson(res, 200, {
+        ok: true,
+        service: "SmetaOffice API",
+        storage: "json",
+        updatedAt: new Date().toISOString(),
+        counts: {
+          projects: (db.projects || []).length,
+          executors: (db.executors || []).length,
+          users: (db.users || []).length,
+          partners: (db.partners || []).length,
+          salesLeads: (db.salesLeads || []).length,
+        },
+      });
       return;
     }
 
@@ -164,6 +187,45 @@ const server = http.createServer(async (req, res) => {
       const nextDb = { ...db, users };
       await writeDb(nextDb);
       sendJson(res, 200, nextDb.users);
+      return;
+    }
+
+    if (req.method === "GET" && route === "/api/partners") {
+      sendJson(res, 200, db.partners || []);
+      return;
+    }
+
+    if (req.method === "PUT" && route === "/api/partners") {
+      const partners = await readJsonBody(req);
+      const nextDb = { ...db, partners };
+      await writeDb(nextDb);
+      sendJson(res, 200, nextDb.partners);
+      return;
+    }
+
+    if (req.method === "GET" && route === "/api/sales-leads") {
+      sendJson(res, 200, db.salesLeads || []);
+      return;
+    }
+
+    if (req.method === "PUT" && route === "/api/sales-leads") {
+      const salesLeads = await readJsonBody(req);
+      const nextDb = { ...db, salesLeads };
+      await writeDb(nextDb);
+      sendJson(res, 200, nextDb.salesLeads);
+      return;
+    }
+
+    if (req.method === "GET" && route === "/api/directories") {
+      sendJson(res, 200, db.directories || defaultDb.directories);
+      return;
+    }
+
+    if (req.method === "PUT" && route === "/api/directories") {
+      const directories = await readJsonBody(req);
+      const nextDb = { ...db, directories: { ...directories, updatedAt: new Date().toISOString() } };
+      await writeDb(nextDb);
+      sendJson(res, 200, nextDb.directories);
       return;
     }
 
