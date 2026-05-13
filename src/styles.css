@@ -1422,6 +1422,22 @@ h3 { margin: 0; }
 }
 
 .dashboard-hero { display: grid; gap: 18px; }
+.role-scope-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(320px, .9fr);
+  gap: 18px;
+  align-items: start;
+}
+.role-scope-card h3 {
+  margin: 10px 0 8px;
+  color: #020617;
+  font-size: 22px;
+}
+.role-scope-meta {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
 .dashboard-period {
   display: flex;
   flex-wrap: wrap;
@@ -2483,7 +2499,7 @@ h3 { margin: 0; }
   .office-main { padding-left: 0; }
   .office-header { grid-template-columns: 1fr; align-items: stretch; }
   .workspace-head, .details-head, .account-hero, .project-open-head { align-items: stretch; flex-direction: column; }
-  .stats-grid, .info-grid, .bottom-panels, .pipeline, .summary-grid, .executor-groups, .executor-form, .executor-two-cols, .mvp-days, .integration-form, .client-app-grid, .economy-summary, .production-budget-card, .login-card, .finance-grid, .finance-kpi-list, .plan-grid, .focus-grid, .risk-project-strip, .task-kanban, .executor-process-grid, .bitrix-bridge-grid, .stage-editor-row, .stage-editor-head, .admin-directory-grid, .empty-start-card, .task-meaning-grid, .partner-detail-grid, .analytics-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .stats-grid, .info-grid, .bottom-panels, .pipeline, .summary-grid, .executor-groups, .executor-form, .executor-two-cols, .mvp-days, .integration-form, .client-app-grid, .economy-summary, .production-budget-card, .login-card, .finance-grid, .finance-kpi-list, .plan-grid, .focus-grid, .risk-project-strip, .task-kanban, .executor-process-grid, .bitrix-bridge-grid, .stage-editor-row, .stage-editor-head, .admin-directory-grid, .empty-start-card, .role-scope-card, .task-meaning-grid, .partner-detail-grid, .analytics-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .dashboard-grid, .dashboard-grid.wide { grid-template-columns: 1fr; }
 }
 
@@ -2491,7 +2507,7 @@ h3 { margin: 0; }
   .office-content, .office-header { padding-left: 16px; padding-right: 16px; }
   .header-actions, .filters, .module-head { flex-direction: column; align-items: stretch; }
   .header-actions label, .moscow-clock, .filters input, .filters select { width: 100%; min-width: 0; }
-  .stats-grid, .projects-list, .drill-card-grid, .card-money-row, .drill-metrics, .info-grid, .bottom-panels, .pipeline, .summary-grid, .executor-groups, .executor-list, .executor-form, .executor-two-cols, .chat-input, .project-chat-input, .mvp-days, .integration-form, .quick-form, .task-create-form, .economy-summary, .production-budget-card, .login-card, .finance-grid, .finance-kpi-list, .org-detail-grid, .mini-kpi-grid, .plan-grid, .focus-grid, .risk-project-strip, .task-command-bar, .task-kanban, .executor-process-grid, .task-inspector-actions, .client-participant-form, .sales-grid, .sales-board, .stage-editor-row, .stage-editor-head, .admin-directory-grid, .empty-start-card, .quick-action-grid, .task-meaning-grid, .partner-detail-grid, .analytics-grid, .specialization-add { grid-template-columns: 1fr; }
+  .stats-grid, .projects-list, .drill-card-grid, .card-money-row, .drill-metrics, .info-grid, .bottom-panels, .pipeline, .summary-grid, .executor-groups, .executor-list, .executor-form, .executor-two-cols, .chat-input, .project-chat-input, .mvp-days, .integration-form, .quick-form, .task-create-form, .economy-summary, .production-budget-card, .login-card, .finance-grid, .finance-kpi-list, .org-detail-grid, .mini-kpi-grid, .plan-grid, .focus-grid, .risk-project-strip, .task-command-bar, .task-kanban, .executor-process-grid, .task-inspector-actions, .client-participant-form, .sales-grid, .sales-board, .stage-editor-row, .stage-editor-head, .admin-directory-grid, .empty-start-card, .role-scope-card, .role-scope-meta, .quick-action-grid, .task-meaning-grid, .partner-detail-grid, .analytics-grid, .specialization-add { grid-template-columns: 1fr; }
   .wizard-header, .create-project-summary { flex-direction: column; align-items: stretch; }
   .stage-editor-wide { grid-column: auto; }
   .task-table > div, .partner-table > div, .partner-table > button, .project-account-meta, .mapping-table > div, .sync-log > div, .task-board > div, .analytics-list > div, .sections-table > div:not(.empty), .admin-users-table > div, .finance-table > div, .dashboard-table > div, .dashboard-table > button, .task-status-chart > div, .bitrix-map-table > div, .client-participants-list > div, .approval-list > div { grid-template-columns: 1fr; }

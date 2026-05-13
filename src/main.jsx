@@ -20,13 +20,13 @@ const roles = [
 
 const rolePermissions = {
   owner: ["viewAll", "viewClient", "viewFinance", "viewProductionBudget", "manageUsers", "manageProjects", "manageExecutors", "assignExecutors", "viewExecutorContacts", "editFinance", "viewOwnerDashboard"],
-  admin: ["viewAll", "viewClient", "manageUsers", "manageProjects", "manageExecutors", "assignExecutors", "viewExecutorContacts", "viewOwnerDashboard"],
+  admin: ["viewAll", "viewClient", "manageUsers", "manageProjects", "manageExecutors", "assignExecutors", "viewExecutorContacts"],
   deputy: ["viewAll", "viewClient", "viewFinance", "viewProductionBudget", "manageProjects", "manageExecutors", "assignExecutors", "viewExecutorContacts", "viewOwnerDashboard"],
   director: ["viewClient", "viewFinance", "viewProductionBudget", "manageProjects", "manageExecutors", "assignExecutors", "viewExecutorContacts", "viewOwnerDashboard"],
-  regional_manager: ["viewClient", "viewProductionBudget", "manageProjects", "manageExecutors", "assignExecutors", "viewExecutorContacts", "viewOwnerDashboard"],
-  pm: ["viewClient", "viewProductionBudget", "manageProjects", "manageExecutors", "assignExecutors", "viewExecutorContacts"],
-  project_manager: ["viewClient", "manageProjects", "assignExecutors"],
-  sales_manager: ["viewClient", "manageProjects"],
+  regional_manager: ["viewClient", "viewFinance", "viewProductionBudget", "manageProjects", "manageExecutors", "assignExecutors", "viewExecutorContacts", "viewOwnerDashboard"],
+  pm: ["viewClient", "viewProductionBudget", "manageProjects", "manageExecutors", "assignExecutors"],
+  project_manager: ["viewClient", "viewProductionBudget", "manageProjects", "assignExecutors"],
+  sales_manager: ["viewClient"],
   head_of_sales: ["viewClient", "manageProjects", "viewOwnerDashboard"],
   accountant: ["viewFinance", "editFinance"],
   finance: ["viewFinance", "editFinance"],
@@ -48,7 +48,7 @@ const demoUsers = [
   { id: "USR-006", login: "pm", password: "pm", role: "pm", name: "Руководитель проекта", status: "active", region: "ДНР", regions: ["ДНР"], direction: "Проектный институт", position: "Руководитель проекта" },
   { id: "USR-007", login: "project", password: "project", role: "project_manager", name: "Менеджер проекта", status: "active", region: "ЧР", regions: ["ЧР"], direction: "Бюро архитектуры и дизайна", position: "Менеджер проекта" },
   { id: "USR-008", login: "sales", password: "sales", role: "sales_manager", name: "Менеджер продаж", status: "active", region: "ЧР", regions: ["ЧР"], direction: "Единый центр продаж", position: "Менеджер продаж" },
-  { id: "USR-009", login: "headsales", password: "headsales", role: "head_of_sales", name: "Руководитель отдела продаж", status: "active", region: "Все регионы", regions: ["Все регионы"], direction: "Единый центр продаж", position: "Руководитель отдела продаж" },
+  { id: "USR-009", login: "headsales", password: "headsales", role: "head_of_sales", name: "Руководитель отдела продаж", status: "active", region: "ЧР", regions: ["ЧР"], direction: "Единый центр продаж", position: "Руководитель отдела продаж" },
   { id: "USR-010", login: "accountant", password: "accountant", role: "accountant", name: "Бухгалтер", status: "active", region: "Все регионы", regions: ["Все регионы"], direction: "Финансы", position: "Бухгалтер" },
   { id: "USR-011", login: "finance", password: "finance", role: "finance", name: "Финансист", status: "active", region: "Все регионы", regions: ["Все регионы"], direction: "Финансы", position: "Финансовый контроль" },
   { id: "USR-012", login: "executor", password: "executor", role: "executor", name: "Исполнитель", status: "active", region: "ЧР", regions: ["ЧР"], direction: "Бюро архитектуры и дизайна", position: "Исполнитель / визуализатор", executorId: "EX-063" },
@@ -1508,27 +1508,96 @@ function canAccessProject(user, project, viewRole = user?.role) {
     return project.pmUserId === user.id || project.managerId === user.id || project.manager === user.name;
   }
   if (role === "project_manager") {
-    return project.projectManagerId === user.id || project.managerId === user.id || project.manager === user.name;
+    return project.projectManagerId === user.id || project.pmUserId === user.id || project.managerId === user.id || project.manager === user.name;
   }
   if (role === "sales_manager") {
-    return project.salesManagerId === user.id || project.source === "SmetaGo" || project.direction === "Агентство недвижимости" || project.direction === "Недвижимость";
+    return project.salesManagerId === user.id;
   }
   if (role === "head_of_sales") {
-    return project.headOfSalesId === user.id || project.source === "SmetaGo" || project.direction === "Агентство недвижимости" || project.direction === "Недвижимость";
+    return project.headOfSalesId === user.id || Boolean(project.salesManagerId) || project.source === "SmetaGo";
   }
 
   return canAccessRegion(user, project);
 }
 
+function canAccessPartner(user, partner, viewRole = user?.role) {
+  const role = viewRole || user?.role;
+  if (!partner || !user) return false;
+  if (["owner", "admin", "deputy"].includes(role)) return true;
+  if (role === "finance" || role === "accountant") return true;
+  if (role === "partner") return partner.userId === user.id || partner.partnerUserId === user.id || partner.name === user.name;
+
+  const userRegions = userRegionList(user);
+  const regionMatch = userRegions.includes("Все регионы") || userRegions.includes(normalizeRegionName(partner.region));
+  if (!regionMatch) return false;
+
+  if (role === "director") {
+    return partner.direction === user.direction || user.direction === "Все направления";
+  }
+  if (role === "regional_manager") return true;
+  if (role === "pm" || role === "project_manager") {
+    return partner.direction === user.direction || user.direction === "Все направления";
+  }
+  if (role === "head_of_sales" || role === "sales_manager") {
+    return partner.direction === "Агентство недвижимости" || partner.direction === "Продажи" || partner.relation === "Партнёр приводит нам клиентов";
+  }
+  return false;
+}
+
 function sectionAllowed(role, sectionId) {
-  const common = ["dashboard", "sales", "projects", "tasks", "analytics", "client"];
+  const projectSections = ["projects", "projectDetail"];
+  const salesSections = ["dashboard", "sales", ...projectSections, "tasks", "analytics", "client"];
   if (role === "owner" || role === "deputy") return true;
-  if (role === "admin") return ["dashboard", "sales", "projects", "tasks", "executors", "partners", "analytics", "integrations", "admin", "client"].includes(sectionId);
-  if (role === "finance" || role === "accountant") return ["dashboard", "sales", "projects", "tasks", "analytics", "finance"].includes(sectionId);
-  if (role === "executor") return ["dashboard", "tasks"].includes(sectionId);
-  if (role === "partner") return ["dashboard", "sales", "projects", "tasks", "analytics"].includes(sectionId);
-  if (role === "sales_manager" || role === "head_of_sales") return common.includes(sectionId);
-  return ["dashboard", "sales", "projects", "tasks", "executors", "analytics", "client"].includes(sectionId);
+  if (role === "admin") return ["dashboard", ...projectSections, "tasks", "executors", "partners", "integrations", "admin", "client"].includes(sectionId);
+  if (role === "finance" || role === "accountant") return ["dashboard", ...projectSections, "analytics", "finance"].includes(sectionId);
+  if (role === "executor") return ["dashboard", "projects", "tasks"].includes(sectionId);
+  if (role === "partner") return ["dashboard", "sales", ...projectSections, "tasks"].includes(sectionId);
+  if (role === "sales_manager" || role === "head_of_sales") return salesSections.includes(sectionId);
+  if (role === "pm" || role === "project_manager") return ["dashboard", ...projectSections, "tasks", "executors", "analytics", "client"].includes(sectionId);
+  if (role === "director" || role === "regional_manager") return ["dashboard", ...projectSections, "tasks", "executors", "partners", "analytics", "client"].includes(sectionId);
+  return ["dashboard", ...projectSections, "tasks", "analytics", "client"].includes(sectionId);
+}
+
+function roleScopeText(role, user) {
+  if (role === "owner") return "весь холдинг";
+  if (role === "admin") return "админка, доступы, справочники, без закрытых финансов";
+  if (role === "deputy") return "операционный контур холдинга";
+  if (role === "director") return `${user?.direction || "своё направление"} · ${user?.region || "свои регионы"}`;
+  if (role === "regional_manager") return `${user?.region || "свой регион"} · все направления региона`;
+  if (role === "pm") return "только проекты, где пользователь назначен РП";
+  if (role === "project_manager") return "только проекты, где пользователь назначен менеджером проекта";
+  if (role === "sales_manager") return "свои лиды, сделки и проекты продаж";
+  if (role === "head_of_sales") return `${user?.region || "регион"} · единый центр продаж`;
+  if (role === "finance" || role === "accountant") return "финансовые показатели доступных проектов";
+  if (role === "partner") return "только свои заявки, работы и выплаты";
+  if (role === "executor") return "только свои проекты, задачи, уровень и выплаты";
+  return "доступ по назначению";
+}
+
+function dashboardTitleForRole(role) {
+  if (role === "admin") return "Панель администратора";
+  if (role === "director") return "Панель руководителя направления";
+  if (role === "regional_manager") return "Панель регионального менеджера";
+  if (role === "pm") return "Панель руководителя проекта";
+  if (role === "project_manager") return "Панель менеджера проекта";
+  if (role === "sales_manager") return "Панель менеджера продаж";
+  if (role === "head_of_sales") return "Панель руководителя отдела продаж";
+  if (role === "finance" || role === "accountant") return "Панель финансов";
+  if (role === "partner") return "Панель партнёра";
+  return "Сводка владельца";
+}
+
+function dashboardHintForRole(role) {
+  if (role === "admin") return "Главная задача администратора: пользователи, роли, регионы, направления, справочники и техническая чистота данных. Финансовые суммы здесь скрыты.";
+  if (role === "director") return "Руководитель направления видит только своё направление в назначенных регионах: проекты, задачи, партнёров и аналитику своего блока.";
+  if (role === "regional_manager") return "Региональный менеджер видит все направления своего региона: проекты, сроки, риски, исполнителей и партнёров региона.";
+  if (role === "pm") return "РП видит только свои проекты: этапы, исполнителей, сроки, задачи, файлы и производственный бюджет.";
+  if (role === "project_manager") return "Менеджер проекта работает как операционный помощник РП: свои проекты, задачи, этапы и статусы.";
+  if (role === "sales_manager") return "Менеджер продаж видит свои лиды, сделки, задачи по клиентам и связанные проекты без производственной маржи.";
+  if (role === "head_of_sales") return "РОП видит продажи своего региона/отдела: SLA, КП, договоры, авансы и передачу в проекты.";
+  if (role === "finance" || role === "accountant") return "Финансы видят договоры, оплаты, задолженность, себестоимость и выплаты, но не управляют доступами.";
+  if (role === "partner") return "Партнёр видит только назначенные работы, свои заявки, статус выплат и рейтинг. Регионы и чужие клиенты скрыты.";
+  return "Здесь показан только тот контур, который доступен выбранной роли.";
 }
 
 function cn(...classes) {
@@ -1874,7 +1943,11 @@ function slaTone(status) {
 function leadCanAccess(user, lead, viewRole = user?.role) {
   const role = viewRole || user?.role;
   if (!lead || !user) return false;
-  if (["owner", "admin", "deputy", "head_of_sales"].includes(role)) return true;
+  if (["owner", "admin", "deputy"].includes(role)) return true;
+  if (role === "head_of_sales") {
+    const regions = userRegionList(user);
+    return regions.includes("Все регионы") || regions.includes(normalizeRegionName(lead.region));
+  }
   if (role === "finance" || role === "accountant") return true;
   if (role === "partner") return lead.partnerId === user.id || lead.farmerId === user.id;
   if (role === "sales_manager") return lead.hunterId === user.id || lead.farmerId === user.id;
@@ -3267,8 +3340,24 @@ function ExecutorsModule({ role, executors, setExecutors, allTasks = [] }) {
   );
 }
 
-function ExecutorPersonalAccount({ allTasks }) {
-  const personalTasks = allTasks.filter((task) => task.executorId === "EX-001");
+function ExecutorPersonalAccount({ allTasks, session, activeSection }) {
+  const executorId = session?.executorId || "EX-001";
+  const personalTasks = allTasks.filter((task) => task.executorId === executorId || task.assigneeId === executorId);
+  const projectSummaries = Array.from(
+    personalTasks.reduce((map, task) => {
+      const item = map.get(task.projectId) || {
+        id: task.projectId,
+        title: task.projectTitle,
+        region: task.projectRegion,
+        tasks: [],
+        progress: 0,
+      };
+      item.tasks.push(task);
+      item.progress = Math.round(item.tasks.reduce((sum, nextTask) => sum + (nextTask.status === "Принято" ? 100 : nextTask.status === "На проверке" ? 80 : nextTask.status === "В работе" ? 55 : 15), 0) / item.tasks.length);
+      map.set(task.projectId, item);
+      return map;
+    }, new Map()).values()
+  );
   const visibleProjects = personalTasks.length
     ? personalTasks.map((task) => ({
         id: task.projectId,
@@ -3283,13 +3372,94 @@ function ExecutorPersonalAccount({ allTasks }) {
     : executorAccount.projects;
   const xpPercent = Math.round((executorAccount.xp / executorAccount.nextLevelXp) * 100);
 
+  if (activeSection === "projects") {
+    return (
+      <section className="executor-account">
+        <div className="account-hero">
+          <div>
+            <p>Мои проекты</p>
+            <h2>{session?.name || executorAccount.name}</h2>
+            <span>Исполнитель видит только проекты, где назначен на этап или задачу.</span>
+          </div>
+          <div className="account-level-card">
+            <span>Проектов</span>
+            <b>{projectSummaries.length}</b>
+            <small>активных задач: {personalTasks.length}</small>
+          </div>
+        </div>
+        <section className="office-card">
+          <div className="executor-task-list">
+            {(projectSummaries.length ? projectSummaries : visibleProjects).map((project) => (
+              <div key={project.id}>
+                <div>
+                  <span className="muted-chip">{project.id}</span>
+                  <h3>{project.title}</h3>
+                  <p>{project.region || project.task || "проект исполнителя"}</p>
+                </div>
+                <div className="project-account-meta">
+                  <em className="status active">Назначен</em>
+                  <span>Задач: {project.tasks?.length || 1}</span>
+                  <b>Видимость ограничена</b>
+                  <small>только свои этапы и файлы</small>
+                </div>
+                <div className="bar">
+                  <span className="bar-fill green" style={{ width: `${project.progress || 15}%` }} />
+                </div>
+              </div>
+            ))}
+          </div>
+          {!projectSummaries.length ? <p className="section-hint">Пока нет назначенных проектов из рабочей базы.</p> : null}
+        </section>
+      </section>
+    );
+  }
+
+  if (activeSection === "tasks") {
+    return (
+      <section className="executor-account">
+        <div className="account-hero">
+          <div>
+            <p>Мои задачи</p>
+            <h2>{session?.name || executorAccount.name}</h2>
+            <span>Здесь только конкретные действия, назначенные исполнителю.</span>
+          </div>
+          <div className="account-level-card">
+            <span>Задач</span>
+            <b>{personalTasks.length}</b>
+            <small>на проверке: {personalTasks.filter((task) => task.status === "На проверке").length}</small>
+          </div>
+        </div>
+        <section className="office-card">
+          <div className="executor-task-list">
+            {personalTasks.map((task) => (
+              <div key={task.id}>
+                <div>
+                  <span className="muted-chip">{task.projectId} · {task.kind}</span>
+                  <h3>{task.name}</h3>
+                  <p>{task.projectTitle}</p>
+                </div>
+                <div className="project-account-meta">
+                  <em className={cn("status", statusClass(task.status))}>{task.status}</em>
+                  <span>Срок: {task.due}</span>
+                  <b>{money(task.executorCost || 0)}</b>
+                  <small>{task.yandexLink ? "есть ссылка на файлы" : "файлы не привязаны"}</small>
+                </div>
+              </div>
+            ))}
+            {!personalTasks.length ? <div className="empty">Пока нет назначенных задач.</div> : null}
+          </div>
+        </section>
+      </section>
+    );
+  }
+
   return (
     <section className="executor-account">
       <div className="account-hero">
         <div>
           <p>Личный кабинет исполнителя</p>
-          <h2>{executorAccount.name}</h2>
-          <span>{executorAccount.role} · {executorAccount.city}</span>
+          <h2>{session?.name || executorAccount.name}</h2>
+          <span>{session?.position || executorAccount.role} · {session?.region || executorAccount.city}</span>
           <div className="executor-chips">
             {executorAccount.badges.map((badge) => (
               <span key={badge}>{badge}</span>
@@ -4720,7 +4890,7 @@ function TasksModule({ allTasks, onTaskStatusChange, executors, onGoSection }) {
   );
 }
 
-function PartnersModule({ role, partnerItems, setPartnerItems }) {
+function PartnersModule({ role, session, partnerItems, visiblePartnerItems, setPartnerItems }) {
   const [partnerForm, setPartnerForm] = useState({
     name: "",
     category: partnerCategoryOptions[0],
@@ -4775,7 +4945,7 @@ function PartnersModule({ role, partnerItems, setPartnerItems }) {
     <>
       <SectionIntro section="partners" />
       <PartnerTable
-        partnerItems={partnerItems}
+        partnerItems={visiblePartnerItems}
         partnerForm={partnerForm}
         setPartnerForm={setPartnerForm}
         onAddPartner={addPartner}
@@ -5171,6 +5341,12 @@ function DashboardModule({ visibleProjects, selectedProject, setSelectedId, role
   const summary = financeSummary(visibleProjects);
   const canSeeFinance = roleCan(role, "viewFinance");
   const canSeeProductionBudget = roleCan(role, "viewProductionBudget") || canSeeFinance;
+  const showOrgBreakdown = ["owner", "deputy", "director", "regional_manager", "finance", "accountant"].includes(role);
+  const showProductionRules = !["partner", "sales_manager", "head_of_sales"].includes(role);
+  const showControlPath = !["partner"].includes(role);
+  const dashboardTitle = dashboardTitleForRole(role);
+  const dashboardHint = dashboardHintForRole(role);
+  const scopeText = roleScopeText(role, session);
   const visibleTasks = flattenTasks(visibleProjects);
   const redProjects = visibleProjects.filter((project) => project.risk === "red");
   const yellowProjects = visibleProjects.filter((project) => project.risk === "yellow");
@@ -5275,6 +5451,20 @@ function DashboardModule({ visibleProjects, selectedProject, setSelectedId, role
         ))}
       </section>
 
+      <section className="office-card role-scope-card">
+        <div>
+          <span className="muted-chip">Ролевой контур</span>
+          <h3>{dashboardTitle}</h3>
+          <p className="section-hint">{dashboardHint}</p>
+        </div>
+        <div className="role-scope-meta">
+          <Info label="Роль" value={currentRole.name} />
+          <Info label="Область видимости" value={scopeText} />
+          <Info label="Доступных проектов" value={visibleProjects.length} />
+          <Info label="Доступных задач" value={visibleTasks.length} />
+        </div>
+      </section>
+
       {visibleProjects.length === 0 ? (
         <section className="office-card empty-start-card">
           <div>
@@ -5294,8 +5484,8 @@ function DashboardModule({ visibleProjects, selectedProject, setSelectedId, role
       <section className="dashboard-hero workspace-card">
         <div className="workspace-head">
           <div>
-            <h2>Сводка владельца</h2>
-            <p>Роль: {currentRole.name}. Здесь смотрим компанию сверху: деньги, выполнение, риски, регионы и направления.</p>
+            <h2>{dashboardTitle}</h2>
+            <p>{dashboardTitle}. Видимость: {scopeText}. Система показывает только данные, которые нужны этой роли для работы.</p>
           </div>
           <div className="dashboard-period">
             <button type="button" className="primary" onClick={() => showAction("Сформирован управленческий отчёт по текущему срезу")}>Сформировать отчёт</button>
@@ -5357,55 +5547,57 @@ function DashboardModule({ visibleProjects, selectedProject, setSelectedId, role
         )}
       </section>
 
-      <section className="dashboard-grid wide">
-        <div className="office-card">
-          <div className="section-row">
-            <div>
-              <h3>Регионы</h3>
-              <p className="section-hint">Где сколько проектов, денег, выполнения и рисков.</p>
+      {showOrgBreakdown ? (
+        <section className="dashboard-grid wide">
+          <div className="office-card">
+            <div className="section-row">
+              <div>
+                <h3>Регионы</h3>
+                <p className="section-hint">Показываются только регионы, доступные текущей роли.</p>
+              </div>
             </div>
-          </div>
-          <div className="dashboard-table">
-            <div className="dashboard-table-head">
-              <span>Регион</span><span>Проекты</span><span>{canSeeFinance ? "Договоры" : "Задачи"}</span><span>{canSeeFinance ? "Оплачено" : "На проверке"}</span><span>Выполнение</span><span>Светофор</span>
-            </div>
-            {regionRows.map((item) => (
-              <button key={item.name} type="button" onClick={() => showAction(`Регион: ${item.name}`)}>
-                <b>{item.name}</b>
-                <span>{item.projects.length}</span>
-                <span>{canSeeFinance ? money(item.economy.contractAmount) : flattenTasks(item.projects).length}</span>
-                <span>{canSeeFinance ? money(item.economy.paidByClient) : flattenTasks(item.projects).filter((task) => task.status === "На проверке").length}</span>
-                <div className="table-progress"><em>{item.progress}%</em><div className="bar"><i className={cn("bar-fill", item.risk)} style={{ width: `${Math.max(4, item.progress)}%` }} /></div></div>
-                <em className={cn("risk-chip", item.risk)}>{riskText(item.risk)}</em>
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <div className="office-card">
-          <div className="section-row">
-            <div>
-              <h3>Направления</h3>
-              <p className="section-hint">Сравнение производственных блоков по деньгам и рискам.</p>
-            </div>
-          </div>
-          <div className="direction-bars">
-            {directionRows.map((item) => {
-              const percent = summary.contractAmount ? Math.round((item.economy.contractAmount / summary.contractAmount) * 100) : 0;
-              return (
-                <button key={item.name} type="button" onClick={() => showAction(`Направление: ${item.name}`)}>
-                  <div>
-                    <b>{item.name}</b>
-                    <span>{item.projects.length} проектов{canSeeFinance ? ` · ${money(item.economy.contractAmount)}` : ""}</span>
-                  </div>
+            <div className="dashboard-table">
+              <div className="dashboard-table-head">
+                <span>Регион</span><span>Проекты</span><span>{canSeeFinance ? "Договоры" : "Задачи"}</span><span>{canSeeFinance ? "Оплачено" : "На проверке"}</span><span>Выполнение</span><span>Светофор</span>
+              </div>
+              {regionRows.map((item) => (
+                <button key={item.name} type="button" onClick={() => showAction(`Регион: ${item.name}`)}>
+                  <b>{item.name}</b>
+                  <span>{item.projects.length}</span>
+                  <span>{canSeeFinance ? money(item.economy.contractAmount) : flattenTasks(item.projects).length}</span>
+                  <span>{canSeeFinance ? money(item.economy.paidByClient) : flattenTasks(item.projects).filter((task) => task.status === "На проверке").length}</span>
+                  <div className="table-progress"><em>{item.progress}%</em><div className="bar"><i className={cn("bar-fill", item.risk)} style={{ width: `${Math.max(4, item.progress)}%` }} /></div></div>
                   <em className={cn("risk-chip", item.risk)}>{riskText(item.risk)}</em>
-                  <div className="bar"><i className={cn("bar-fill", item.risk)} style={{ width: `${Math.max(6, percent)}%` }} /></div>
                 </button>
-              );
-            })}
+              ))}
+            </div>
           </div>
-        </div>
-      </section>
+
+          <div className="office-card">
+            <div className="section-row">
+              <div>
+                <h3>Направления</h3>
+                <p className="section-hint">Сравнение доступных производственных блоков по деньгам, задачам и рискам.</p>
+              </div>
+            </div>
+            <div className="direction-bars">
+              {directionRows.map((item) => {
+                const percent = summary.contractAmount ? Math.round((item.economy.contractAmount / summary.contractAmount) * 100) : 0;
+                return (
+                  <button key={item.name} type="button" onClick={() => showAction(`Направление: ${item.name}`)}>
+                    <div>
+                      <b>{item.name}</b>
+                      <span>{item.projects.length} проектов{canSeeFinance ? ` · ${money(item.economy.contractAmount)}` : ""}</span>
+                    </div>
+                    <em className={cn("risk-chip", item.risk)}>{riskText(item.risk)}</em>
+                    <div className="bar"><i className={cn("bar-fill", item.risk)} style={{ width: `${Math.max(6, percent)}%` }} /></div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </section>
+      ) : null}
 
       <section className="dashboard-grid">
         <div className="office-card">
@@ -5425,6 +5617,7 @@ function DashboardModule({ visibleProjects, selectedProject, setSelectedId, role
           </div>
         </div>
 
+        {showProductionRules ? (
         <div className="office-card">
           <h3>Автоконтроль и правила</h3>
           <p className="section-hint">Это правила, которые система должна контролировать автоматически. Сейчас они показаны как управленческая памятка MVP, без лишних кликов.</p>
@@ -5441,6 +5634,12 @@ function DashboardModule({ visibleProjects, selectedProject, setSelectedId, role
             ))}
           </div>
         </div>
+        ) : (
+          <div className="office-card">
+            <h3>Рабочий контур роли</h3>
+            <p className="section-hint">{dashboardHint}</p>
+          </div>
+        )}
       </section>
 
       <section className="office-card">
@@ -5463,6 +5662,7 @@ function DashboardModule({ visibleProjects, selectedProject, setSelectedId, role
         </div>
       </section>
 
+      {showControlPath ? (
       <section className="office-card">
         <h3>Сквозной путь контроля</h3>
         <div className="pipeline">
@@ -5482,6 +5682,7 @@ function DashboardModule({ visibleProjects, selectedProject, setSelectedId, role
           ))}
         </div>
       </section>
+      ) : null}
     </>
   );
 }
@@ -5662,11 +5863,19 @@ function SmetaOfficePrototype() {
   }, [projectItems, role, query, direction, effectiveAccessUser]);
 
   const visibleTasks = useMemo(() => flattenTasks(visibleProjects), [visibleProjects]);
+  const visiblePartners = useMemo(
+    () => partners.filter((partner) => canAccessPartner(effectiveAccessUser, partner, role)),
+    [partners, effectiveAccessUser, role]
+  );
 
   const selectedProject = visibleProjects.find((project) => project.id === selectedId) ?? visibleProjects[0] ?? null;
   const attentionCount = visibleTasks.filter((task) => ["Просрочено", "На проверке", "РџСЂРѕСЃСЂРѕС‡РµРЅРѕ", "РќР° РїСЂРѕРІРµСЂРєРµ"].includes(task.status)).length;
   const currentScreenTitle = role === "executor"
-    ? "Личный кабинет исполнителя"
+    ? activeSection === "projects"
+      ? "Мои проекты"
+      : activeSection === "tasks"
+      ? "Мои задачи"
+      : "Личный кабинет исполнителя"
     : activeSection === "projectDetail"
     ? selectedProject?.title || "Карточка проекта"
     : appScreens[activeSection]?.title || "SmetaOffice";
@@ -6182,12 +6391,12 @@ function SmetaOfficePrototype() {
               </select>
             </label>
             <button type="button" onClick={() => session.role === "owner" ? setActiveSection("admin") : showAction("Регион и должность назначает администратор")}>{session.region || "Регион не назначен"} · {session.position || roles.find((item) => item.id === session.role)?.name}</button>
-            <button type="button" onClick={() => setActiveSection("tasks")}>{attentionCount} уведомлений</button>
+            <button type="button" onClick={() => setActiveSection(sectionAllowed(role, "tasks") ? "tasks" : "dashboard")}>{attentionCount} уведомлений</button>
           </div>
         </header>
 
         <div className="office-content">
-          {role === "executor" ? <ExecutorPersonalAccount allTasks={allTasks} /> : null}
+          {role === "executor" ? <ExecutorPersonalAccount allTasks={allTasks} session={session} activeSection={activeSection} /> : null}
 
           {role !== "executor" && activeSection === "executors" ? <ExecutorsModule role={role} executors={executors} setExecutors={setExecutors} allTasks={visibleTasks} /> : null}
 
@@ -6197,7 +6406,7 @@ function SmetaOfficePrototype() {
             <SalesLeadsModule
               leads={salesLeads}
               setSalesLeads={setSalesLeads}
-              projectItems={projectItems}
+              projectItems={visibleProjects}
               users={users}
               role={role}
               session={effectiveAccessUser}
@@ -6270,11 +6479,11 @@ function SmetaOfficePrototype() {
           ) : null}
 
           {role !== "executor" && activeSection === "tasks" ? <TasksModule allTasks={visibleTasks} onTaskStatusChange={changeTaskStatus} executors={executors} onGoSection={setActiveSection} /> : null}
-          {role !== "executor" && activeSection === "partners" ? <PartnersModule role={role} partnerItems={partners} setPartnerItems={setPartners} /> : null}
+          {role !== "executor" && activeSection === "partners" ? <PartnersModule role={role} session={effectiveAccessUser} partnerItems={partners} visiblePartnerItems={visiblePartners} setPartnerItems={setPartners} /> : null}
           {role !== "executor" && activeSection === "admin" ? <AdminModule users={users} setUsers={setUsers} session={session} /> : null}
           {role !== "executor" && activeSection === "analytics" ? <AnalyticsModule projectItems={visibleProjects} allTasks={visibleTasks} role={role} /> : null}
-          {role !== "executor" && activeSection === "finance" ? <FinanceModule projectItems={projectItems} role={role} /> : null}
-          {role !== "executor" && activeSection === "client" ? <ClientAppModule projectItems={projectItems} /> : null}
+          {role !== "executor" && activeSection === "finance" ? <FinanceModule projectItems={visibleProjects} role={role} /> : null}
+          {role !== "executor" && activeSection === "client" ? <ClientAppModule projectItems={visibleProjects} /> : null}
         </div>
       </main>
     </div>
