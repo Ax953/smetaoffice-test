@@ -4976,7 +4976,7 @@ function ClientAppModule({ projectItems }) {
   );
 }
 
-function DashboardModule({ visibleProjects, selectedProject, setSelectedId, role, session, query, setQuery, direction, setDirection, chooseFirstAvailable, currentRole, onProjectMessage }) {
+function DashboardModule({ visibleProjects, selectedProject, setSelectedId, role, session, query, setQuery, direction, setDirection, chooseFirstAvailable, currentRole, onProjectMessage, onGoSection }) {
   const summary = financeSummary(visibleProjects);
   const canSeeFinance = roleCan(role, "viewFinance");
   const canSeeProductionBudget = roleCan(role, "viewProductionBudget") || canSeeFinance;
@@ -5061,6 +5061,22 @@ function DashboardModule({ visibleProjects, selectedProject, setSelectedId, role
           <StatCard key={item.label} item={item} />
         ))}
       </section>
+
+      {visibleProjects.length === 0 ? (
+        <section className="office-card empty-start-card">
+          <div>
+            <span className="muted-chip">MVP пустой базы</span>
+            <h3>Начни с реестра проектов</h3>
+            <p className="section-hint">Сейчас в выбранной роли нет проектов. Для нормального теста нужно создать первый проект, добавить исполнителей/партнёров и проверить, как считаются этапы, задачи и деньги.</p>
+          </div>
+          <div className="quick-action-grid">
+            <button type="button" className="primary" onClick={() => onGoSection?.("projects")}>Создать проект</button>
+            <button type="button" className="secondary" onClick={() => onGoSection?.("executors")}>Добавить исполнителей</button>
+            <button type="button" className="secondary" onClick={() => onGoSection?.("partners")}>Добавить партнёров</button>
+            <button type="button" className="secondary" onClick={() => onGoSection?.("admin")}>Проверить роли</button>
+          </div>
+        </section>
+      ) : null}
 
       <section className="dashboard-hero workspace-card">
         <div className="workspace-head">
@@ -5273,6 +5289,7 @@ function SmetaOfficePrototype() {
   const [taskForm, setTaskForm] = useState({ name: "", sectionName: "", description: "", owner: "", executorId: "", due: "", status: "Новая", yandexLink: "" });
   const [actionNotice, setActionNotice] = useState("");
   const [moscowNow, setMoscowNow] = useState(() => new Date());
+  const [systemHealth, setSystemHealth] = useState(null);
 
   const currentRole = roles.find((item) => item.id === role) ?? roles[0];
   const allTasks = useMemo(() => flattenTasks(projectItems), [projectItems]);
@@ -5434,6 +5451,26 @@ function SmetaOfficePrototype() {
   const visibleTasks = useMemo(() => flattenTasks(visibleProjects), [visibleProjects]);
 
   const selectedProject = visibleProjects.find((project) => project.id === selectedId) ?? visibleProjects[0] ?? null;
+  const attentionCount = visibleTasks.filter((task) => ["Просрочено", "На проверке", "РџСЂРѕСЃСЂРѕС‡РµРЅРѕ", "РќР° РїСЂРѕРІРµСЂРєРµ"].includes(task.status)).length;
+  const currentScreenTitle = role === "executor"
+    ? "Личный кабинет исполнителя"
+    : activeSection === "projectDetail"
+    ? selectedProject?.title || "Карточка проекта"
+    : appScreens[activeSection]?.title || "SmetaOffice";
+
+  useEffect(() => {
+    let alive = true;
+    async function loadHealth() {
+      const health = await apiGet("/health", null);
+      if (alive) setSystemHealth(health);
+    }
+    loadHealth();
+    const timer = window.setInterval(loadHealth, 30000);
+    return () => {
+      alive = false;
+      window.clearInterval(timer);
+    };
+  }, []);
 
   function chooseFirstAvailable(nextRole = role, nextDirection = direction, nextQuery = query) {
     const normalizedQuery = nextQuery.trim().toLowerCase();
@@ -5903,17 +5940,13 @@ function SmetaOfficePrototype() {
         <header className="office-header">
           <div>
             <p>SmetaGo → SmetaOffice → SmetaPartner</p>
-            <h1>
-              {role === "executor"
-                ? "Личный кабинет исполнителя"
-                : activeSection === "executors"
-                ? "Центр исполнителей"
-                : activeSection === "integrations"
-                ? "Интеграции и запуск MVP"
-                : "Центр контроля проектов"}
-            </h1>
+            <h1>{currentScreenTitle}</h1>
           </div>
           <div className="header-actions">
+            <div className={cn("system-status-chip", systemHealth?.ok ? "online" : "offline")}>
+              <span>API</span>
+              <b>{systemHealth?.ok ? `${systemHealth.storage || "json"} · ${systemHealth.counts?.projects ?? 0} проектов` : "нет связи"}</b>
+            </div>
             <div className="moscow-clock">
               <span>Москва</span>
               <b>{moscowDateTime}</b>
@@ -5936,7 +5969,7 @@ function SmetaOfficePrototype() {
               </select>
             </label>
             <button type="button" onClick={() => session.role === "owner" ? setActiveSection("admin") : showAction("Регион и должность назначает администратор")}>{session.region || "Регион не назначен"} · {session.position || roles.find((item) => item.id === session.role)?.name}</button>
-            <button type="button" onClick={() => setActiveSection("tasks")}>12 уведомлений</button>
+            <button type="button" onClick={() => setActiveSection("tasks")}>{attentionCount} уведомлений</button>
           </div>
         </header>
 
@@ -5972,6 +6005,7 @@ function SmetaOfficePrototype() {
               chooseFirstAvailable={chooseFirstAvailable}
               currentRole={currentRole}
               onProjectMessage={addProjectMessage}
+              onGoSection={setActiveSection}
             />
           ) : null}
 
