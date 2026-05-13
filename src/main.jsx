@@ -440,11 +440,20 @@ const partnerCategoryOptions = [
   "Другое",
 ];
 
+const partnerRelationOptions = [
+  "Партнёр выполняет наши заявки",
+  "Партнёр приводит нам клиентов",
+  "Мы передаём клиента партнёру",
+  "Поставщик / закупка / комплектация",
+  "Обоюдный обмен клиентами",
+  "Маркетинг / лидогенерация",
+];
+
 const partnerSeed = [
-  { id: "P-001", name: "BuildPro Ростов", category: "Строительная компания / ремонт", region: "Ростовская область", direction: "Строительство и ремонт", rating: 91, active: 4, overdue: 0, level: "Проверенный", status: "Активен", accrued: 420000, paid: 280000 },
-  { id: "P-002", name: "CityRealty", category: "Агентство недвижимости / риелтор", region: "Ростовская область", direction: "Агентство недвижимости", rating: 78, active: 2, overdue: 1, level: "Надёжный", status: "Активен", accrued: 36000, paid: 0 },
-  { id: "P-003", name: "Геология-Партнёр", category: "Изыскания / геодезия / обследования", region: "ДНР", direction: "Изыскания / обследования / обмеры", rating: 64, active: 1, overdue: 1, level: "Базовый", status: "Проверка", accrued: 120000, paid: 60000 },
-  { id: "P-004", name: "CleanHome", category: "Бытовой сервис", region: "Чеченская Республика", direction: "Бытовые услуги / сервис", rating: 88, active: 0, overdue: 0, level: "Надёжный", status: "Резерв", accrued: 0, paid: 0 },
+  { id: "P-001", name: "BuildPro Ростов", category: "Строительная компания / ремонт", region: "Ростовская область", direction: "Строительство и ремонт", rating: 91, active: 4, overdue: 0, level: "Проверенный", status: "Активен", accrued: 420000, paid: 280000, relation: "Партнёр выполняет наши заявки", commissionRule: "Процент по договорённости", serviceDescription: "Ремонт и строительная реализация", contact: "контакт скрыт в демо" },
+  { id: "P-002", name: "CityRealty", category: "Агентство недвижимости / риелтор", region: "Ростовская область", direction: "Агентство недвижимости", rating: 78, active: 2, overdue: 1, level: "Надёжный", status: "Активен", accrued: 36000, paid: 0, relation: "Партнёр приводит нам клиентов", commissionRule: "Партнёрское вознаграждение за клиента", serviceDescription: "Подбор и сопровождение недвижимости", contact: "контакт скрыт в демо" },
+  { id: "P-003", name: "Геология-Партнёр", category: "Изыскания / геодезия / обследования", region: "ДНР", direction: "Изыскания / обследования / обмеры", rating: 64, active: 1, overdue: 1, level: "Базовый", status: "Проверка", accrued: 120000, paid: 60000, relation: "Партнёр выполняет наши заявки", commissionRule: "Смета по работам", serviceDescription: "Геология, геодезия, обследования", contact: "контакт скрыт в демо" },
+  { id: "P-004", name: "CleanHome", category: "Бытовой сервис", region: "Чеченская Республика", direction: "Бытовые услуги / сервис", rating: 88, active: 0, overdue: 0, level: "Надёжный", status: "Резерв", accrued: 0, paid: 0, relation: "Мы передаём клиента партнёру", commissionRule: "Комиссия за переданную услугу", serviceDescription: "Клининг и сервис после ремонта", contact: "контакт скрыт в демо" },
 ];
 
 const quickStats = [
@@ -595,9 +604,8 @@ const salesStageLabels = {
 };
 
 const salesBoardBuckets = [
-  { id: "new", title: "Новые лиды", stages: ["new_lead"] },
   { id: "sla", title: "Просроченные по SLA", sla: "breached" },
-  { id: "hunter", title: "В работе у Hunter", stages: ["new_lead", "qualified"], requiresHunter: true },
+  { id: "hunter", title: "Квалифицированы Hunter", stages: ["qualified"], requiresHunter: true },
   { id: "farmer", title: "Переданы Farmer", stages: ["qualified", "brief_and_measurement", "measurement_and_estimate", "objects_selection", "service_scope"], requiresFarmer: true },
   { id: "proposal", title: "КП отправлено", stages: ["proposal_sent"] },
   { id: "contract", title: "Договор / аванс", stages: ["contract_and_advance", "contract_advance", "deposit"] },
@@ -924,18 +932,18 @@ const executorStats = [
 ];
 
 const executorGroups = [
-  { name: "Архитекторы", count: 164, source: "Экспресс-Дизайн + рабочая база", sections: "АР, планировки, фасады" },
-  { name: "Дизайнеры", count: 159, source: "Экспресс-Дизайн + рабочая база", sections: "Дизайн, концепции, интерьер" },
-  { name: "Визуализаторы", count: 81, source: "Экспресс-Дизайн + рабочая база", sections: "3D, рендеры, визуализация" },
-  { name: "Чертежники", count: 5, source: "Рабочая база", sections: "Рабочка, оформление, комплекты" },
-  { name: "Конструкторы", count: 8, source: "Рабочая база", sections: "КР, расчёты, узлы" },
-  { name: "Инженеры ОВиК", count: 3, source: "Рабочая база", sections: "Отопление, вентиляция, кондиционирование" },
-  { name: "Инженеры ВК", count: 2, source: "Рабочая база", sections: "Водоснабжение, канализация" },
-  { name: "Инженеры ЭОМ", count: 2, source: "Рабочая база", sections: "Электрика, освещение, щиты" },
-  { name: "Инженеры СС", count: 2, source: "Рабочая база", sections: "Слаботочные системы" },
-  { name: "ПОС / ППР / ПОД / ПЗ", count: 1, source: "Рабочая база", sections: "Организация строительства и пояснительные разделы" },
-  { name: "ГИПы", count: 1, source: "Рабочая база", sections: "Координация разделов, проверка, выдача" },
-  { name: "Сметчики", count: 8, source: "Рабочая база", sections: "Сметы, ведомости, экспертиза стоимости" },
+  { name: "Архитекторы", count: 164, source: "Необработанные контакты + рабочая база", sections: "АР, планировки, фасады", section: "АР" },
+  { name: "Дизайнеры", count: 159, source: "Необработанные контакты + рабочая база", sections: "Дизайн, концепции, интерьер", section: "Дизайн" },
+  { name: "Визуализаторы", count: 81, source: "Необработанные контакты + рабочая база", sections: "3D, рендеры, визуализация", section: "3D" },
+  { name: "Чертежники", count: 5, source: "Рабочая база", sections: "Рабочка, оформление, комплекты", section: "Рабочка" },
+  { name: "Конструкторы", count: 8, source: "Рабочая база", sections: "КР, расчёты, узлы", section: "КР" },
+  { name: "Инженеры ОВиК", count: 3, source: "Рабочая база", sections: "Отопление, вентиляция, кондиционирование", section: "ОВиК" },
+  { name: "Инженеры ВК", count: 2, source: "Рабочая база", sections: "Водоснабжение, канализация", section: "ВК" },
+  { name: "Инженеры ЭОМ", count: 2, source: "Рабочая база", sections: "Электрика, освещение, щиты", section: "ЭОМ" },
+  { name: "Инженеры СС", count: 2, source: "Рабочая база", sections: "Слаботочные системы", section: "СС" },
+  { name: "ПОС / ППР / ПОД / ПЗ", count: 1, source: "Рабочая база", sections: "Организация строительства и пояснительные разделы", section: "ПОС/ППР/ПОД/ПЗ" },
+  { name: "ГИПы", count: 1, source: "Рабочая база", sections: "Координация разделов, проверка, выдача", section: "ГИП" },
+  { name: "Сметчики", count: 8, source: "Рабочая база", sections: "Сметы, ведомости, экспертиза стоимости", section: "Сметы" },
 ];
 
 const executorProfiles = [
@@ -1375,7 +1383,7 @@ const appScreens = {
   sales: {
     title: "Продажи / Лиды",
     eyebrow: "Зеркало Bitrix24",
-    desc: "Лиды, Hunter, Farmer, РОП, SLA 5 минут, направления и связь с проектами. Это не отдельная CRM, а модель будущей синхронизации с Bitrix24.",
+    desc: "В SmetaOffice попадают только тёплые и квалифицированные лиды из Bitrix24: замер, КП, договор, аванс и связь с проектом. Холодные заявки остаются в Bitrix24.",
   },
   projects: {
     title: "Проекты",
@@ -1415,7 +1423,7 @@ const appScreens = {
   client: {
     title: "Клиентское приложение",
     eyebrow: "Что видит клиент",
-    desc: "Внешний спокойный статус: этап, прогресс, отчёты, документы и связь с менеджером.",
+    desc: "Это витрина будущего SmetaGO для клиента: понятный статус проекта, прогресс, отчёты, документы и связь с менеджером без внутренней кухни.",
   },
 };
 
@@ -2659,6 +2667,19 @@ function ProjectDetails({ project, role, onUpdateProject, onTaskStatusChange, on
 }
 
 function PartnerTable({ partnerItems, partnerForm, setPartnerForm, onAddPartner, canManagePartners }) {
+  const [selectedPartnerId, setSelectedPartnerId] = useState(partnerItems[0]?.id || partnerItems[0]?.name || "");
+  const selectedPartner = partnerItems.find((partner) => (partner.id || partner.name) === selectedPartnerId) || partnerItems[0] || null;
+
+  useEffect(() => {
+    if (!partnerItems.length) {
+      setSelectedPartnerId("");
+      return;
+    }
+    if (!partnerItems.some((partner) => (partner.id || partner.name) === selectedPartnerId)) {
+      setSelectedPartnerId(partnerItems[0].id || partnerItems[0].name);
+    }
+  }, [partnerItems, selectedPartnerId]);
+
   return (
     <section className="office-card">
       <div className="section-row">
@@ -2681,6 +2702,11 @@ function PartnerTable({ partnerItems, partnerForm, setPartnerForm, onAddPartner,
             {directionOptions.filter((item) => item !== "Все").map((direction) => <option key={direction}>{direction}</option>)}
           </select>
           <input value={partnerForm.contact} onChange={(event) => setPartnerForm((next) => ({ ...next, contact: event.target.value }))} placeholder="Контакт / телефон / Telegram" />
+          <select value={partnerForm.relation} onChange={(event) => setPartnerForm((next) => ({ ...next, relation: event.target.value }))}>
+            {partnerRelationOptions.map((relation) => <option key={relation}>{relation}</option>)}
+          </select>
+          <input value={partnerForm.serviceDescription} onChange={(event) => setPartnerForm((next) => ({ ...next, serviceDescription: event.target.value }))} placeholder="Что предоставляет: краски, ремонт, лиды, проектирование..." />
+          <input value={partnerForm.commissionRule} onChange={(event) => setPartnerForm((next) => ({ ...next, commissionRule: event.target.value }))} placeholder="Комиссия / условия: 10%, фикс, по договорённости" />
           <button type="button" className="primary" onClick={onAddPartner} disabled={!partnerForm.name.trim()}>Добавить партнёра</button>
         </div>
       ) : (
@@ -2688,7 +2714,7 @@ function PartnerTable({ partnerItems, partnerForm, setPartnerForm, onAddPartner,
       )}
       <div className="partner-table">
         {partnerItems.map((partner) => (
-          <div key={partner.id || partner.name}>
+          <button key={partner.id || partner.name} type="button" className={selectedPartner?.id === partner.id ? "active" : ""} onClick={() => setSelectedPartnerId(partner.id || partner.name)}>
             <div>
               <b>{partner.name}</b>
               <span>{partner.category} · {partner.region} · {partner.direction}</span>
@@ -2697,9 +2723,36 @@ function PartnerTable({ partnerItems, partnerForm, setPartnerForm, onAddPartner,
             <span>{partner.status || "Активен"} · рейтинг {partner.rating}</span>
             <span>Активно {partner.active} · к выплате {money(Math.max((Number(partner.accrued) || 0) - (Number(partner.paid) || 0), 0))}</span>
             <strong className={partner.overdue ? "bad" : "good"}>Просрочки {partner.overdue}</strong>
-          </div>
+          </button>
         ))}
       </div>
+      {selectedPartner ? (
+        <div className="partner-detail-card">
+          <div className="section-row">
+            <div>
+              <span className="muted-chip">{selectedPartner.id || "партнёр"}</span>
+              <h3>{selectedPartner.name}</h3>
+              <p className="section-hint">{selectedPartner.category} · {selectedPartner.region} · {selectedPartner.direction}</p>
+            </div>
+            <span className={cn("risk-chip", selectedPartner.overdue ? "yellow" : "green")}>{selectedPartner.status || "Активен"}</span>
+          </div>
+          <div className="partner-detail-grid">
+            <Info label="Вид связи" value={selectedPartner.relation || "не указано"} />
+            <Info label="Что предоставляет" value={selectedPartner.serviceDescription || selectedPartner.category} />
+            <Info label="Комиссия / условия" value={selectedPartner.commissionRule || "не указано"} />
+            <Info label="Контакт" value={canManagePartners ? selectedPartner.contact || "не указан" : "скрыто"} />
+            <Info label="Рейтинг" value={selectedPartner.rating} />
+            <Info label="Активные заявки" value={selectedPartner.active || 0} />
+            <Info label="Начислено" value={money(selectedPartner.accrued || 0)} />
+            <Info label="Выплачено" value={money(selectedPartner.paid || 0)} />
+            <Info label="К выплате" value={money(Math.max((Number(selectedPartner.accrued) || 0) - (Number(selectedPartner.paid) || 0), 0))} />
+          </div>
+          <div className="task-card-block">
+            <b>Что важно по партнёру</b>
+            <p>{selectedPartner.notes || "Карточка нужна, чтобы понимать: партнёр приводит нам клиента, мы передаём клиента партнёру, он выполняет наши работы или поставляет материалы. Это влияет на комиссию, документы и доступ к данным."}</p>
+          </div>
+        </div>
+      ) : null}
     </section>
   );
 }
@@ -2901,6 +2954,8 @@ function ExecutorsModule({ role, executors, setExecutors, allTasks = [] }) {
   const [section, setSection] = useState("Все");
   const [query, setQuery] = useState("");
   const [selectedId, setSelectedId] = useState(executorProfiles[0].id);
+  const [customGroups, setCustomGroups] = useState(() => readStoredValue("smeta.executorSpecializationGroups", []));
+  const [newSpecialization, setNewSpecialization] = useState("");
   const [form, setForm] = useState({
     name: "",
     type: "физлицо",
@@ -2915,6 +2970,8 @@ function ExecutorsModule({ role, executors, setExecutors, allTasks = [] }) {
   });
   const canSeeContacts = roleCan(role, "viewExecutorContacts");
   const canManageExecutors = roleCan(role, "manageExecutors");
+  const visibleExecutorGroups = [...executorGroups, ...customGroups];
+  const sectionOptions = ["Все", ...new Set([...executorSections.filter((item) => item !== "Все"), ...customGroups.map((group) => group.section || group.name)])];
   const liveExecutorStats = useMemo(() => {
     const verified = executors.filter((executor) => ["Проверенный", "Сильный", "Эксперт"].includes(executor.status)).length;
     const needsCheck = executors.filter((executor) => ["Новый контакт", "На проверке"].includes(executor.status)).length;
@@ -2991,6 +3048,35 @@ function ExecutorsModule({ role, executors, setExecutors, allTasks = [] }) {
     });
   }
 
+  function addSpecializationGroup() {
+    if (!canManageExecutors) {
+      showAction("Добавлять категории специалистов могут только роли с правом управления исполнителями");
+      return;
+    }
+    const name = newSpecialization.trim();
+    if (!name) {
+      showAction("Укажи название специализации");
+      return;
+    }
+    const exists = visibleExecutorGroups.some((group) => group.name.toLowerCase() === name.toLowerCase());
+    if (exists) {
+      showAction("Такая специализация уже есть");
+      return;
+    }
+    const created = {
+      name,
+      count: 0,
+      source: "Добавлено вручную в SmetaOffice",
+      sections: name,
+      section: name,
+    };
+    const next = [...customGroups, created];
+    setCustomGroups(next);
+    writeStoredValue("smeta.executorSpecializationGroups", next);
+    setNewSpecialization("");
+    showAction("Специализация добавлена в карту исполнителей");
+  }
+
   function updateExecutor(executorId, patch) {
     if (!canManageExecutors) return;
     setExecutors((items) => items.map((item) => (item.id === executorId ? { ...item, ...patch } : item)));
@@ -3013,7 +3099,7 @@ function ExecutorsModule({ role, executors, setExecutors, allTasks = [] }) {
     <section className="executors-module">
       <div className="module-head">
         <div>
-          <p>Импорт из таблицы исполнителей → нормализация → SmetaTasks</p>
+          <p>Необработанные контакты → проверка → карточка исполнителя → задачи SmetaOffice</p>
           <h2>База исполнителей</h2>
         </div>
         <button type="button" className="primary" onClick={() => showAction("Импорт Excel: файл исполнителей будет загружаться через backend/Яндекс.Диск")}>Импорт Excel</button>
@@ -3030,12 +3116,12 @@ function ExecutorsModule({ role, executors, setExecutors, allTasks = [] }) {
           <div className="section-row">
             <div>
               <h3>Карта специализаций</h3>
-              <p className="section-hint">Это не контакты, а производственная структура: кто закрывает какой раздел.</p>
+              <p className="section-hint">Это карта необработанных и рабочих специалистов. Управленцы видят, какие контакты ещё нужно проверить и кого можно перевести в полноценных исполнителей.</p>
             </div>
           </div>
           <div className="executor-groups">
-            {executorGroups.map((group) => (
-              <button type="button" key={group.name} onClick={() => setSection(groupToSection(group.name))}>
+            {visibleExecutorGroups.map((group) => (
+              <button type="button" key={group.name} onClick={() => setSection(group.section || groupToSection(group.name))}>
                 <strong>{group.count}</strong>
                 <div>
                   <b>{group.name}</b>
@@ -3045,17 +3131,23 @@ function ExecutorsModule({ role, executors, setExecutors, allTasks = [] }) {
               </button>
             ))}
           </div>
+          {canManageExecutors ? (
+            <div className="specialization-add">
+              <input value={newSpecialization} onChange={(event) => setNewSpecialization(event.target.value)} placeholder="Новая категория: BIM-менеджеры, технологи, авторский надзор..." />
+              <button type="button" className="secondary" onClick={addSpecializationGroup}>Добавить категорию</button>
+            </div>
+          ) : null}
         </section>
 
         <aside className="side-card access-warning">
           <h3>Доступ к контактам</h3>
           <p>
             {canSeeContacts
-              ? "Вы вошли как владелец: контакты открыты."
+              ? "Контактные данные открыты для управленческого состава: владелец, админ и роли с правом на базу исполнителей."
               : "Для этой роли телефоны и почты скрыты."}
           </p>
           <div className="auto-list">
-            <div>✓ телефоны и почты не показываем в демо</div>
+            <div>✓ необработанные контакты видят только управленцы</div>
             <div>✓ партнёрам не отдаём чужую базу</div>
             <div>✓ доступ только через права SmetaOffice</div>
           </div>
@@ -3065,13 +3157,13 @@ function ExecutorsModule({ role, executors, setExecutors, allTasks = [] }) {
       <section className="office-card executor-process-card">
         <div className="section-row">
           <div>
-            <h3>Логика допуска исполнителей</h3>
+          <h3>Логика допуска исполнителей</h3>
             <p className="section-hint">Исполнитель не просто контакт. У него есть специализация, ранг, загрузка, история качества, доступ к задачам и внутренняя коммуникация.</p>
           </div>
         </div>
         <div className="executor-process-grid">
           {[
-            ["1", "Контакт", "Внесли человека, контакты закрыты от неуправленцев"],
+            ["1", "Необработанный контакт", "Внесли человека или команду, контакты закрыты от неуправленцев"],
             ["2", "Проверка", "Портфолио, тестовая задача, комментарий руководства"],
             ["3", "Допуск", "Разделы, ранг, лимит активных задач"],
             ["4", "Работа", "Задачи, сроки, файлы, чат внутри приложения"],
@@ -3105,7 +3197,7 @@ function ExecutorsModule({ role, executors, setExecutors, allTasks = [] }) {
           </select>
           <input value={form.city} onChange={(event) => setForm((next) => ({ ...next, city: event.target.value }))} placeholder="Город / удалённо" />
           <select value={form.section} onChange={(event) => setForm((next) => ({ ...next, section: event.target.value }))}>
-            {executorSections.filter((item) => item !== "Все").map((item) => (
+            {sectionOptions.filter((item) => item !== "Все").map((item) => (
               <option key={item}>{item}</option>
             ))}
           </select>
@@ -3140,7 +3232,7 @@ function ExecutorsModule({ role, executors, setExecutors, allTasks = [] }) {
           <div className="filters">
             <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Поиск исполнителя" />
             <select value={section} onChange={(event) => setSection(event.target.value)}>
-              {executorSections.map((item) => (
+              {sectionOptions.map((item) => (
                 <option key={item} value={item}>
                   {item}
                 </option>
@@ -3506,6 +3598,8 @@ function SalesLeadsModule({ leads, setSalesLeads, projectItems, users, role, ses
   const visibleLeads = useMemo(() => {
     return leads.filter((lead) => {
       if (!leadCanAccess(session, lead, role)) return false;
+      const isWarmOperationalLead = ["warm", "hot"].includes(lead.qualificationStatus) && lead.stage !== "new_lead";
+      if (!isWarmOperationalLead) return false;
       const slaStatus = leadSlaStatus(lead);
       if (directionFilter !== "all" && lead.direction !== directionFilter) return false;
       if (regionFilter !== "all" && lead.region !== regionFilter) return false;
@@ -3587,7 +3681,7 @@ function SalesLeadsModule({ leads, setSalesLeads, projectItems, users, role, ses
     <>
       <SectionIntro section="sales" />
       <section className="stats-grid">
-        <StatCard item={{ label: "Лиды в доступе", value: String(visibleLeads.length), tone: "blue" }} />
+        <StatCard item={{ label: "Тёплые сделки", value: String(visibleLeads.length), tone: "blue" }} />
         <StatCard item={{ label: "SLA нарушен", value: String(stats.breached), tone: stats.breached ? "red" : "green" }} />
         <StatCard item={{ label: "КП отправлено", value: String(stats.proposal), tone: "orange" }} />
         <StatCard item={{ label: "Связаны с проектом", value: String(stats.linked), tone: "green" }} />
@@ -3596,8 +3690,8 @@ function SalesLeadsModule({ leads, setSalesLeads, projectItems, users, role, ses
       <section className="workspace-card">
         <div className="workspace-head">
           <div>
-            <h2>Фильтры Bitrix-воронки</h2>
-            <p>Фильтры отражают будущие поля Bitrix24. Реальный API пока не подключён.</p>
+            <h2>Фильтры тёплой Bitrix-воронки</h2>
+            <p>SmetaOffice не заменяет CRM. Здесь показываем только квалифицированные лиды и сделки, которые уже идут к замеру, КП, договору, авансу или созданию проекта.</p>
           </div>
         </div>
         <div className="filters sales-filters">
@@ -3626,8 +3720,8 @@ function SalesLeadsModule({ leads, setSalesLeads, projectItems, users, role, ses
         <div className="office-card">
           <div className="section-row">
             <div>
-              <h3>Доска лидов</h3>
-              <p className="section-hint">Это не самостоятельная CRM. Стадии и роли бьются с будущими воронками Bitrix24.</p>
+              <h3>Доска тёплых лидов</h3>
+              <p className="section-hint">Холодные заявки, первичный Instagram/сайт/телефон и мусорная квалификация остаются в Bitrix24. Здесь только то, что уже нужно довести до договора или проекта.</p>
             </div>
           </div>
           <div className="sales-board">
@@ -3702,6 +3796,7 @@ function SalesLeadsModule({ leads, setSalesLeads, projectItems, users, role, ses
 
       <section className="office-card">
         <h3>Стадии по направлениям</h3>
+        <p className="section-hint">Это памятка соответствия SmetaOffice и Bitrix24. На следующих итерациях эти стадии будут подтягиваться из реальных воронок Bitrix24.</p>
         <div className="bitrix-stage-map">
           {Object.entries(bitrixFunnels).map(([id, funnel]) => (
             <div key={id}>
@@ -4431,7 +4526,7 @@ function ProjectDetailModule({ project, role, session, onBack, onDeleteProject, 
   );
 }
 
-function TasksModule({ allTasks, onTaskStatusChange, executors }) {
+function TasksModule({ allTasks, onTaskStatusChange, executors, onGoSection }) {
   const [statusFilter, setStatusFilter] = useState("Все");
   const [sectionFilter, setSectionFilter] = useState("Все");
   const [query, setQuery] = useState("");
@@ -4472,13 +4567,28 @@ function TasksModule({ allTasks, onTaskStatusChange, executors }) {
         <StatCard item={{ label: "Бюджет исполнителей", value: money(taskMoney), tone: "green" }} />
       </section>
 
+      <section className="office-card task-meaning-card">
+        <div className="section-row">
+          <div>
+            <h3>Что означает раздел «Задачи»</h3>
+            <p className="section-hint">Этап проекта — крупный блок работы. Задача — конкретное действие внутри этапа: подготовить файл, проверить чертёж, загрузить отчёт, согласовать с клиентом. Здесь не создаём хаос вручную, а контролируем задачи, которые появились из карточек проектов.</p>
+          </div>
+        </div>
+        <div className="task-meaning-grid">
+          <div><b>Владелец</b><span>видит просрочки, красные зоны, зависшие проверки и проблемные проекты.</span></div>
+          <div><b>РП / менеджер проекта</b><span>ведёт задачи своих проектов, сроки, исполнителей и правки.</span></div>
+          <div><b>Исполнитель</b><span>в личном кабинете видит только назначенные ему задачи, оплату и статус проверки.</span></div>
+          <div><b>Продажи</b><span>работают с задачами по клиенту и сделке, но без производственной маржи.</span></div>
+        </div>
+      </section>
+
       <section className="office-card">
         <div className="section-row">
           <div>
             <h3>Операционная доска производства</h3>
             <p className="section-hint">Здесь вместе лежат задачи и разделы проектов: кто делает, что делает, срок, статус, деньги и связь с Яндекс.Диском.</p>
           </div>
-          <button type="button" className="primary" onClick={() => showAction("Создание задачи выполняется из карточки конкретного проекта")}>Создать задачу</button>
+          <button type="button" className="primary" onClick={() => onGoSection?.("projects")}>Создать задачу в проекте</button>
         </div>
 
         <div className="task-command-bar">
@@ -4617,6 +4727,9 @@ function PartnersModule({ role, partnerItems, setPartnerItems }) {
     region: "Чеченская Республика",
     direction: "Агентство недвижимости",
     contact: "",
+    relation: partnerRelationOptions[0],
+    serviceDescription: "",
+    commissionRule: "",
   });
   const canManagePartners = ["owner", "admin"].includes(role);
 
@@ -4642,6 +4755,9 @@ function PartnersModule({ role, partnerItems, setPartnerItems }) {
       region: partnerForm.region,
       direction: partnerForm.direction,
       contact: partnerForm.contact.trim(),
+      relation: partnerForm.relation,
+      serviceDescription: partnerForm.serviceDescription.trim(),
+      commissionRule: partnerForm.commissionRule.trim(),
       rating: 50,
       active: 0,
       overdue: 0,
@@ -4651,7 +4767,7 @@ function PartnersModule({ role, partnerItems, setPartnerItems }) {
       paid: 0,
     };
     updatePartners([created, ...partnerItems]);
-    setPartnerForm({ name: "", category: partnerCategoryOptions[0], region: "Чеченская Республика", direction: "Агентство недвижимости", contact: "" });
+    setPartnerForm({ name: "", category: partnerCategoryOptions[0], region: "Чеченская Республика", direction: "Агентство недвижимости", contact: "", relation: partnerRelationOptions[0], serviceDescription: "", commissionRule: "" });
     showAction("Партнёр добавлен в базу SmetaOffice");
   }
 
@@ -4906,20 +5022,65 @@ function FinanceModule({ projectItems, role }) {
 }
 
 function AnalyticsModule({ projectItems, allTasks, role }) {
+  const [period, setPeriod] = useState("month");
+  const periodLabels = {
+    month: "Месяц",
+    quarter: "Квартал",
+    halfyear: "Полгода",
+    year: "Год",
+  };
   const redProjects = projectItems.filter((project) => project.risk === "red").length;
   const reviewTasks = allTasks.filter((task) => task.status === "На проверке").length;
   const overdueTasks = allTasks.filter((task) => task.status === "Просрочено").length;
   const summary = financeSummary(projectItems);
   const canSeeFinance = roleCan(role, "viewFinance");
+  const avgProgress = projectItems.length ? Math.round(projectItems.reduce((sum, project) => sum + (Number(project.progress) || 0), 0) / projectItems.length) : 0;
+  const directionAnalytics = Array.from(
+    projectItems.reduce((map, project) => {
+      const key = project.direction || "Без направления";
+      const item = map.get(key) || { name: key, projects: [], tasks: [] };
+      item.projects.push(project);
+      item.tasks.push(...flattenTasks([project]));
+      map.set(key, item);
+      return map;
+    }, new Map()).values()
+  ).map((item) => {
+    const economy = financeSummary(item.projects);
+    const progress = item.projects.length ? Math.round(item.projects.reduce((sum, project) => sum + (Number(project.progress) || 0), 0) / item.projects.length) : 0;
+    return {
+      ...item,
+      economy,
+      progress,
+      overdue: item.tasks.filter((task) => task.status === "Просрочено").length,
+      review: item.tasks.filter((task) => task.status === "На проверке").length,
+    };
+  });
+  const bottlenecks = ["Новая", "В работе", "На проверке", "Правки", "Просрочено"]
+    .map((status) => ({ status, count: allTasks.filter((task) => task.status === status).length }))
+    .sort((a, b) => b.count - a.count);
 
   return (
     <>
       <SectionIntro section="analytics" />
+      <section className="office-card analytics-control-card">
+        <div className="section-row">
+          <div>
+            <h3>Период аналитики</h3>
+            <p className="section-hint">Сейчас период — управленческий фильтр MVP. Когда занесём даты старта/закрытия и историю завершённых проектов, эти кнопки будут считать месяц, квартал, полгода и год по факту.</p>
+          </div>
+          <span className="muted-chip">Срез: {periodLabels[period]}</span>
+        </div>
+        <div className="analytics-period-tabs">
+          {Object.entries(periodLabels).map(([id, label]) => (
+            <button key={id} type="button" className={period === id ? "active" : ""} onClick={() => setPeriod(id)}>{label}</button>
+          ))}
+        </div>
+      </section>
       <section className="stats-grid">
         <StatCard item={{ label: "Красная зона", value: String(redProjects), tone: "red" }} />
         <StatCard item={{ label: "На проверке", value: String(reviewTasks), tone: "orange" }} />
         <StatCard item={{ label: "Просрочено задач", value: String(overdueTasks), tone: "red" }} />
-        <StatCard item={{ label: canSeeFinance ? "Валовая прибыль" : "Средний прогресс", value: canSeeFinance ? money(summary.grossProfit) : "36%", tone: canSeeFinance ? "green" : "blue" }} />
+        <StatCard item={{ label: canSeeFinance ? "Условная валовая прибыль" : "Средний прогресс", value: canSeeFinance ? money(summary.companyPlannedGross) : `${avgProgress}%`, tone: canSeeFinance ? "green" : "blue" }} />
       </section>
       {canSeeFinance ? (
         <section className="stats-grid">
@@ -4931,6 +5092,7 @@ function AnalyticsModule({ projectItems, allTasks, role }) {
       ) : null}
       <section className="office-card">
         <h3>Контроль владельца</h3>
+        <p className="section-hint">Базовый список нужен для поиска проблемных проектов. Глубже смотрим: где просрочка, какой этап завис, кто отвечает и что стоит денег.</p>
         <div className="analytics-list">
           {projectItems.map((project) => (
             <div key={project.id}>
@@ -4940,6 +5102,35 @@ function AnalyticsModule({ projectItems, allTasks, role }) {
               <strong>{project.progress}%</strong>
             </div>
           ))}
+        </div>
+      </section>
+      <section className="analytics-grid">
+        <div className="office-card">
+          <h3>Направления: деньги и риски</h3>
+          <div className="analytics-list">
+            {directionAnalytics.map((item) => (
+              <div key={item.name}>
+                <b>{item.name}</b>
+                <span>{item.projects.length} проектов · прогресс {item.progress}% · просрочки {item.overdue}</span>
+                <em className={cn("risk-chip", item.overdue ? "red" : item.review ? "yellow" : "green")}>{item.overdue ? "красная зона" : item.review ? "на проверке" : "в норме"}</em>
+                <strong>{canSeeFinance ? money(item.economy.contractAmount) : `${item.tasks.length} задач`}</strong>
+              </div>
+            ))}
+            {!directionAnalytics.length ? <div className="empty">Пока нет проектов для аналитики.</div> : null}
+          </div>
+        </div>
+        <div className="office-card">
+          <h3>Узкие места производства</h3>
+          <p className="section-hint">Здесь видно, где скапливаются задачи: новые, в работе, на проверке, правки или просрочки.</p>
+          <div className="bottleneck-list">
+            {bottlenecks.map((item) => (
+              <div key={item.status}>
+                <span>{item.status}</span>
+                <div className="bar"><i className={cn("bar-fill", item.status === "Просрочено" ? "red" : item.status === "На проверке" ? "yellow" : "green")} style={{ width: `${Math.max(4, allTasks.length ? Math.round((item.count / allTasks.length) * 100) : 0)}%` }} /></div>
+                <b>{item.count}</b>
+              </div>
+            ))}
+          </div>
         </div>
       </section>
     </>
@@ -4996,7 +5187,8 @@ function DashboardModule({ visibleProjects, selectedProject, setSelectedId, role
     ? [
         { label: "Сумма договоров", value: money(summary.contractAmount), tone: "blue" },
         { label: "Оплачено клиентами", value: money(summary.paidByClient), tone: "green" },
-        { label: "Валовая прибыль по оплатам", value: money(summary.grossProfit), tone: summary.grossProfit >= 0 ? "green" : "red" },
+        { label: "Осталось оплатить", value: money(summary.receivable), tone: summary.receivable ? "orange" : "green" },
+        { label: "Условная валовая прибыль", value: money(summary.companyPlannedGross), tone: summary.companyPlannedGross >= 0 ? "green" : "red" },
         { label: "Красная зона", value: String(redProjects.length), tone: redProjects.length ? "red" : "green" },
       ]
     : [
@@ -5009,7 +5201,7 @@ function DashboardModule({ visibleProjects, selectedProject, setSelectedId, role
   const planCards = [
     { label: "План выполнения", value: `${avgProgress}%`, hint: "средний прогресс проектов", percent: avgProgress, tone: avgProgress >= 70 ? "green" : avgProgress >= 40 ? "yellow" : "red" },
     ...(canSeeFinance ? [{ label: "Оплата договоров", value: `${paidPercent}%`, hint: `${money(summary.paidByClient)} из ${money(summary.contractAmount)}`, percent: paidPercent, tone: paidPercent >= 70 ? "green" : paidPercent >= 35 ? "yellow" : "red" }] : []),
-    ...(canSeeProductionBudget ? [{ label: "Освоение бюджета РП", value: `${productionUsePercent}%`, hint: `${money(summary.realizationCost)} из ${money(summary.allocatedProductionBudget)}`, percent: Math.min(productionUsePercent, 100), tone: productionUsePercent <= 80 ? "green" : productionUsePercent <= 100 ? "yellow" : "red" }] : []),
+    ...(canSeeProductionBudget ? [{ label: "Затраты на проекты", value: `${productionUsePercent}%`, hint: `${money(summary.realizationCost)} из ${money(summary.allocatedProductionBudget)}`, percent: Math.min(productionUsePercent, 100), tone: productionUsePercent <= 80 ? "green" : productionUsePercent <= 100 ? "yellow" : "red" }] : []),
     { label: "Проекты без пожара", value: `${healthyPercent}%`, hint: `${visibleProjects.length - redProjects.length} из ${visibleProjects.length} не в красной зоне`, percent: healthyPercent, tone: healthyPercent >= 80 ? "green" : healthyPercent >= 60 ? "yellow" : "red" },
   ];
 
@@ -5047,11 +5239,32 @@ function DashboardModule({ visibleProjects, selectedProject, setSelectedId, role
   }));
 
   const todayFocus = [
-    { title: "Красные проекты", value: redProjects.length, hint: redProjects[0]?.title || "Пожаров нет", tone: redProjects.length ? "red" : "green" },
-    { title: "Есть риск", value: yellowProjects.length, hint: yellowProjects[0]?.title || "Риски под контролем", tone: yellowProjects.length ? "yellow" : "green" },
-    { title: "Просроченные задачи", value: overdueTasks.length, hint: overdueTasks[0]?.name || "Просрочек нет", tone: overdueTasks.length ? "red" : "green" },
-    { title: "На проверке", value: reviewTasks.length, hint: reviewTasks[0]?.name || "Проверок нет", tone: reviewTasks.length ? "blue" : "green" },
+    { title: "Красные проекты", value: redProjects.length, hint: redProjects[0]?.title || "Пожаров нет", tone: redProjects.length ? "red" : "green", project: redProjects[0] },
+    { title: "Есть риск", value: yellowProjects.length, hint: yellowProjects[0]?.title || "Риски под контролем", tone: yellowProjects.length ? "yellow" : "green", project: yellowProjects[0] },
+    { title: "Просроченные задачи", value: overdueTasks.length, hint: overdueTasks[0]?.name || "Просрочек нет", tone: overdueTasks.length ? "red" : "green", section: "tasks" },
+    { title: "На проверке", value: reviewTasks.length, hint: reviewTasks[0]?.name || "Проверок нет", tone: reviewTasks.length ? "blue" : "green", section: "tasks" },
   ];
+
+  function openDashboardProject(project) {
+    if (!project) {
+      showAction("Нет проекта для открытия по этому показателю");
+      return;
+    }
+    setSelectedId(project.id);
+    onGoSection?.("projectDetail");
+  }
+
+  function openDashboardFocus(item) {
+    if (item.project) {
+      openDashboardProject(item.project);
+      return;
+    }
+    if (item.section) {
+      onGoSection?.(item.section);
+      return;
+    }
+    showAction(`${item.title}: ${item.hint}`);
+  }
 
   return (
     <>
@@ -5116,7 +5329,7 @@ function DashboardModule({ visibleProjects, selectedProject, setSelectedId, role
           </div>
           <div className="focus-grid">
             {todayFocus.map((item) => (
-              <button key={item.title} type="button" onClick={() => showAction(`${item.title}: ${item.hint}`)}>
+              <button key={item.title} type="button" onClick={() => openDashboardFocus(item)}>
                 <span className={cn("risk-chip", item.tone)}>{item.title}</span>
                 <b>{item.value}</b>
                 <p>{item.hint}</p>
@@ -5131,10 +5344,9 @@ function DashboardModule({ visibleProjects, selectedProject, setSelectedId, role
             <div className="finance-flow">
               <div><span>Сумма договоров</span><b>{money(summary.contractAmount)}</b></div>
               <div><span>Оплачено клиентами</span><b>{money(summary.paidByClient)}</b></div>
-              <div><span>Задолженность / к получению</span><b>{money(summary.receivable)}</b></div>
-              <div><span>Бюджет реализации РП</span><b>{money(summary.allocatedProductionBudget)}</b></div>
-              <div><span>Плановая валовая прибыль</span><b>{money(summary.companyPlannedGross)}</b></div>
-              <div className="strong"><span>Чистая прибыль по оплатам</span><b>{money(summary.netProfit)}</b></div>
+              <div><span>Осталось оплатить клиентам</span><b>{money(summary.receivable)}</b></div>
+              <div><span>Затраты на проекты</span><b>{money(summary.realizationCost)}</b></div>
+              <div className="strong"><span>Условная валовая прибыль</span><b>{money(summary.companyPlannedGross)}</b></div>
             </div>
           </div>
         ) : (
@@ -5215,6 +5427,7 @@ function DashboardModule({ visibleProjects, selectedProject, setSelectedId, role
 
         <div className="office-card">
           <h3>Автоконтроль и правила</h3>
+          <p className="section-hint">Это правила, которые система должна контролировать автоматически. Сейчас они показаны как управленческая памятка MVP, без лишних кликов.</p>
           <div className="auto-list dashboard-rules">
             {[
               "Время ответа на заявку — 5 минут",
@@ -5224,7 +5437,7 @@ function DashboardModule({ visibleProjects, selectedProject, setSelectedId, role
               "Финансы видят деньги, но не управляют ролями",
               "Админ управляет доступом, но не видит закрытую финансовую аналитику",
             ].map((item) => (
-              <button key={item} type="button" onClick={() => showAction(item)}>✓ {item}</button>
+              <div key={item}>✓ {item}</div>
             ))}
           </div>
         </div>
@@ -5239,7 +5452,7 @@ function DashboardModule({ visibleProjects, selectedProject, setSelectedId, role
         </div>
         <div className="risk-project-strip">
           {[...redProjects, ...yellowProjects].slice(0, 6).map((project) => (
-            <button key={project.id} type="button" onClick={() => { setSelectedId(project.id); showAction(`Выбран проект: ${project.title}. Открой раздел «Проекты» или карточку проекта.`); }}>
+            <button key={project.id} type="button" onClick={() => openDashboardProject(project)}>
               <span className={cn("risk-chip", project.risk)}>{riskText(project.risk)}</span>
               <b>{project.title}</b>
               <small>{project.region || project.city} · РП: {project.manager} · {project.stage}</small>
@@ -5254,14 +5467,14 @@ function DashboardModule({ visibleProjects, selectedProject, setSelectedId, role
         <h3>Сквозной путь контроля</h3>
         <div className="pipeline">
           {[
-            { title: "Заявка", desc: "SmetaGo / продажи" },
-            { title: "Проект", desc: "карточка и бюджет" },
-            { title: "Разделы", desc: "исполнители и сроки" },
-            { title: "Проверка", desc: "РП / ГИП / управляющий" },
-            { title: "Финансы", desc: "оплаты, выплаты, прибыль" },
-            { title: "Клиент", desc: "статус и отчёты" },
+            { title: "Заявка", desc: "SmetaGo / Bitrix", section: "sales" },
+            { title: "Проект", desc: "карточка и бюджет", section: "projects" },
+            { title: "Разделы", desc: "исполнители и сроки", section: "projectDetail" },
+            { title: "Проверка", desc: "РП / ГИП / управляющий", section: "tasks" },
+            { title: "Финансы", desc: "оплаты, выплаты, прибыль", section: "finance" },
+            { title: "Клиент", desc: "статус и отчёты", section: "client" },
           ].map((step, index) => (
-            <button key={step.title} type="button" onClick={() => showAction(step.desc)}>
+            <button key={step.title} type="button" onClick={() => onGoSection?.(step.section)}>
               <b>{index + 1}</b>
               <strong>{step.title}</strong>
               <span>{step.desc}</span>
@@ -6056,7 +6269,7 @@ function SmetaOfficePrototype() {
             />
           ) : null}
 
-          {role !== "executor" && activeSection === "tasks" ? <TasksModule allTasks={visibleTasks} onTaskStatusChange={changeTaskStatus} executors={executors} /> : null}
+          {role !== "executor" && activeSection === "tasks" ? <TasksModule allTasks={visibleTasks} onTaskStatusChange={changeTaskStatus} executors={executors} onGoSection={setActiveSection} /> : null}
           {role !== "executor" && activeSection === "partners" ? <PartnersModule role={role} partnerItems={partners} setPartnerItems={setPartners} /> : null}
           {role !== "executor" && activeSection === "admin" ? <AdminModule users={users} setUsers={setUsers} session={session} /> : null}
           {role !== "executor" && activeSection === "analytics" ? <AnalyticsModule projectItems={visibleProjects} allTasks={visibleTasks} role={role} /> : null}
