@@ -2023,6 +2023,16 @@ function financeSummary(projectItems) {
   );
 }
 
+function isProjectInstituteProject(project) {
+  const direction = normalizeDirectionName(project?.direction);
+  const type = String(project?.projectType || "").toLowerCase();
+  return direction === "Проектный институт" || type.includes("87 постанов");
+}
+
+function isRegionalOperatingProject(project) {
+  return !isProjectInstituteProject(project);
+}
+
 function rankName(rank) {
   if (rank >= 5) return "Эксперт";
   if (rank === 4) return "Старший специалист";
@@ -4534,7 +4544,7 @@ function ProjectsModule({
         directions: new Set(),
       });
     });
-    searchProjects.forEach((project) => {
+    searchProjects.filter(isRegionalOperatingProject).forEach((project) => {
       const key = normalizeRegionName(project.region || project.city);
       const economy = projectEconomy(project);
       const item = map.get(key) || { name: key, projects: 0, contractAmount: 0, paidByClient: 0, realizationCost: 0, risk: "green", directions: new Set() };
@@ -4552,15 +4562,12 @@ function ProjectsModule({
 
   const totals = useMemo(() => financeSummary(searchProjects), [searchProjects]);
   const instituteProjects = useMemo(() => {
-    return searchProjects.filter((project) => {
-      const text = `${project.direction || ""} ${project.projectType || ""} ${(project.sections || []).map((item) => item.name).join(" ")}`.toLowerCase();
-      return text.includes("проектный институт") || text.includes("87") || text.includes("проектная документация") || text.includes("пос") || text.includes("оди") || text.includes("эксперти");
-    });
+    return searchProjects.filter(isProjectInstituteProject);
   }, [searchProjects]);
 
   const instituteSummary = useMemo(() => financeSummary(instituteProjects), [instituteProjects]);
   const selectedRegionProjects = useMemo(() => {
-    return searchProjects.filter((project) => normalizeRegionName(project.region || project.city) === selectedRegion);
+    return searchProjects.filter((project) => isRegionalOperatingProject(project) && normalizeRegionName(project.region || project.city) === selectedRegion);
   }, [searchProjects, selectedRegion]);
 
   const selectedRegionSummary = useMemo(() => financeSummary(selectedRegionProjects), [selectedRegionProjects]);
@@ -5833,7 +5840,7 @@ function DashboardModule({ visibleProjects, selectedProject, setSelectedId, role
   ];
 
   const regionRows = Array.from(
-    visibleProjects.reduce((map, project) => {
+    visibleProjects.filter(isRegionalOperatingProject).reduce((map, project) => {
       const key = project.region || project.city || "Без региона";
       const item = map.get(key) || { name: key, projects: [], risk: "green" };
       item.projects.push(project);
