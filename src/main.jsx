@@ -853,7 +853,7 @@ const regionalDirections = [
     id: "surveys",
     title: "Изыскания / обследования / обмеры",
     manager: "Управляющий изысканиями",
-    hint: "Локальные выезды, обследования, обмеры, геология, исходные данные и техническое заключение.",
+    hint: "Только самостоятельные услуги изысканий, обследований и обмеров. Разделы обследования внутри проектного института остаются в проектном институте.",
     projectDirection: "Изыскания / обследования / обмеры",
     headcount: 0,
     payrollMonthly: 0,
@@ -862,8 +862,7 @@ const regionalDirections = [
     plannedGrossTarget: 0,
     risk: "yellow",
     match: (project) => {
-      const text = `${project.direction || ""} ${project.projectType || ""} ${(project.sections || []).map((item) => item.name).join(" ")}`.toLowerCase();
-      return text.includes("изыск") || text.includes("обслед") || text.includes("тзк") || text.includes("дефект");
+      return normalizeDirectionName(project.direction) === "Изыскания / обследования / обмеры";
     },
   },
   {
