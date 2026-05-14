@@ -38,6 +38,7 @@ const roleCan = (role, permission) => role === "owner" || (rolePermissions[role]
 const userCan = (user, permission) => roleCan(user?.role, permission);
 
 const API_BASE = import.meta.env.VITE_API_BASE || (window.location.port === "5173" ? "http://127.0.0.1:8787/api" : "/api");
+const AUTH_TOKEN_KEY = "smeta.authToken";
 
 const demoUsers = [
   { id: "USR-001", login: "owner", password: "owner", role: "owner", name: "Владелец", status: "active", region: "Все регионы", regions: ["Все регионы"], direction: "Все направления", position: "Основатель / владелец" },
@@ -1621,9 +1622,31 @@ function writeStoredValue(key, value) {
   }
 }
 
+function readAuthToken() {
+  try {
+    return window.localStorage.getItem(AUTH_TOKEN_KEY) || "";
+  } catch {
+    return "";
+  }
+}
+
+function writeAuthToken(token) {
+  try {
+    if (token) window.localStorage.setItem(AUTH_TOKEN_KEY, token);
+    else window.localStorage.removeItem(AUTH_TOKEN_KEY);
+  } catch {
+    // Keep login usable even if browser storage is blocked.
+  }
+}
+
+function authHeaders() {
+  const token = readAuthToken();
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
 async function apiGet(path, fallback) {
   try {
-    const response = await fetch(`${API_BASE}${path}`);
+    const response = await fetch(`${API_BASE}${path}`, { headers: authHeaders() });
     if (!response.ok) throw new Error(`API ${response.status}`);
     return await response.json();
   } catch {
@@ -1635,11 +1658,25 @@ async function apiPut(path, value) {
   try {
     await fetch(`${API_BASE}${path}`, {
       method: "PUT",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...authHeaders() },
       body: JSON.stringify(value),
     });
   } catch {
     // LocalStorage remains the offline fallback.
+  }
+}
+
+async function apiPost(path, value, fallback = null) {
+  try {
+    const response = await fetch(`${API_BASE}${path}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...authHeaders() },
+      body: JSON.stringify(value),
+    });
+    if (!response.ok) throw new Error(`API ${response.status}`);
+    return await response.json();
+  } catch {
+    return fallback;
   }
 }
 
@@ -3988,8 +4025,14 @@ function LoginScreen({ users, onLogin, onRegister }) {
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
 
-  function submit(event) {
+  async function submit(event) {
     event.preventDefault();
+    const serverLogin = await apiPost("/auth/login", { login: login.trim(), password }, null);
+    if (serverLogin?.ok && serverLogin.user) {
+      setError("");
+      onLogin(serverLogin.user, serverLogin.token);
+      return;
+    }
     const user = users.find((item) => item.login === login.trim() && item.password === password);
     if (!user) {
       setError("Неверный логин или пароль.");
@@ -4003,7 +4046,7 @@ function LoginScreen({ users, onLogin, onRegister }) {
     onLogin(user);
   }
 
-  function register(event) {
+  async function register(event) {
     event.preventDefault();
     const nextLogin = requestForm.login.trim();
     if (!requestForm.name.trim() || !nextLogin || !requestForm.password) {
@@ -4014,6 +4057,15 @@ function LoginScreen({ users, onLogin, onRegister }) {
       setError("Такой логин уже есть.");
       return;
     }
+    const serverRequest = await apiPost("/access-requests", requestForm, null);
+    if (serverRequest?.ok) {
+      setRequestForm({ name: "", login: "", password: "", region: "Р§Р " });
+      setError("");
+      setNotice("Р—Р°СЏРІРєР° СЃРѕР·РґР°РЅР°. РўРµРїРµСЂСЊ Р°РґРјРёРЅ РґРѕР»Р¶РµРЅ РЅР°Р·РЅР°С‡РёС‚СЊ СЂРѕР»СЊ, СЂРµРіРёРѕРЅ Рё РґРѕР»Р¶РЅРѕСЃС‚СЊ.");
+      setMode("login");
+      return;
+    }
+
     onRegister({
       id: `USR-${Date.now()}`,
       login: nextLogin,
@@ -5745,6 +5797,26 @@ function SmetaOfficePrototype() {
 
   useEffect(() => {
     let alive = true;
+    async function restoreServerSession() {
+      if (!readAuthToken()) return;
+      const auth = await apiGet("/auth/me", null);
+      if (!alive) return;
+      if (auth?.ok && auth.user) {
+        setSession(auth.user);
+        setRole(auth.user.role);
+        writeStoredValue("smeta.session", auth.user);
+      } else {
+        writeAuthToken("");
+      }
+    }
+    restoreServerSession();
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    let alive = true;
     async function loadServerState() {
       const [serverProjects, serverExecutors, serverUsers, serverPartners, serverSalesLeads] = await Promise.all([
         apiGet("/projects", null),
@@ -5785,7 +5857,7 @@ function SmetaOfficePrototype() {
     return () => {
       alive = false;
     };
-  }, []);
+  }, [session?.id]);
 
   useEffect(() => {
     if (!session?.login) return;
@@ -6312,13 +6384,16 @@ function SmetaOfficePrototype() {
     showAction(`Участник клиента ${participant.name} добавлен в проект и будет виден в SmetaGo`);
   }
 
-  function login(user) {
+  function login(user, token = "") {
+    writeAuthToken(token);
     setSession(user);
     setRole(user.role);
     writeStoredValue("smeta.session", user);
   }
 
   function logout() {
+    apiPost("/auth/logout", {});
+    writeAuthToken("");
     setSession(null);
     writeStoredValue("smeta.session", null);
     setRole("owner");

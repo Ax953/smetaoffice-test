@@ -9,3 +9,13 @@ services:
     envVars:
       - key: NODE_ENV
         value: production
+      - key: SMETA_AUTH_MODE
+        value: server
+      - key: SMETA_SESSION_TTL_HOURS
+        value: 24
+      - key: SMETA_BOOTSTRAP_OWNER_LOGIN
+        sync: false
+      - key: SMETA_BOOTSTRAP_OWNER_PASSWORD
+        sync: false
+      - key: SMETA_BOOTSTRAP_OWNER_NAME
+        sync: false

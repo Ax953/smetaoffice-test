@@ -3,6 +3,7 @@ import { readFile, writeFile, mkdir } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { randomBytes, timingSafeEqual, pbkdf2Sync } from "node:crypto";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const dataDir = path.join(__dirname, "data");
@@ -10,6 +11,8 @@ const dbPath = path.join(dataDir, "database.json");
 const distDir = path.join(__dirname, "dist");
 const port = Number(process.env.PORT || process.env.SMETA_API_PORT || 8787);
 const host = process.env.HOST || "0.0.0.0";
+const authMode = process.env.SMETA_AUTH_MODE || "demo";
+const sessionTtlMs = Number(process.env.SMETA_SESSION_TTL_HOURS || 24) * 60 * 60 * 1000;
 
 const defaultDb = {
   projects: [],
@@ -28,6 +31,8 @@ const defaultDb = {
   },
   integrationSettings: { webhookUrl: "", syncMode: "manual", lastCheck: "не запускалась" },
   syncLog: [],
+  accessRequests: [],
+  authSessions: {},
 };
 
 async function ensureDb() {
@@ -52,6 +57,38 @@ async function writeDb(nextDb) {
   await writeFile(dbPath, JSON.stringify(nextDb, null, 2), "utf8");
 }
 
+async function ensureBootstrapOwner() {
+  const login = process.env.SMETA_BOOTSTRAP_OWNER_LOGIN;
+  const password = process.env.SMETA_BOOTSTRAP_OWNER_PASSWORD;
+  if (!login || !password) return;
+
+  const db = await readDb();
+  const users = db.users || [];
+  if (users.some((user) => user.role === "owner" || user.login === login)) return;
+
+  const hashed = hashPassword(password);
+  await writeDb({
+    ...db,
+    users: [
+      {
+        id: `USR-${Date.now()}`,
+        login,
+        passwordSalt: hashed.salt,
+        passwordHash: hashed.hash,
+        role: "owner",
+        name: process.env.SMETA_BOOTSTRAP_OWNER_NAME || "Owner",
+        status: "active",
+        region: "Все регионы",
+        regions: ["Все регионы"],
+        direction: "Все направления",
+        position: "Основатель / владелец",
+        createdAt: new Date().toISOString(),
+      },
+      ...users,
+    ],
+  });
+}
+
 async function readJsonBody(req) {
   const chunks = [];
   for await (const chunk of req) chunks.push(chunk);
@@ -64,9 +101,105 @@ function sendJson(res, status, payload) {
     "Content-Type": "application/json; charset=utf-8",
     "Access-Control-Allow-Origin": "*",
     "Access-Control-Allow-Methods": "GET,POST,PUT,PATCH,OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type",
+    "Access-Control-Allow-Headers": "Content-Type, Authorization",
   });
   res.end(JSON.stringify(payload));
+}
+
+function publicUser(user) {
+  if (!user) return null;
+  const { password, passwordHash, passwordSalt, ...safeUser } = user;
+  return { ...safeUser, hasPassword: Boolean(password || passwordHash) };
+}
+
+function publicUsers(users = []) {
+  return users.map(publicUser);
+}
+
+function hashPassword(password, salt = randomBytes(16).toString("hex")) {
+  const hash = pbkdf2Sync(String(password), salt, 120000, 32, "sha256").toString("hex");
+  return { salt, hash };
+}
+
+function verifyPassword(user, password) {
+  if (!user || !password) return false;
+  if (user.passwordHash && user.passwordSalt) {
+    const expected = Buffer.from(user.passwordHash, "hex");
+    const actual = Buffer.from(hashPassword(password, user.passwordSalt).hash, "hex");
+    return expected.length === actual.length && timingSafeEqual(expected, actual);
+  }
+  return user.password === password;
+}
+
+function sessionTokenFrom(req) {
+  const header = req.headers.authorization || "";
+  const match = header.match(/^Bearer\s+(.+)$/i);
+  return match ? match[1] : "";
+}
+
+function cleanupSessions(db) {
+  const now = Date.now();
+  const sessions = db.authSessions || {};
+  return Object.fromEntries(Object.entries(sessions).filter(([, session]) => Date.parse(session.expiresAt || 0) > now));
+}
+
+function authUser(req, db) {
+  const token = sessionTokenFrom(req);
+  const sessions = cleanupSessions(db);
+  const session = token ? sessions[token] : null;
+  const user = session ? (db.users || []).find((item) => item.id === session.userId) : null;
+  return user?.status === "active" ? { token, user, sessions } : { token: "", user: null, sessions };
+}
+
+function requireAuth(req, res, db) {
+  if (authMode !== "server") return { user: { role: "system" }, sessions: db.authSessions || {} };
+  const auth = authUser(req, db);
+  if (!auth.user) {
+    sendJson(res, 401, { ok: false, error: "Unauthorized" });
+    return null;
+  }
+  return auth;
+}
+
+function canWriteCollection(user, route) {
+  if (!user || user.status === "disabled") return false;
+  if (["owner", "admin", "deputy"].includes(user.role)) return true;
+  if (route === "/api/projects") return ["director", "regional_manager", "pm", "project_manager"].includes(user.role);
+  if (route === "/api/executors") return ["director", "regional_manager", "pm"].includes(user.role);
+  if (route === "/api/partners") return ["director", "regional_manager"].includes(user.role);
+  if (route === "/api/sales-leads") return ["head_of_sales", "sales_manager"].includes(user.role);
+  if (route === "/api/integration-settings") return user.role === "admin";
+  if (route === "/api/users" || route === "/api/directories") return ["owner", "admin"].includes(user.role);
+  return false;
+}
+
+function requireWriteAccess(req, res, db, route) {
+  const auth = requireAuth(req, res, db);
+  if (!auth) return null;
+  if (authMode === "server" && !canWriteCollection(auth.user, route)) {
+    sendJson(res, 403, { ok: false, error: "Forbidden" });
+    return null;
+  }
+  return auth;
+}
+
+function normalizeIncomingUsers(incomingUsers = [], existingUsers = []) {
+  return incomingUsers.map((user) => {
+    const existing = existingUsers.find((item) => item.id === user.id || item.login === user.login);
+    const nextUser = { ...existing, ...user };
+    if (user.password) {
+      const hashed = hashPassword(user.password);
+      delete nextUser.password;
+      nextUser.passwordSalt = hashed.salt;
+      nextUser.passwordHash = hashed.hash;
+    } else if (existing?.passwordHash && existing?.passwordSalt) {
+      nextUser.passwordHash = existing.passwordHash;
+      nextUser.passwordSalt = existing.passwordSalt;
+    } else if (existing?.password) {
+      nextUser.password = existing.password;
+    }
+    return nextUser;
+  });
 }
 
 function sendText(res, status, body, contentType = "text/plain; charset=utf-8") {
@@ -134,6 +267,7 @@ const server = http.createServer(async (req, res) => {
         ok: true,
         service: "SmetaOffice API",
         storage: "json",
+        authMode,
         updatedAt: new Date().toISOString(),
         counts: {
           projects: (db.projects || []).length,
@@ -146,17 +280,114 @@ const server = http.createServer(async (req, res) => {
       return;
     }
 
+    if (req.method === "POST" && route === "/api/auth/login") {
+      const body = await readJsonBody(req);
+      const user = (db.users || []).find((item) => item.login === String(body.login || "").trim());
+      if (!verifyPassword(user, body.password)) {
+        sendJson(res, 401, { ok: false, error: "Invalid login or password" });
+        return;
+      }
+      if (user.status !== "active") {
+        sendJson(res, 403, { ok: false, error: "User is not active" });
+        return;
+      }
+
+      const token = randomBytes(32).toString("hex");
+      const nextDb = {
+        ...db,
+        authSessions: {
+          ...cleanupSessions(db),
+          [token]: {
+            userId: user.id,
+            createdAt: new Date().toISOString(),
+            expiresAt: new Date(Date.now() + sessionTtlMs).toISOString(),
+          },
+        },
+      };
+      await writeDb(nextDb);
+      sendJson(res, 200, { ok: true, token, user: publicUser(user), expiresAt: nextDb.authSessions[token].expiresAt });
+      return;
+    }
+
+    if (req.method === "GET" && route === "/api/auth/me") {
+      const auth = authUser(req, db);
+      if (!auth.user) {
+        sendJson(res, 401, { ok: false, error: "Unauthorized" });
+        return;
+      }
+      if (Object.keys(auth.sessions).length !== Object.keys(db.authSessions || {}).length) {
+        await writeDb({ ...db, authSessions: auth.sessions });
+      }
+      sendJson(res, 200, { ok: true, user: publicUser(auth.user) });
+      return;
+    }
+
+    if (req.method === "POST" && route === "/api/auth/logout") {
+      const auth = authUser(req, db);
+      if (auth.token) {
+        const { [auth.token]: _removed, ...remainingSessions } = auth.sessions;
+        await writeDb({ ...db, authSessions: remainingSessions });
+      }
+      sendJson(res, 200, { ok: true });
+      return;
+    }
+
+    if (req.method === "POST" && route === "/api/access-requests") {
+      const body = await readJsonBody(req);
+      const login = String(body.login || "").trim();
+      if (!body.name || !login || !body.password) {
+        sendJson(res, 400, { ok: false, error: "Name, login and password are required" });
+        return;
+      }
+      if ((db.users || []).some((user) => user.login === login)) {
+        sendJson(res, 409, { ok: false, error: "Login already exists" });
+        return;
+      }
+      const hashed = hashPassword(body.password);
+      const request = {
+        id: `AR-${Date.now()}`,
+        name: String(body.name).trim(),
+        login,
+        region: body.region || "",
+        requestedRole: body.requestedRole || "executor",
+        status: "pending",
+        createdAt: new Date().toISOString(),
+        passwordSalt: hashed.salt,
+        passwordHash: hashed.hash,
+      };
+      const nextDb = { ...db, accessRequests: [request, ...(db.accessRequests || [])] };
+      await writeDb(nextDb);
+      sendJson(res, 200, { ok: true, request: publicUser(request) });
+      return;
+    }
+
+    if (req.method === "GET" && route === "/api/access-requests") {
+      const auth = requireAuth(req, res, db);
+      if (!auth) return;
+      if (authMode === "server" && !["owner", "admin"].includes(auth.user.role)) {
+        sendJson(res, 403, { ok: false, error: "Forbidden" });
+        return;
+      }
+      sendJson(res, 200, publicUsers(db.accessRequests || []));
+      return;
+    }
+
     if (req.method === "GET" && route === "/api/db") {
-      sendJson(res, 200, db);
+      const auth = requireAuth(req, res, db);
+      if (!auth) return;
+      const payload = authMode === "server" ? { ...db, users: publicUsers(db.users || []), authSessions: {}, accessRequests: publicUsers(db.accessRequests || []) } : db;
+      sendJson(res, 200, payload);
       return;
     }
 
     if (req.method === "GET" && route === "/api/projects") {
+      if (!requireAuth(req, res, db)) return;
       sendJson(res, 200, db.projects);
       return;
     }
 
     if (req.method === "PUT" && route === "/api/projects") {
+      if (!requireWriteAccess(req, res, db, route)) return;
       const projects = await readJsonBody(req);
       const nextDb = { ...db, projects };
       await writeDb(nextDb);
@@ -165,11 +396,13 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (req.method === "GET" && route === "/api/executors") {
+      if (!requireAuth(req, res, db)) return;
       sendJson(res, 200, db.executors);
       return;
     }
 
     if (req.method === "PUT" && route === "/api/executors") {
+      if (!requireWriteAccess(req, res, db, route)) return;
       const executors = await readJsonBody(req);
       const nextDb = { ...db, executors };
       await writeDb(nextDb);
@@ -178,24 +411,29 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (req.method === "GET" && route === "/api/users") {
-      sendJson(res, 200, db.users);
+      if (!requireAuth(req, res, db)) return;
+      sendJson(res, 200, authMode === "server" ? publicUsers(db.users) : db.users);
       return;
     }
 
     if (req.method === "PUT" && route === "/api/users") {
-      const users = await readJsonBody(req);
+      if (!requireWriteAccess(req, res, db, route)) return;
+      const incomingUsers = await readJsonBody(req);
+      const users = authMode === "server" ? normalizeIncomingUsers(incomingUsers, db.users || []) : incomingUsers;
       const nextDb = { ...db, users };
       await writeDb(nextDb);
-      sendJson(res, 200, nextDb.users);
+      sendJson(res, 200, authMode === "server" ? publicUsers(nextDb.users) : nextDb.users);
       return;
     }
 
     if (req.method === "GET" && route === "/api/partners") {
+      if (!requireAuth(req, res, db)) return;
       sendJson(res, 200, db.partners || []);
       return;
     }
 
     if (req.method === "PUT" && route === "/api/partners") {
+      if (!requireWriteAccess(req, res, db, route)) return;
       const partners = await readJsonBody(req);
       const nextDb = { ...db, partners };
       await writeDb(nextDb);
@@ -204,11 +442,13 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (req.method === "GET" && route === "/api/sales-leads") {
+      if (!requireAuth(req, res, db)) return;
       sendJson(res, 200, db.salesLeads || []);
       return;
     }
 
     if (req.method === "PUT" && route === "/api/sales-leads") {
+      if (!requireWriteAccess(req, res, db, route)) return;
       const salesLeads = await readJsonBody(req);
       const nextDb = { ...db, salesLeads };
       await writeDb(nextDb);
@@ -217,11 +457,13 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (req.method === "GET" && route === "/api/directories") {
+      if (!requireAuth(req, res, db)) return;
       sendJson(res, 200, db.directories || defaultDb.directories);
       return;
     }
 
     if (req.method === "PUT" && route === "/api/directories") {
+      if (!requireWriteAccess(req, res, db, route)) return;
       const directories = await readJsonBody(req);
       const nextDb = { ...db, directories: { ...directories, updatedAt: new Date().toISOString() } };
       await writeDb(nextDb);
@@ -230,11 +472,13 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (req.method === "GET" && route === "/api/integration-settings") {
+      if (!requireAuth(req, res, db)) return;
       sendJson(res, 200, db.integrationSettings);
       return;
     }
 
     if (req.method === "PUT" && route === "/api/integration-settings") {
+      if (!requireWriteAccess(req, res, db, route)) return;
       const integrationSettings = await readJsonBody(req);
       const nextDb = { ...db, integrationSettings };
       await writeDb(nextDb);
@@ -243,6 +487,7 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (req.method === "POST" && route === "/api/sync-log") {
+      if (!requireAuth(req, res, db)) return;
       const event = await readJsonBody(req);
       const nextDb = { ...db, syncLog: [{ ...event, at: new Date().toISOString() }, ...(db.syncLog || [])].slice(0, 200) };
       await writeDb(nextDb);
@@ -263,6 +508,7 @@ const server = http.createServer(async (req, res) => {
 
 server.listen(port, host, async () => {
   await ensureDb();
+  await ensureBootstrapOwner();
   console.log(`SmetaOffice: http://${host === "0.0.0.0" ? "127.0.0.1" : host}:${port}`);
   console.log(`SmetaOffice API: http://${host === "0.0.0.0" ? "127.0.0.1" : host}:${port}/api/health`);
   console.log(`Database: ${dbPath}`);
