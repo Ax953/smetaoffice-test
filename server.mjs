@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 import { randomBytes, timingSafeEqual, pbkdf2Sync } from "node:crypto";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const dataDir = path.join(__dirname, "data");
+const dataDir = process.env.SMETA_DATA_DIR ? path.resolve(process.env.SMETA_DATA_DIR) : path.join(__dirname, "data");
 const dbPath = path.join(dataDir, "database.json");
 const distDir = path.join(__dirname, "dist");
 const port = Number(process.env.PORT || process.env.SMETA_API_PORT || 8787);

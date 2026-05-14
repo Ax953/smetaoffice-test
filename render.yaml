@@ -1,14 +1,20 @@
 services:
   - type: web
-    name: smetaoffice-test
+    name: smetaoffice-official
     env: node
     plan: starter
     buildCommand: npm ci && npm run build
     startCommand: npm start
     autoDeploy: false
+    disk:
+      name: smetaoffice-data
+      mountPath: /var/data/smetaoffice
+      sizeGB: 1
     envVars:
       - key: NODE_ENV
         value: production
+      - key: SMETA_DATA_DIR
+        value: /var/data/smetaoffice
       - key: SMETA_AUTH_MODE
         value: server
       - key: SMETA_SESSION_TTL_HOURS
