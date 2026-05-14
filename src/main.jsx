@@ -5734,9 +5734,22 @@ function FinanceModule({ projectItems, role }) {
         <StatCard item={{ label: "Выделено РП/реализация", value: money(summary.allocatedProductionBudget), tone: "blue" }} />
       </section>
 
+      <section className="office-card finance-plain-card">
+        <div>
+          <h3>Финансы: что смотреть первым</h3>
+          <p className="section-hint">Сейчас здесь только проектная экономика: договоры, оплаты клиента, затраты на исполнителей/партнёров и условная валовая часть. Кассу компании, аренды и общую бухгалтерию пока не смешиваем с проектами.</p>
+        </div>
+        <div className="finance-plain-grid">
+          <div><span>Клиенты должны оплатить</span><b>{money(summary.receivable)}</b></div>
+          <div><span>Потрачено / к выплате по проектам</span><b>{money(summary.realizationCost)}</b></div>
+          <div><span>Остаток бюджета РП</span><b>{money(summary.pmBudgetLeft)}</b></div>
+          <div><span>Плановая валовая часть</span><b>{money(summary.companyPlannedGross)}</b></div>
+        </div>
+      </section>
+
       <section className="finance-grid">
         <div className="office-card">
-          <h3>Финансовая логика месяца</h3>
+          <h3>Проектные деньги по шагам</h3>
           <div className="finance-flow">
             <div><span>1. Поступления от проектов (факт)</span><b>{money(summary.paidByClient)}</b></div>
             <div><span>2. Себестоимость исполнителей</span><b>{money(summary.realizationCost)}</b></div>
