@@ -2312,9 +2312,7 @@ function normalizeSalesLead(lead) {
 
 function mergeSalesLeads(leads) {
   const source = Array.isArray(leads) ? leads : [];
-  const existing = new Set(source.map((lead) => lead.id));
-  const missing = seedSalesLeads.filter((lead) => !existing.has(lead.id));
-  return [...missing, ...source].map(normalizeSalesLead);
+  return source.map(normalizeSalesLead);
 }
 
 function salesLeadStats(leads) {
@@ -4178,6 +4176,7 @@ function SectionIntro({ section }) {
 }
 
 function SalesLeadsModule({ leads, setSalesLeads, projectItems, users, role, session }) {
+  const [viewFilter, setViewFilter] = useState("operational");
   const [directionFilter, setDirectionFilter] = useState("all");
   const [regionFilter, setRegionFilter] = useState("all");
   const [sourceFilter, setSourceFilter] = useState("all");
@@ -4192,7 +4191,10 @@ function SalesLeadsModule({ leads, setSalesLeads, projectItems, users, role, ses
     return leads.filter((lead) => {
       if (!leadCanAccess(session, lead, role)) return false;
       const isWarmOperationalLead = ["warm", "hot"].includes(lead.qualificationStatus) && lead.stage !== "new_lead";
-      if (!isWarmOperationalLead) return false;
+      if (viewFilter === "operational" && !isWarmOperationalLead) return false;
+      if (viewFilter === "qualified" && !["warm", "hot"].includes(lead.qualificationStatus)) return false;
+      if (viewFilter === "contract" && !["contract_and_advance", "contract_advance", "deposit"].includes(lead.stage)) return false;
+      if (viewFilter === "project" && !lead.projectId) return false;
       const slaStatus = leadSlaStatus(lead);
       if (directionFilter !== "all" && lead.direction !== directionFilter) return false;
       if (regionFilter !== "all" && lead.region !== regionFilter) return false;
@@ -4200,11 +4202,16 @@ function SalesLeadsModule({ leads, setSalesLeads, projectItems, users, role, ses
       if (slaFilter !== "all" && slaStatus !== slaFilter) return false;
       return true;
     });
-  }, [leads, session, role, directionFilter, regionFilter, sourceFilter, slaFilter]);
+  }, [leads, session, role, viewFilter, directionFilter, regionFilter, sourceFilter, slaFilter]);
 
   const selectedLead = visibleLeads.find((lead) => lead.id === selectedLeadId) || visibleLeads[0] || null;
   const stats = salesLeadStats(visibleLeads);
   const farmers = users.filter((user) => ["project_manager", "pm", "sales_manager", "partner", "director", "regional_manager"].includes(user.role));
+
+  useEffect(() => {
+    if (selectedLeadId && visibleLeads.some((lead) => lead.id === selectedLeadId)) return;
+    setSelectedLeadId(visibleLeads[0]?.id || "");
+  }, [selectedLeadId, visibleLeads]);
 
   function patchLead(leadId, patchFactory) {
     if (!canChangeSales) {
@@ -4274,7 +4281,7 @@ function SalesLeadsModule({ leads, setSalesLeads, projectItems, users, role, ses
     <>
       <SectionIntro section="sales" />
       <section className="stats-grid">
-        <StatCard item={{ label: "Тёплые сделки", value: String(visibleLeads.length), tone: "blue" }} />
+        <StatCard item={{ label: "Лиды в текущем виде", value: String(visibleLeads.length), tone: "blue" }} />
         <StatCard item={{ label: "SLA нарушен", value: String(stats.breached), tone: stats.breached ? "red" : "green" }} />
         <StatCard item={{ label: "КП отправлено", value: String(stats.proposal), tone: "orange" }} />
         <StatCard item={{ label: "Связаны с проектом", value: String(stats.linked), tone: "green" }} />
@@ -4288,6 +4295,13 @@ function SalesLeadsModule({ leads, setSalesLeads, projectItems, users, role, ses
           </div>
         </div>
         <div className="filters sales-filters">
+          <select value={viewFilter} onChange={(event) => setViewFilter(event.target.value)}>
+            <option value="operational">Только тёплые / рабочие</option>
+            <option value="qualified">Квалифицированные</option>
+            <option value="contract">Договор / аванс</option>
+            <option value="project">Связанные с проектом</option>
+            <option value="all">Смотреть всё</option>
+          </select>
           <select value={directionFilter} onChange={(event) => setDirectionFilter(event.target.value)}>
             <option value="all">Все направления</option>
             {Object.entries(salesDirections).map(([id, label]) => <option key={id} value={id}>{label}</option>)}
@@ -4339,6 +4353,11 @@ function SalesLeadsModule({ leads, setSalesLeads, projectItems, users, role, ses
               );
             })}
           </div>
+          {!visibleLeads.length ? (
+            <div className="empty">
+              В SmetaOffice сейчас нет квалифицированных лидов из Bitrix24. Холодные заявки остаются в Bitrix; сюда будут попадать только тёплые сделки, которые нужно довести до договора, аванса или проекта.
+            </div>
+          ) : null}
         </div>
 
         <aside className="office-card">
@@ -4382,7 +4401,7 @@ function SalesLeadsModule({ leads, setSalesLeads, projectItems, users, role, ses
               </div>
             </div>
           ) : (
-            <div className="empty">Для этой роли нет доступных лидов.</div>
+            <div className="empty">Лид не выбран. Включи “Смотреть всё” или дождись синхронизации Bitrix24, если в SmetaOffice пока нет рабочих лидов.</div>
           )}
         </aside>
       </section>
@@ -6344,7 +6363,7 @@ function SmetaOfficePrototype() {
   const [projectItems, setProjectItemsState] = useState(() => mergeDemoProductionProjects(readStoredValue("smeta.projects", [])));
   const [executors, setExecutorsState] = useState(() => readStoredValue("smeta.executors", []));
   const [users, setUsersState] = useState(() => sanitizeUsersForClient(readStoredValue("smeta.users", demoUsers)).map(normalizeUserRecord));
-  const [salesLeads, setSalesLeadsState] = useState(() => mergeSalesLeads(readStoredValue("smeta.salesLeads", seedSalesLeads)));
+  const [salesLeads, setSalesLeadsState] = useState(() => mergeSalesLeads(readStoredValue("smeta.salesLeads", [])));
   const [partners, setPartnersState] = useState(() => readStoredValue("smeta.partners", partnerSeed).map(normalizePartnerRecord));
   const [selectedId, setSelectedId] = useState(() => readStoredValue("smeta.selectedProjectId", ""));
   const [activeSection, setActiveSection] = useState("dashboard");
@@ -6450,7 +6469,6 @@ function SmetaOfficePrototype() {
         const nextSalesLeads = mergeSalesLeads(serverSalesLeads);
         setSalesLeadsState(nextSalesLeads);
         writeStoredValue("smeta.salesLeads", nextSalesLeads);
-        if (nextSalesLeads.length !== serverSalesLeads.length) apiPut("/sales-leads", nextSalesLeads);
       }
     }
     loadServerState();
