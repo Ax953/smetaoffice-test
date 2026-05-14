@@ -861,6 +861,28 @@ h3 { margin: 0; }
 .user-executor-cell input:not([type]) {
   min-width: 0;
 }
+.executor-admin-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+.executor-admin-grid label {
+  display: grid;
+  gap: 4px;
+  align-items: initial;
+  font-size: 12px;
+  font-weight: 800;
+}
+.executor-admin-grid label span {
+  margin: 0;
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 800;
+}
+.executor-admin-grid input,
+.executor-admin-grid select {
+  min-width: 0;
+}
 .admin-directory-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));

@@ -507,13 +507,16 @@ function normalizeUserRecord(user) {
   if (!user) return user;
   const executorSections = parseExecutorSections(user.executorSections || user.executorSectionsText);
   const executorEnabled = Boolean(user.executorEnabled || user.role === "executor" || user.executorId);
+  const executorRank = Number(user.executorRank) || (user.role === "executor" ? 2 : 1);
   return {
     ...user,
     direction: normalizeDirectionName(user.direction || "Все направления"),
     executorEnabled,
     executorSections: executorSections.length ? executorSections : guessExecutorSections(user),
-    executorRank: Number(user.executorRank) || (user.role === "executor" ? 2 : 1),
+    executorRank,
     executorStatus: user.executorStatus || (executorEnabled ? "Внутренний исполнитель" : "Не исполнитель"),
+    executorRating: clampPercent(user.executorRating || (executorEnabled ? 50 : 0)),
+    executorQualification: user.executorQualification || (executorEnabled ? rankName(executorRank) : ""),
   };
 }
 
@@ -968,6 +971,34 @@ const executorSections = [
   "ПОС/ППР/ПОД/ПЗ",
   "ГИП",
   "Сметы",
+];
+
+const executorRankOptions = [
+  { value: 1, label: "Ранг 1 — новичок" },
+  { value: 2, label: "Ранг 2 — простые задачи" },
+  { value: 3, label: "Ранг 3 — стандартные задачи" },
+  { value: 4, label: "Ранг 4 — сложные задачи" },
+  { value: 5, label: "Ранг 5 — эксперт" },
+];
+
+const executorStatusOptions = ["Не исполнитель", "Новый контакт", "На проверке", "Внутренний исполнитель", "Проверенный", "Сильный", "Эксперт", "Ограничен"];
+
+const executorQualificationOptions = [
+  "Архитектор",
+  "Ведущий архитектор",
+  "Дизайнер",
+  "Дизайнер-визуализатор",
+  "Визуализатор",
+  "Чертёжник",
+  "Конструктор",
+  "Инженер ОВиК",
+  "Инженер ВК",
+  "Инженер ЭОМ",
+  "Инженер СС",
+  "ГИП",
+  "Сметчик",
+  "Комплектатор",
+  "Универсальный исполнитель",
 ];
 
 const executorStats = [
@@ -2208,6 +2239,7 @@ function userToExecutorProfile(user) {
     rank,
     status: user.executorStatus || (user.role === "executor" ? "Внутренний исполнитель" : "Совмещает должность и выполнение"),
     rating: Number(user.executorRating) || 50,
+    qualification: user.executorQualification || rankName(rank),
     workload: Number(user.executorWorkload) || 0,
     onTime: Number(user.executorOnTime) || 0,
     firstAccept: Number(user.executorFirstAccept) || 0,
@@ -2217,7 +2249,7 @@ function userToExecutorProfile(user) {
       email: user.email || user.contacts?.email || "—",
       telegram: user.telegram || user.contacts?.telegram || "—",
     },
-    note: user.executorNote || `Пользователь системы может назначаться исполнителем. Основная должность: ${user.position || "не указана"}.`,
+    note: user.executorNote || `Пользователь системы может назначаться исполнителем. Основная должность: ${user.position || "не указана"}. Квалификация: ${user.executorQualification || rankName(rank)}.`,
     chat: Array.isArray(user.executorChat) ? user.executorChat : [],
   };
 }
@@ -3316,6 +3348,7 @@ function ExecutorDetails({ executor, canSeeContacts, onMessage, assignedTasks = 
         <Info label="Активных работ" value={activeProjects} />
         <Info label="Приёмка с первого раза" value={executor.firstAccept ? `${executor.firstAccept}%` : "нет истории"} />
         <Info label="Градация" value={rankName(executor.rank)} />
+        <Info label="Квалификация" value={executor.qualification || rankName(executor.rank)} />
       </div>
 
       <div className="executor-metrics">
@@ -5509,6 +5542,7 @@ function AdminModule({ users, setUsers, session, executors = [] }) {
     const nextDirection = directionChoices.includes(normalizedDirection) ? normalizedDirection : defaultScopedDirection;
     const executorEnabled = Boolean(userDraft.executorEnabled || nextRole === "executor");
     const executorSections = executorEnabled ? parseExecutorSections(userDraft.executorSections).length ? parseExecutorSections(userDraft.executorSections) : guessExecutorSections({ ...userDraft, role: nextRole, direction: nextDirection }) : [];
+    const executorRank = Number(userDraft.executorRank) || (nextRole === "executor" ? 2 : 1);
     return {
       ...userDraft,
       role: nextRole,
@@ -5517,8 +5551,10 @@ function AdminModule({ users, setUsers, session, executors = [] }) {
       direction: nextDirection,
       executorEnabled,
       executorSections,
-      executorRank: Number(userDraft.executorRank) || (nextRole === "executor" ? 2 : 1),
+      executorRank,
       executorStatus: executorEnabled ? userDraft.executorStatus || "Внутренний исполнитель" : "Не исполнитель",
+      executorRating: clampPercent(userDraft.executorRating || (executorEnabled ? 50 : 0)),
+      executorQualification: executorEnabled ? userDraft.executorQualification || rankName(executorRank) : "",
     };
   }
 
@@ -5625,6 +5661,12 @@ function AdminModule({ users, setUsers, session, executors = [] }) {
       regions: scopedForm.regions,
       direction: scopedForm.direction,
       position: newUserForm.position,
+      executorEnabled: scopedForm.executorEnabled,
+      executorSections: scopedForm.executorSections,
+      executorRank: scopedForm.executorRank,
+      executorStatus: scopedForm.executorStatus,
+      executorRating: scopedForm.executorRating,
+      executorQualification: scopedForm.executorQualification,
       createdAt: new Date().toISOString(),
       createdBy: session?.id || session?.login || "system",
     };
@@ -5684,6 +5726,9 @@ function AdminModule({ users, setUsers, session, executors = [] }) {
         <datalist id="position-options">
           {positionOptions.map((position) => <option key={position} value={position} />)}
         </datalist>
+        <datalist id="executor-qualification-options">
+          {executorQualificationOptions.map((qualification) => <option key={qualification} value={qualification} />)}
+        </datalist>
         {adminNotice ? <div className="login-notice admin-notice">{adminNotice}</div> : null}
       </section>
 
@@ -5702,6 +5747,7 @@ function AdminModule({ users, setUsers, session, executors = [] }) {
             const rowRoleChoices = canEdit ? roleChoices : roles;
             const rowRegionChoices = canEdit ? regionChoices : regionOptions;
             const rowDirectionChoices = canEdit ? directionChoices : allDirectionChoices;
+            const isExecutorEnabled = Boolean(user.executorEnabled || user.role === "executor");
             return (
             <div key={user.id}>
               <div>
@@ -5743,8 +5789,51 @@ function AdminModule({ users, setUsers, session, executors = [] }) {
                   value={parseExecutorSections(user.executorSections).join(", ")}
                   onChange={(event) => updateUser(user.id, { executorEnabled: true, executorSections: parseExecutorSections(event.target.value) })}
                   placeholder="Специализации: Дизайн, 3D, АР"
-                  disabled={!canEdit || !(user.executorEnabled || user.role === "executor")}
+                  disabled={!canEdit || !isExecutorEnabled}
                 />
+                <div className="executor-admin-grid">
+                  <label>
+                    <span>Уровень</span>
+                    <select
+                      value={Number(user.executorRank) || (user.role === "executor" ? 2 : 1)}
+                      onChange={(event) => updateUser(user.id, { executorEnabled: true, executorRank: Number(event.target.value) })}
+                      disabled={!canEdit || !isExecutorEnabled}
+                    >
+                      {executorRankOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+                    </select>
+                  </label>
+                  <label>
+                    <span>Рейтинг</span>
+                    <input
+                      type="number"
+                      min="0"
+                      max="100"
+                      value={clampPercent(user.executorRating || (isExecutorEnabled ? 50 : 0))}
+                      onChange={(event) => updateUser(user.id, { executorEnabled: true, executorRating: clampPercent(event.target.value) })}
+                      disabled={!canEdit || !isExecutorEnabled}
+                    />
+                  </label>
+                  <label>
+                    <span>Статус</span>
+                    <select
+                      value={user.executorStatus || (isExecutorEnabled ? "Внутренний исполнитель" : "Не исполнитель")}
+                      onChange={(event) => updateUser(user.id, { executorEnabled: true, executorStatus: event.target.value })}
+                      disabled={!canEdit || !isExecutorEnabled}
+                    >
+                      {executorStatusOptions.map((status) => <option key={status} value={status}>{status}</option>)}
+                    </select>
+                  </label>
+                  <label>
+                    <span>Квалификация</span>
+                    <input
+                      list="executor-qualification-options"
+                      value={user.executorQualification || ""}
+                      onChange={(event) => updateUser(user.id, { executorEnabled: true, executorQualification: event.target.value })}
+                      placeholder="Напр.: ведущий архитектор"
+                      disabled={!canEdit || !isExecutorEnabled}
+                    />
+                  </label>
+                </div>
               </div>
             </div>
             );
