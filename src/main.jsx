@@ -4017,7 +4017,7 @@ function SalesLeadsModule({ leads, setSalesLeads, projectItems, users, role, ses
   );
 }
 
-function LoginScreen({ users, onLogin, onRegister, allowDemoFallback = false }) {
+function LoginScreen({ users, onLogin, onRegister, allowDemoFallback = false, allowAccessRequests = false }) {
   const [login, setLogin] = useState("");
   const [password, setPassword] = useState("");
   const [mode, setMode] = useState("login");
@@ -4102,7 +4102,7 @@ function LoginScreen({ users, onLogin, onRegister, allowDemoFallback = false }) 
 
         <form onSubmit={mode === "login" ? submit : register} className="login-form">
           <h1>{mode === "login" ? "Авторизация" : "Заявка на доступ"}</h1>
-          <p>{mode === "login" ? "Вход только для активированных пользователей. Роль, регион и должность назначает админ." : "Пользователь сам не выбирает должность. Он оставляет заявку, админ распределяет его по структуре холдинга."}</p>
+          <p>{mode === "login" ? "Вход только по аккаунту, который выдал администратор SmetaOffice. Роль, регион, направление и доступы назначаются внутри админки." : "Пользователь сам не выбирает должность. Он оставляет заявку, админ распределяет его по структуре холдинга."}</p>
           {mode === "login" ? (
             <>
               <input value={login} onChange={(event) => setLogin(event.target.value)} placeholder="Логин" />
@@ -4123,9 +4123,11 @@ function LoginScreen({ users, onLogin, onRegister, allowDemoFallback = false }) 
           {error ? <span className="login-error">{error}</span> : null}
           {notice ? <span className="login-notice">{notice}</span> : null}
           <button type="submit" className="primary">{mode === "login" ? "Войти" : "Отправить заявку"}</button>
-          <button type="button" className="secondary" onClick={() => { setMode(mode === "login" ? "register" : "login"); setError(""); }}>
-            {mode === "login" ? "Подать заявку на доступ" : "Уже есть доступ"}
-          </button>
+          {allowAccessRequests ? (
+            <button type="button" className="secondary" onClick={() => { setMode(mode === "login" ? "register" : "login"); setError(""); }}>
+              {mode === "login" ? "Подать заявку на доступ" : "Уже есть доступ"}
+            </button>
+          ) : null}
         </form>
 
         {allowDemoFallback ? (
@@ -6412,6 +6414,7 @@ function SmetaOfficePrototype() {
         onLogin={login}
         onRegister={(user) => setUsers((items) => [user, ...items])}
         allowDemoFallback={import.meta.env.DEV}
+        allowAccessRequests={import.meta.env.DEV}
       />
     );
   }
