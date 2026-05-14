@@ -505,9 +505,15 @@ function normalizeDirectionName(direction) {
 
 function normalizeUserRecord(user) {
   if (!user) return user;
+  const executorSections = parseExecutorSections(user.executorSections || user.executorSectionsText);
+  const executorEnabled = Boolean(user.executorEnabled || user.role === "executor" || user.executorId);
   return {
     ...user,
     direction: normalizeDirectionName(user.direction || "Все направления"),
+    executorEnabled,
+    executorSections: executorSections.length ? executorSections : guessExecutorSections(user),
+    executorRank: Number(user.executorRank) || (user.role === "executor" ? 2 : 1),
+    executorStatus: user.executorStatus || (executorEnabled ? "Внутренний исполнитель" : "Не исполнитель"),
   };
 }
 
@@ -1362,6 +1368,8 @@ const defaultProjectForm = {
   stage: "Заявка / бриф",
   progress: 5,
   risk: "green",
+  startDate: "",
+  endDate: "",
   deadline: "",
   sourceComment: "",
   directorUserId: "",
@@ -1757,7 +1765,7 @@ function statusClass(status) {
 
 function executorStatusClass(status) {
   if (status === "Эксперт" || status === "Сильный") return "strong";
-  if (status === "Проверенный") return "verified";
+  if (status === "Проверенный" || status === "Внутренний исполнитель" || status === "Совмещает должность и выполнение") return "verified";
   if (status === "На проверке") return "review";
   if (status === "Новый контакт") return "new";
   return "limited";
@@ -1786,6 +1794,40 @@ function formatMoscowDateTime(date = new Date()) {
     hour: "2-digit",
     minute: "2-digit",
   }).format(date);
+}
+
+function parseDateValue(value) {
+  if (!value) return null;
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function formatProjectDate(value) {
+  const parsed = parseDateValue(value);
+  if (!parsed) return "не указана";
+  return new Intl.DateTimeFormat("ru-RU", { day: "2-digit", month: "short", year: "numeric" }).format(parsed);
+}
+
+function daysBetween(start, end) {
+  const startDate = parseDateValue(start);
+  const endDate = parseDateValue(end);
+  if (!startDate || !endDate) return null;
+  const diff = Math.ceil((endDate.setHours(0, 0, 0, 0) - startDate.setHours(0, 0, 0, 0)) / 86400000);
+  return Math.max(diff, 0);
+}
+
+function projectTimeline(project) {
+  const start = project.startDate || project.createdAt || "";
+  const end = project.endDate || "";
+  const elapsed = start ? daysBetween(start, new Date().toISOString()) : null;
+  const planned = start && end ? daysBetween(start, end) : null;
+  const left = end ? daysBetween(new Date().toISOString(), end) : null;
+  const endDate = parseDateValue(end);
+  const today = new Date();
+  if (endDate) endDate.setHours(0, 0, 0, 0);
+  today.setHours(0, 0, 0, 0);
+  const overdue = Boolean(endDate && endDate < today && project.status !== "Завершён");
+  return { start, end, elapsed, planned, left, overdue };
 }
 
 function toMoneyNumber(value) {
@@ -1843,7 +1885,8 @@ function validateProjectForm(form) {
     ["contractAmount", "Сумма договора"],
     ["directorUserId", "Руководитель направления"],
     ["pmUserId", "Руководитель проекта"],
-    ["deadline", "Контрольный срок"],
+    ["startDate", "Дата начала проекта"],
+    ["endDate", "Дата окончания проекта"],
     ["yandexFolder", "Главная папка Яндекс.Диска"],
   ];
   return required
@@ -2003,6 +2046,75 @@ function groupToSection(groupName) {
   return "Все";
 }
 
+function parseExecutorSections(value) {
+  if (Array.isArray(value)) return value.map((item) => String(item).trim()).filter(Boolean);
+  return String(value || "")
+    .split(/[;,]/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function guessExecutorSections(user) {
+  const text = `${user?.position || ""} ${user?.direction || ""} ${user?.role || ""}`.toLowerCase();
+  const sections = [];
+  if (text.includes("архитект")) sections.push("АР");
+  if (text.includes("дизайн")) sections.push("Дизайн");
+  if (text.includes("визуал")) sections.push("3D");
+  if (text.includes("черт")) sections.push("Рабочка");
+  if (text.includes("конструкт") || text.includes("кр")) sections.push("КР");
+  if (text.includes("ов") || text.includes("вентил")) sections.push("ОВиК");
+  if (text.includes("вк") || text.includes("водоснаб")) sections.push("ВК");
+  if (text.includes("эом") || text.includes("электр")) sections.push("ЭОМ");
+  if (text.includes("смет")) sections.push("Сметы");
+  if (text.includes("гип")) sections.push("ГИП");
+  return sections.length ? [...new Set(sections)] : ["Общие работы"];
+}
+
+function userToExecutorProfile(user) {
+  const sections = parseExecutorSections(user.executorSections).length ? parseExecutorSections(user.executorSections) : guessExecutorSections(user);
+  const rank = Number(user.executorRank) || (user.role === "executor" ? 2 : 1);
+  return {
+    id: user.executorId || user.id,
+    userId: user.id,
+    name: user.name,
+    type: user.role === "partner" ? "партнёр" : "пользователь SmetaOffice",
+    city: user.city || user.region || "не указан",
+    sections,
+    rank,
+    status: user.executorStatus || (user.role === "executor" ? "Внутренний исполнитель" : "Совмещает должность и выполнение"),
+    rating: Number(user.executorRating) || 50,
+    workload: Number(user.executorWorkload) || 0,
+    onTime: Number(user.executorOnTime) || 0,
+    firstAccept: Number(user.executorFirstAccept) || 0,
+    price: user.executorPrice || "не указан",
+    contacts: {
+      phone: user.phone || user.contacts?.phone || "—",
+      email: user.email || user.contacts?.email || "—",
+      telegram: user.telegram || user.contacts?.telegram || "—",
+    },
+    note: user.executorNote || `Пользователь системы может назначаться исполнителем. Основная должность: ${user.position || "не указана"}.`,
+    chat: Array.isArray(user.executorChat) ? user.executorChat : [],
+  };
+}
+
+function buildExecutorDirectory(executors = [], users = []) {
+  const manualExecutors = Array.isArray(executors) ? executors : [];
+  const userExecutors = users
+    .filter((user) => user?.status !== "blocked" && user?.status !== "disabled")
+    .filter((user) => user.executorEnabled || user.role === "executor" || user.executorId)
+    .map(userToExecutorProfile);
+  const map = new Map();
+  [...manualExecutors, ...userExecutors].forEach((executor) => {
+    if (!executor?.id) return;
+    const sections = parseExecutorSections(executor.sections);
+    map.set(executor.id, {
+      ...executor,
+      sections: sections.length ? sections : ["Общие работы"],
+    });
+  });
+  return [...map.values()];
+}
+
 function leadStageLabel(stage) {
   return salesStageLabels[stage] || stage || "без стадии";
 }
@@ -2103,6 +2215,7 @@ function StatCard({ item }) {
 
 function ProjectCard({ project, active, onClick }) {
   const economy = projectEconomy(project);
+  const timeline = projectTimeline(project);
 
   return (
     <button type="button" onClick={onClick} className={cn("project-card", active && "active")}>
@@ -2129,6 +2242,7 @@ function ProjectCard({ project, active, onClick }) {
       <div className="project-meta">
         <span>РП: {project.manager}</span>
         <span>Срок: {project.deadline}</span>
+        <span>Идёт: {timeline.elapsed == null ? "не указано" : `${timeline.elapsed} дн.`}</span>
       </div>
       <div className="card-money-row">
         <span>Договор: <b>{money(economy.contractAmount)}</b></span>
@@ -2493,6 +2607,8 @@ function ProjectEditPanel({ project, users, canEdit, onUpdateProject }) {
     stage: project.stage || "",
     progress: Number(project.progress) || 0,
     risk: project.risk || "green",
+    startDate: project.startDate || "",
+    endDate: project.endDate || "",
     deadline: project.deadline || "",
     yandexFolder: project.yandexFolder === "не привязан" ? "" : project.yandexFolder || "",
     contractAmount: Number(project.contractAmount) || 0,
@@ -2517,6 +2633,8 @@ function ProjectEditPanel({ project, users, canEdit, onUpdateProject }) {
       stage: project.stage || "",
       progress: Number(project.progress) || 0,
       risk: project.risk || "green",
+      startDate: project.startDate || "",
+      endDate: project.endDate || "",
       deadline: project.deadline || "",
       yandexFolder: project.yandexFolder === "не привязан" ? "" : project.yandexFolder || "",
       contractAmount: Number(project.contractAmount) || 0,
@@ -2582,6 +2700,8 @@ function ProjectEditPanel({ project, users, canEdit, onUpdateProject }) {
         <label><span>Текущий этап</span><select value={form.stage} onChange={(event) => update({ stage: event.target.value })}>{projectStages.map((stage) => <option key={stage}>{stage}</option>)}</select></label>
         <label><span>Готовность, %</span><input type="number" value={form.progress} onChange={(event) => update({ progress: event.target.value })} /></label>
         <label><span>Светофор</span><select value={form.risk} onChange={(event) => update({ risk: event.target.value })}><option value="green">В норме</option><option value="yellow">Есть риск</option><option value="red">Красная зона</option></select></label>
+        <label><span>Дата начала</span><input type="date" value={form.startDate} onChange={(event) => update({ startDate: event.target.value })} /></label>
+        <label><span>Дата окончания</span><input type="date" value={form.endDate} onChange={(event) => update({ endDate: event.target.value })} /></label>
         <label><span>Контрольный срок</span><input value={form.deadline} onChange={(event) => update({ deadline: event.target.value })} /></label>
         <label><span>Руководитель проекта</span><select value={form.pmUserId} onChange={(event) => update({ pmUserId: event.target.value })}><option value="">Не назначен</option>{projectLeads.map((user) => <option key={user.id} value={user.id}>{user.name} · {user.position}</option>)}</select></label>
         <label><span>Менеджер проекта</span><select value={form.projectManagerId} onChange={(event) => update({ projectManagerId: event.target.value })}><option value="">Не назначен</option>{projectLeads.map((user) => <option key={user.id} value={user.id}>{user.name} · {user.position}</option>)}</select></label>
@@ -2662,6 +2782,7 @@ function ProjectDetails({ project, role, onUpdateProject, onTaskStatusChange, on
   const canSeeClient = roleCan(role, "viewClient") || roleCan(role, "manageProjects") || canSeeMoney;
   const canAdminProject = ["owner", "admin"].includes(role);
   const economy = projectEconomy(project);
+  const timeline = projectTimeline(project);
 
   return (
     <div className="details-stack">
@@ -2680,7 +2801,7 @@ function ProjectDetails({ project, role, onUpdateProject, onTaskStatusChange, on
           <div className="stage-card">
             <span>Текущий этап</span>
             <b>{project.stage}</b>
-            <small>Срок: {project.deadline}</small>
+            <small>{timeline.overdue ? "Срок просрочен" : `Срок: ${project.deadline || formatProjectDate(timeline.end)}`}</small>
           </div>
         </div>
 
@@ -2689,6 +2810,10 @@ function ProjectDetails({ project, role, onUpdateProject, onTaskStatusChange, on
           <Info label="РП" value={project.manager} />
           <Info label="Исполнитель" value={project.executor} />
           <Info label="Партнёр" value={project.partner} />
+          <Info label="Дата начала" value={formatProjectDate(timeline.start)} />
+          <Info label="Дата окончания" value={formatProjectDate(timeline.end)} />
+          <Info label="Идёт в работе" value={timeline.elapsed == null ? "дата начала не указана" : `${timeline.elapsed} дн.`} />
+          <Info label="Плановый срок" value={timeline.planned == null ? "не рассчитан" : `${timeline.planned} дн.`} />
           <Info label="Адрес" value={[project.country, project.region, project.city, project.address].filter(Boolean).join(", ")} />
           <Info label="Яндекс.Диск" value={<ExternalLinkValue url={project.yandexFolder} />} />
         </div>
@@ -3132,7 +3257,7 @@ function ExecutorDetails({ executor, canSeeContacts, onMessage, assignedTasks = 
 function ExecutorsModule({ role, executors, setExecutors, allTasks = [] }) {
   const [section, setSection] = useState("Все");
   const [query, setQuery] = useState("");
-  const [selectedId, setSelectedId] = useState(executorProfiles[0].id);
+  const [selectedId, setSelectedId] = useState("");
   const [customGroups, setCustomGroups] = useState(() => readStoredValue("smeta.executorSpecializationGroups", []));
   const [newSpecialization, setNewSpecialization] = useState("");
   const [form, setForm] = useState({
@@ -3149,7 +3274,14 @@ function ExecutorsModule({ role, executors, setExecutors, allTasks = [] }) {
   });
   const canSeeContacts = roleCan(role, "viewExecutorContacts");
   const canManageExecutors = roleCan(role, "manageExecutors");
-  const visibleExecutorGroups = [...executorGroups, ...customGroups];
+  const visibleExecutorGroups = [...executorGroups, ...customGroups].map((group) => {
+    const groupSection = group.section || groupToSection(group.name);
+    return {
+      ...group,
+      count: executors.filter((executor) => parseExecutorSections(executor.sections).includes(groupSection)).length,
+      source: "База исполнителей SmetaOffice",
+    };
+  });
   const sectionOptions = ["Все", ...new Set([...executorSections.filter((item) => item !== "Все"), ...customGroups.map((group) => group.section || group.name)])];
   const liveExecutorStats = useMemo(() => {
     const verified = executors.filter((executor) => ["Проверенный", "Сильный", "Эксперт"].includes(executor.status)).length;
@@ -3336,7 +3468,7 @@ function ExecutorsModule({ role, executors, setExecutors, allTasks = [] }) {
       <section className="office-card executor-process-card">
         <div className="section-row">
           <div>
-          <h3>Логика допуска исполнителей</h3>
+            <h3>Логика допуска исполнителей</h3>
             <p className="section-hint">Исполнитель не просто контакт. У него есть специализация, ранг, загрузка, история качества, доступ к задачам и внутренняя коммуникация.</p>
           </div>
         </div>
@@ -3405,8 +3537,8 @@ function ExecutorsModule({ role, executors, setExecutors, allTasks = [] }) {
       <section className="workspace-card">
         <div className="workspace-head">
           <div>
-            <h2>Карточки исполнителей</h2>
-            <p>Нажимай на специализацию выше или на карточку исполнителя: внутри рейтинг, ранг, загрузка, история и закрытые контактные данные.</p>
+            <h2>Исполнители выбранной специализации</h2>
+            <p>Карточки появляются только из реальной базы исполнителей или из пользователей, которым в админке включили возможность быть исполнителем.</p>
           </div>
           <div className="filters">
             <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Поиск исполнителя" />
@@ -4297,7 +4429,9 @@ function ProjectCreationWizard({ projectForm, setProjectForm, users, onCreatePro
           <label><span>Источник</span><select value={projectForm.creationMode} onChange={(event) => update({ creationMode: event.target.value })}>{projectCreationModes.map((mode) => <option key={mode.id} value={mode.id}>{mode.label}</option>)}</select></label>
           <label><span>Название проекта</span><input className={!projectForm.title.trim() ? "invalid" : ""} value={projectForm.title} onChange={(event) => update({ title: event.target.value })} placeholder="Например: ПД школы после обследования" /></label>
           <label><span>Клиент</span><input className={!projectForm.client.trim() ? "invalid" : ""} value={projectForm.client} onChange={(event) => update({ client: event.target.value })} placeholder="ФИО или компания" /></label>
-          <label><span>Контрольный срок</span><input className={!projectForm.deadline.trim() ? "invalid" : ""} value={projectForm.deadline} onChange={(event) => update({ deadline: event.target.value })} placeholder="Например: 30 июня" /></label>
+          <label><span>Дата начала</span><input className={!projectForm.startDate ? "invalid" : ""} type="date" value={projectForm.startDate} onChange={(event) => update({ startDate: event.target.value })} /></label>
+          <label><span>Дата окончания</span><input className={!projectForm.endDate ? "invalid" : ""} type="date" value={projectForm.endDate} onChange={(event) => update({ endDate: event.target.value, deadline: projectForm.deadline || formatProjectDate(event.target.value) })} /></label>
+          <label><span>Контрольный срок / текст</span><input value={projectForm.deadline} onChange={(event) => update({ deadline: event.target.value })} placeholder="Например: 30 июня или этапная сдача" /></label>
           <label><span>Текущий статус</span><select value={projectForm.status} onChange={(event) => update({ status: event.target.value })}>{["Новая", "В работе", "На проверке", "Ожидает клиента", "Ожидает оплаты", "Красная зона", "Завершён"].map((status) => <option key={status}>{status}</option>)}</select></label>
           <label><span>Текущий этап</span><select value={projectForm.stage} onChange={(event) => update({ stage: event.target.value })}>{stages.map((stage) => {
             const item = typeof stage === "string" ? { name: stage } : stage;
@@ -5133,12 +5267,18 @@ function AdminModule({ users, setUsers, session }) {
     const nextRegion = regionChoices.includes(normalizedRegion) ? normalizedRegion : defaultScopedRegion;
     const normalizedDirection = normalizeDirectionName(userDraft.direction || defaultScopedDirection);
     const nextDirection = directionChoices.includes(normalizedDirection) ? normalizedDirection : defaultScopedDirection;
+    const executorEnabled = Boolean(userDraft.executorEnabled || nextRole === "executor");
+    const executorSections = executorEnabled ? parseExecutorSections(userDraft.executorSections).length ? parseExecutorSections(userDraft.executorSections) : guessExecutorSections({ ...userDraft, role: nextRole, direction: nextDirection }) : [];
     return {
       ...userDraft,
       role: nextRole,
       region: nextRegion,
       regions: nextRegion === "Все регионы" ? ["Все регионы"] : [nextRegion],
       direction: nextDirection,
+      executorEnabled,
+      executorSections,
+      executorRank: Number(userDraft.executorRank) || (nextRole === "executor" ? 2 : 1),
+      executorStatus: executorEnabled ? userDraft.executorStatus || "Внутренний исполнитель" : "Не исполнитель",
     };
   }
 
@@ -5322,6 +5462,23 @@ function AdminModule({ users, setUsers, session }) {
                 ))}
               </select>
               <input list="position-options" value={user.position || ""} onChange={(event) => updateUser(user.id, { position: event.target.value })} placeholder="Должность" disabled={!canEdit} />
+              <div className="user-executor-cell">
+                <label>
+                  <input
+                    type="checkbox"
+                    checked={Boolean(user.executorEnabled || user.role === "executor")}
+                    onChange={(event) => updateUser(user.id, { executorEnabled: event.target.checked })}
+                    disabled={!canEdit}
+                  />
+                  Может быть исполнителем
+                </label>
+                <input
+                  value={parseExecutorSections(user.executorSections).join(", ")}
+                  onChange={(event) => updateUser(user.id, { executorEnabled: true, executorSections: parseExecutorSections(event.target.value) })}
+                  placeholder="Специализации: Дизайн, 3D, АР"
+                  disabled={!canEdit || !(user.executorEnabled || user.role === "executor")}
+                />
+              </div>
             </div>
             );
           })}
@@ -5987,7 +6144,7 @@ function SmetaOfficePrototype() {
   const [query, setQuery] = useState("");
   const [direction, setDirection] = useState("Все");
   const [projectItems, setProjectItemsState] = useState(() => mergeDemoProductionProjects(readStoredValue("smeta.projects", [])));
-  const [executors, setExecutorsState] = useState(() => readStoredValue("smeta.executors", executorProfiles));
+  const [executors, setExecutorsState] = useState(() => readStoredValue("smeta.executors", []));
   const [users, setUsersState] = useState(() => sanitizeUsersForClient(readStoredValue("smeta.users", demoUsers)).map(normalizeUserRecord));
   const [salesLeads, setSalesLeadsState] = useState(() => mergeSalesLeads(readStoredValue("smeta.salesLeads", seedSalesLeads)));
   const [partners, setPartnersState] = useState(() => readStoredValue("smeta.partners", partnerSeed).map(normalizePartnerRecord));
@@ -6000,6 +6157,7 @@ function SmetaOfficePrototype() {
   const [systemHealth, setSystemHealth] = useState(null);
 
   const currentRole = roles.find((item) => item.id === role) ?? roles[0];
+  const executorDirectory = useMemo(() => buildExecutorDirectory(executors, users), [executors, users]);
   const allTasks = useMemo(() => flattenTasks(projectItems), [projectItems]);
   const moscowDateTime = useMemo(
     () =>
@@ -6074,7 +6232,7 @@ function SmetaOfficePrototype() {
         writeStoredValue("smeta.projects", mergedProjects);
         if (JSON.stringify(mergedProjects) !== JSON.stringify(serverProjects)) apiPut("/projects", mergedProjects);
       }
-      if (Array.isArray(serverExecutors) && serverExecutors.length) {
+      if (Array.isArray(serverExecutors)) {
         setExecutorsState(serverExecutors);
         writeStoredValue("smeta.executors", serverExecutors);
       }
@@ -6270,7 +6428,7 @@ function SmetaOfficePrototype() {
       };
     });
     const status = projectForm.status || "Новая";
-    const deadline = projectForm.deadline.trim() || "не указан";
+    const deadline = projectForm.deadline.trim() || formatProjectDate(projectForm.endDate);
     const source = projectSourceLabel(projectForm.creationMode);
     const directorName = userNameById(users, projectForm.directorUserId, "Руководитель не назначен");
     const pmName = userNameById(users, projectForm.pmUserId, "РП не назначен");
@@ -6285,6 +6443,8 @@ function SmetaOfficePrototype() {
       city: projectForm.city.trim() || "не указан",
       address: projectForm.address.trim(),
       region: projectForm.region,
+      startDate: projectForm.startDate,
+      endDate: projectForm.endDate,
       responsibleRegion: projectForm.region,
       objectRegion: projectForm.region,
       objectCity: projectForm.city.trim() || "не указан",
@@ -6726,7 +6886,7 @@ function SmetaOfficePrototype() {
         <div className="office-content">
           {role === "executor" ? <ExecutorPersonalAccount allTasks={allTasks} session={session} activeSection={activeSection} /> : null}
 
-          {role !== "executor" && activeSection === "executors" ? <ExecutorsModule role={role} executors={executors} setExecutors={setExecutors} allTasks={visibleTasks} /> : null}
+          {role !== "executor" && activeSection === "executors" ? <ExecutorsModule role={role} executors={executorDirectory} setExecutors={setExecutors} allTasks={visibleTasks} /> : null}
 
           {role !== "executor" && activeSection === "integrations" ? <IntegrationsModule /> : null}
 
@@ -6777,7 +6937,7 @@ function SmetaOfficePrototype() {
               setTaskForm={setTaskForm}
               onCreateTask={createTask}
               onTaskStatusChange={changeTaskStatus}
-              executors={executors}
+              executors={executorDirectory}
               users={users}
               projectFormErrors={validateProjectForm(projectForm)}
             />
@@ -6797,7 +6957,7 @@ function SmetaOfficePrototype() {
               taskForm={taskForm}
               setTaskForm={setTaskForm}
               onCreateTask={createTask}
-              executors={executors}
+              executors={executorDirectory}
               users={users}
               onUpdateSection={updateProjectSection}
               onAddSection={addProjectSection}
@@ -6806,7 +6966,7 @@ function SmetaOfficePrototype() {
             />
           ) : null}
 
-          {role !== "executor" && activeSection === "tasks" ? <TasksModule allTasks={visibleTasks} onTaskStatusChange={changeTaskStatus} executors={executors} onGoSection={setActiveSection} /> : null}
+          {role !== "executor" && activeSection === "tasks" ? <TasksModule allTasks={visibleTasks} onTaskStatusChange={changeTaskStatus} executors={executorDirectory} onGoSection={setActiveSection} /> : null}
           {role !== "executor" && activeSection === "partners" ? <PartnersModule role={role} session={effectiveAccessUser} partnerItems={partners} visiblePartnerItems={visiblePartners} setPartnerItems={setPartners} /> : null}
           {role !== "executor" && activeSection === "admin" ? <AdminModule users={users} setUsers={setUsers} session={session} /> : null}
           {role !== "executor" && activeSection === "analytics" ? <AnalyticsModule projectItems={visibleProjects} allTasks={visibleTasks} role={role} /> : null}
