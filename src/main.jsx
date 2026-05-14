@@ -4567,7 +4567,7 @@ function LoginScreen({ users, onLogin, onRegister, allowDemoFallback = false, al
       <section className="login-card">
         <div className="office-logo login-logo">
           <div className="logo-image-wrap">
-            <img src="/smeta-emblem.png" alt="SMETA" />
+            <img src="/smeta-office-mark.png" alt="SmetaGroup" />
           </div>
           <span>
             <b>SmetaOffice</b>
@@ -7226,7 +7226,7 @@ function SmetaOfficePrototype() {
       <aside className="office-sidebar">
         <div className="office-logo">
           <div className="logo-image-wrap">
-            <img src="/smeta-emblem.png" alt="SMETA" />
+            <img src="/smeta-office-mark.png" alt="SmetaGroup" />
           </div>
           <span>
             <b>SmetaOffice</b>

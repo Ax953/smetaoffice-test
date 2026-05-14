@@ -33,12 +33,18 @@ input.invalid, select.invalid {
   background: #020617;
   color: white;
 }
-.office-logo { display: flex; align-items: center; gap: 12px; }
+.office-logo {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 64px;
+}
 .logo-image-wrap {
   display: grid;
   place-items: center;
-  width: 58px;
-  height: 58px;
+  flex: 0 0 auto;
+  width: 60px;
+  height: 60px;
   overflow: hidden;
   border: 1px solid rgba(255,255,255,.14);
   border-radius: 18px;
@@ -47,9 +53,10 @@ input.invalid, select.invalid {
 }
 .logo-image-wrap img {
   display: block;
-  width: 50px;
-  height: 50px;
+  width: 46px;
+  height: 46px;
   object-fit: contain;
+  object-position: center;
 }
 .office-logo b, .office-logo small { display: block; }
 .office-logo b { font-size: 19px; }
