@@ -226,8 +226,8 @@ const seedProjects = [
     client: "Хамидова Л.",
     city: "Москва",
     region: "Москва",
-    projectType: "Недвижимость",
-    direction: "Недвижимость",
+    projectType: "Подбор объекта",
+    direction: "Единый центр продаж",
     manager: "Анна",
     executor: "Агентство-партнёр",
     partner: "CityRealty",
@@ -400,8 +400,10 @@ function mergeDemoProductionProjects(projects) {
 }
 
 function normalizeProjectAccess(project) {
-  const isProjectInstitute = project.direction === "Проектный институт";
-  const isDesign = project.direction === "Дизайн / интерьер" || project.direction === "Бюро архитектуры и дизайна";
+  const normalizedDirection = normalizeDirectionName(project.direction);
+  const normalizedProject = { ...project, direction: normalizedDirection };
+  const isProjectInstitute = normalizedDirection === "Проектный институт";
+  const isDesign = project.direction === "Дизайн / интерьер" || normalizedDirection === "Бюро архитектуры и дизайна";
   const isRostov = project.region === "Ростов";
   const isDnr = project.region === "ДНР";
   const isSmetaGoLead = project.source === "SmetaGo";
@@ -417,7 +419,7 @@ function normalizeProjectAccess(project) {
   };
 
   return {
-    ...project,
+    ...normalizedProject,
     directorUserId: project.directorUserId || defaultsById[project.id]?.directorUserId || (isProjectInstitute ? "USR-004" : ""),
     regionalManagerId: project.regionalManagerId || defaultsById[project.id]?.regionalManagerId || (isRostov ? "USR-005" : ""),
     pmUserId: project.pmUserId || defaultsById[project.id]?.pmUserId || (isDnr || isProjectInstitute ? "USR-006" : ""),
@@ -452,7 +454,7 @@ const partnerRelationOptions = [
 
 const partnerSeed = [
   { id: "P-001", name: "BuildPro Ростов", category: "Строительная компания / ремонт", region: "Ростовская область", direction: "Строительство и ремонт", rating: 91, active: 4, overdue: 0, level: "Проверенный", status: "Активен", accrued: 420000, paid: 280000, relation: "Партнёр выполняет наши заявки", commissionRule: "Процент по договорённости", serviceDescription: "Ремонт и строительная реализация", contact: "контакт скрыт в демо" },
-  { id: "P-002", name: "CityRealty", category: "Агентство недвижимости / риелтор", region: "Ростовская область", direction: "Агентство недвижимости", rating: 78, active: 2, overdue: 1, level: "Надёжный", status: "Активен", accrued: 36000, paid: 0, relation: "Партнёр приводит нам клиентов", commissionRule: "Партнёрское вознаграждение за клиента", serviceDescription: "Подбор и сопровождение недвижимости", contact: "контакт скрыт в демо" },
+  { id: "P-002", name: "CityRealty", category: "Агентство недвижимости / риелтор", region: "Ростовская область", direction: "Единый центр продаж", rating: 78, active: 2, overdue: 1, level: "Надёжный", status: "Активен", accrued: 36000, paid: 0, relation: "Партнёр приводит нам клиентов", commissionRule: "Партнёрское вознаграждение за клиента", serviceDescription: "Подбор и сопровождение недвижимости", contact: "контакт скрыт в демо" },
   { id: "P-003", name: "Геология-Партнёр", category: "Изыскания / геодезия / обследования", region: "ДНР", direction: "Изыскания / обследования / обмеры", rating: 64, active: 1, overdue: 1, level: "Базовый", status: "Проверка", accrued: 120000, paid: 60000, relation: "Партнёр выполняет наши заявки", commissionRule: "Смета по работам", serviceDescription: "Геология, геодезия, обследования", contact: "контакт скрыт в демо" },
   { id: "P-004", name: "CleanHome", category: "Бытовой сервис", region: "Чеченская Республика", direction: "Бытовые услуги / сервис", rating: 88, active: 0, overdue: 0, level: "Надёжный", status: "Резерв", accrued: 0, paid: 0, relation: "Мы передаём клиента партнёру", commissionRule: "Комиссия за переданную услугу", serviceDescription: "Клининг и сервис после ремонта", contact: "контакт скрыт в демо" },
 ];
@@ -477,7 +479,35 @@ const menuItems = [
   { id: "admin", label: "Админка" },
   { id: "client", label: "Клиентское приложение" },
 ];
-const directionOptions = ["Все", "Проектный институт", "Бюро архитектуры и дизайна", "Строительство и ремонт", "Агентство недвижимости", "Изыскания / обследования / обмеры", "Комплектация", "Бытовые услуги / сервис", "Продажи", "Обучение"];
+const directionOptions = ["Все", "Проектный институт", "Бюро архитектуры и дизайна", "Строительство и ремонт", "Единый центр продаж", "Изыскания / обследования / обмеры", "Комплектация", "Бытовые услуги / сервис", "Обучение"];
+
+const directionAliases = {
+  "Агентство недвижимости": "Единый центр продаж",
+  "Недвижимость": "Единый центр продаж",
+  "Продажи": "Единый центр продаж",
+};
+
+function normalizeDirectionName(direction) {
+  const value = String(direction || "").trim();
+  if (!value) return "Без направления";
+  return directionAliases[value] || value;
+}
+
+function normalizeUserRecord(user) {
+  if (!user) return user;
+  return {
+    ...user,
+    direction: normalizeDirectionName(user.direction || "Все направления"),
+  };
+}
+
+function normalizePartnerRecord(partner) {
+  if (!partner) return partner;
+  return {
+    ...partner,
+    direction: normalizeDirectionName(partner.direction || "Единый центр продаж"),
+  };
+}
 
 const salesSources = {
   smetago_app: "SmetaGO приложение",
@@ -828,10 +858,10 @@ const regionalDirections = [
   },
   {
     id: "sales",
-    title: "Агентство недвижимости",
+    title: "Единый центр продаж",
     manager: "Руководитель продаж региона",
-    hint: "Покупка, продажа, аренда, подбор объектов и передача клиента в дизайн / ремонт.",
-    projectDirection: "Агентство недвижимости",
+    hint: "Продажи всей линейки SmetaGroup: недвижимость, проектирование, дизайн, ремонт, комплектация, сервис и партнёрские заявки.",
+    projectDirection: "Единый центр продаж",
     headcount: 0,
     payrollMonthly: 0,
     rentMonthly: 0,
@@ -840,7 +870,7 @@ const regionalDirections = [
     risk: "green",
     match: (project) => {
       const text = `${project.direction || ""} ${project.projectType || ""} ${project.source || ""}`.toLowerCase();
-      return text.includes("недвиж") || text.includes("продаж") || text.includes("smetago");
+      return text.includes("единый центр продаж") || text.includes("недвиж") || text.includes("продаж") || text.includes("smetago");
     },
   },
   {
@@ -1156,10 +1186,10 @@ const projectDirectionCatalog = {
     roles: ["Управляющий реализацией", "Прораб", "РП", "Подрядчик", "Снабжение", "Финансы"],
     projectTypes: ["Ремонт квартиры", "Ремонт коммерческого помещения", "Строительство частного дома", "Реконструкция", "Отделочные работы", "Инженерные работы", "Черновые работы", "Чистовые работы", "Гарантийные работы"],
   },
-  "Агентство недвижимости": {
-    hint: "Покупка, продажа, аренда, подбор и сопровождение сделки.",
-    financeModel: "Основные деньги: комиссия, оплачено, партнёрская доля, передача в дизайн/ремонт.",
-    roles: ["РОП", "Hunter", "Farmer", "Партнёр-риелтор", "Юрист"],
+  "Единый центр продаж": {
+    hint: "Продажи всей линейки SmetaGroup: недвижимость, изыскания, проектирование, дизайн, ремонт, комплектация, сервис и партнёрские заявки.",
+    financeModel: "Основные деньги: комиссия продаж, оплачено клиентом, партнёрская доля и передача проекта в нужное производственное направление.",
+    roles: ["РОП", "Hunter", "Farmer", "Менеджер продаж", "Партнёр", "Юрист"],
     projectTypes: ["Покупка квартиры", "Продажа квартиры", "Аренда", "Подбор объекта", "Коммерческая недвижимость", "Сопровождение сделки"],
   },
   "Изыскания / обследования / обмеры": {
@@ -1540,7 +1570,7 @@ function canAccessPartner(user, partner, viewRole = user?.role) {
     return partner.direction === user.direction || user.direction === "Все направления";
   }
   if (role === "head_of_sales" || role === "sales_manager") {
-    return partner.direction === "Агентство недвижимости" || partner.direction === "Продажи" || partner.relation === "Партнёр приводит нам клиентов";
+    return partner.direction === "Единый центр продаж" || partner.relation === "Партнёр приводит нам клиентов";
   }
   return false;
 }
@@ -1993,7 +2023,7 @@ function leadCanAccess(user, lead, viewRole = user?.role) {
   if (role === "partner") return lead.partnerId === user.id || lead.farmerId === user.id;
   if (role === "sales_manager") return lead.hunterId === user.id || lead.farmerId === user.id;
   if (role === "project_manager" || role === "pm") return lead.farmerId === user.id || lead.projectId;
-  if (role === "director") return user.direction === "Все направления" || salesDirections[lead.direction]?.includes(user.direction) || lead.region === user.region;
+  if (role === "director") return user.direction === "Все направления" || user.direction === "Единый центр продаж" || salesDirections[lead.direction]?.includes(user.direction) || lead.region === user.region;
   if (role === "regional_manager") return userRegionList(user).includes(lead.region) || userRegionList(user).includes("Все регионы");
   return false;
 }
@@ -4959,7 +4989,7 @@ function PartnersModule({ role, session, partnerItems, visiblePartnerItems, setP
     name: "",
     category: partnerCategoryOptions[0],
     region: "Чеченская Республика",
-    direction: "Агентство недвижимости",
+    direction: "Единый центр продаж",
     contact: "",
     relation: partnerRelationOptions[0],
     serviceDescription: "",
@@ -5001,7 +5031,7 @@ function PartnersModule({ role, session, partnerItems, visiblePartnerItems, setP
       paid: 0,
     };
     updatePartners([created, ...partnerItems]);
-    setPartnerForm({ name: "", category: partnerCategoryOptions[0], region: "Чеченская Республика", direction: "Агентство недвижимости", contact: "", relation: partnerRelationOptions[0], serviceDescription: "", commissionRule: "" });
+    setPartnerForm({ name: "", category: partnerCategoryOptions[0], region: "Чеченская Республика", direction: "Единый центр продаж", contact: "", relation: partnerRelationOptions[0], serviceDescription: "", commissionRule: "" });
     showAction("Партнёр добавлен в базу SmetaOffice");
   }
 
@@ -5855,9 +5885,9 @@ function SmetaOfficePrototype() {
   const [direction, setDirection] = useState("Все");
   const [projectItems, setProjectItemsState] = useState(() => mergeDemoProductionProjects(readStoredValue("smeta.projects", [])));
   const [executors, setExecutorsState] = useState(() => readStoredValue("smeta.executors", executorProfiles));
-  const [users, setUsersState] = useState(() => readStoredValue("smeta.users", demoUsers));
+  const [users, setUsersState] = useState(() => sanitizeUsersForClient(readStoredValue("smeta.users", demoUsers)).map(normalizeUserRecord));
   const [salesLeads, setSalesLeadsState] = useState(() => mergeSalesLeads(readStoredValue("smeta.salesLeads", seedSalesLeads)));
-  const [partners, setPartnersState] = useState(() => readStoredValue("smeta.partners", partnerSeed));
+  const [partners, setPartnersState] = useState(() => readStoredValue("smeta.partners", partnerSeed).map(normalizePartnerRecord));
   const [selectedId, setSelectedId] = useState(() => readStoredValue("smeta.selectedProjectId", ""));
   const [activeSection, setActiveSection] = useState("dashboard");
   const [projectForm, setProjectForm] = useState(defaultProjectForm);
@@ -5939,21 +5969,23 @@ function SmetaOfficePrototype() {
         const mergedProjects = mergeDemoProductionProjects(serverProjects);
         setProjectItemsState(mergedProjects);
         writeStoredValue("smeta.projects", mergedProjects);
-        if (mergedProjects.length !== serverProjects.length) apiPut("/projects", mergedProjects);
+        if (JSON.stringify(mergedProjects) !== JSON.stringify(serverProjects)) apiPut("/projects", mergedProjects);
       }
       if (Array.isArray(serverExecutors) && serverExecutors.length) {
         setExecutorsState(serverExecutors);
         writeStoredValue("smeta.executors", serverExecutors);
       }
       if (Array.isArray(serverUsers) && serverUsers.length) {
-        setUsersState(serverUsers);
-        writeStoredValue("smeta.users", serverUsers);
+        const nextUsers = sanitizeUsersForClient(serverUsers).map(normalizeUserRecord);
+        setUsersState(nextUsers);
+        writeStoredValue("smeta.users", nextUsers);
+        if (JSON.stringify(nextUsers) !== JSON.stringify(serverUsers)) apiPut("/users", nextUsers);
       }
       if (Array.isArray(serverPartners)) {
-        const nextPartners = serverPartners.length ? serverPartners : partnerSeed;
+        const nextPartners = (serverPartners.length ? serverPartners : partnerSeed).map(normalizePartnerRecord);
         setPartnersState(nextPartners);
         writeStoredValue("smeta.partners", nextPartners);
-        if (!serverPartners.length) apiPut("/partners", nextPartners);
+        if (JSON.stringify(nextPartners) !== JSON.stringify(serverPartners)) apiPut("/partners", nextPartners);
       }
       if (Array.isArray(serverSalesLeads)) {
         const nextSalesLeads = mergeSalesLeads(serverSalesLeads);
@@ -6005,7 +6037,7 @@ function SmetaOfficePrototype() {
   function setUsers(updater) {
     setUsersState((current) => {
       const next = typeof updater === "function" ? updater(current) : updater;
-      const safeNext = sanitizeUsersForClient(next);
+      const safeNext = sanitizeUsersForClient(next).map(normalizeUserRecord);
       writeStoredValue("smeta.users", safeNext);
       apiPut("/users", next);
       return safeNext;
@@ -6023,7 +6055,7 @@ function SmetaOfficePrototype() {
 
   function setPartners(updater) {
     setPartnersState((current) => {
-      const next = typeof updater === "function" ? updater(current) : updater;
+      const next = (typeof updater === "function" ? updater(current) : updater).map(normalizePartnerRecord);
       writeStoredValue("smeta.partners", next);
       apiPut("/partners", next);
       return next;
