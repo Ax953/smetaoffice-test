@@ -3434,12 +3434,13 @@ function ExecutorsModule({ role, executors, setExecutors, allTasks = [] }) {
   });
   const canSeeContacts = roleCan(role, "viewExecutorContacts");
   const canManageExecutors = roleCan(role, "manageExecutors");
+  const customGroupKeys = new Set(customGroups.map((group) => group.section || group.name));
   const visibleExecutorGroups = [...executorGroups, ...customGroups].map((group) => {
     const groupSection = group.section || groupToSection(group.name);
     return {
       ...group,
       count: executors.filter((executor) => executorHasSection(executor, groupSection)).length,
-      source: "База исполнителей SmetaOffice",
+      source: group.source || "База исполнителей SmetaOffice",
     };
   });
   const sectionOptions = ["Все", ...new Set([...executorSections.filter((item) => item !== "Все"), ...customGroups.map((group) => group.section || group.name)])];
@@ -3550,6 +3551,32 @@ function ExecutorsModule({ role, executors, setExecutors, allTasks = [] }) {
     showAction("Специализация добавлена в карту исполнителей");
   }
 
+  function deleteSpecializationGroup(group) {
+    if (!canManageExecutors) {
+      showAction("Удалять категории специалистов могут только роли с правом управления исполнителями");
+      return;
+    }
+    const groupSection = group.section || group.name;
+    const isCustomGroup = customGroupKeys.has(groupSection);
+    if (!isCustomGroup) {
+      showAction("Базовые категории SmetaOffice нельзя удалить. Их можно только не использовать.");
+      return;
+    }
+    const usedCount = executors.filter((executor) => executorHasSection(executor, groupSection)).length;
+    if (usedCount > 0) {
+      showAction(`Категория "${group.name}" используется у ${usedCount} исполнителей. Сначала убери эту специализацию в карточках исполнителей.`);
+      return;
+    }
+    const next = customGroups.filter((item) => (item.section || item.name) !== groupSection);
+    setCustomGroups(next);
+    writeStoredValue("smeta.executorSpecializationGroups", next);
+    if (section === groupSection) {
+      setSection("Все");
+      setSelectedId("");
+    }
+    showAction(`Категория "${group.name}" удалена из карты исполнителей`);
+  }
+
   function updateExecutor(executorId, patch) {
     if (!canManageExecutors) return;
     setExecutors((items) => items.map((item) => (item.id === executorId ? { ...item, ...patch } : item)));
@@ -3608,24 +3635,34 @@ function ExecutorsModule({ role, executors, setExecutors, allTasks = [] }) {
                 <small>Общая база SmetaOffice</small>
               </div>
             </button>
-            {visibleExecutorGroups.map((group) => (
-              <button
-                type="button"
-                key={group.name}
-                className={(group.section || groupToSection(group.name)) === section ? "active" : ""}
-                onClick={() => {
-                  setSection(group.section || groupToSection(group.name));
-                  setSelectedId("");
-                }}
-              >
-                <strong>{group.count}</strong>
-                <div>
-                  <b>{group.name}</b>
-                  <span>{group.sections}</span>
-                  <small>{group.source}</small>
+            {visibleExecutorGroups.map((group) => {
+              const groupSection = group.section || groupToSection(group.name);
+              const isCustomGroup = customGroupKeys.has(groupSection);
+              return (
+                <div key={group.name} className="executor-group-shell">
+                  <button
+                    type="button"
+                    className={groupSection === section ? "active" : ""}
+                    onClick={() => {
+                      setSection(groupSection);
+                      setSelectedId("");
+                    }}
+                  >
+                    <strong>{group.count}</strong>
+                    <div>
+                      <b>{group.name}</b>
+                      <span>{group.sections}</span>
+                      <small>{group.source}</small>
+                    </div>
+                  </button>
+                  {isCustomGroup && canManageExecutors ? (
+                    <button type="button" className="executor-group-delete" onClick={() => deleteSpecializationGroup(group)}>
+                      Удалить
+                    </button>
+                  ) : null}
                 </div>
-              </button>
-            ))}
+              );
+            })}
           </div>
           {canManageExecutors ? (
             <div className="specialization-add">
@@ -5434,7 +5471,7 @@ function PartnersModule({ role, session, partnerItems, visiblePartnerItems, setP
   );
 }
 
-function AdminModule({ users, setUsers, session }) {
+function AdminModule({ users, setUsers, session, executors = [] }) {
   const [newUserForm, setNewUserForm] = useState({
     name: "",
     login: "",
@@ -5446,6 +5483,7 @@ function AdminModule({ users, setUsers, session }) {
     position: "Не назначена",
   });
   const [adminNotice, setAdminNotice] = useState("");
+  const [customExecutorGroups, setCustomExecutorGroups] = useState(() => readStoredValue("smeta.executorSpecializationGroups", []));
 
   const isFullUserAdmin = fullUserAdminRoles.includes(session?.role);
   const isScopedUserAdmin = scopedUserAdminRoles.includes(session?.role);
@@ -5505,6 +5543,33 @@ function AdminModule({ users, setUsers, session }) {
     if (!user) return false;
     if (isFullUserAdmin) return true;
     return canSeeUserInAdmin(user) && scopedAdminManageableRoleIds.includes(user.role);
+  }
+
+  function executorCategoryUsage(sectionName) {
+    const userLinks = users.filter((user) => {
+      const assignedSections = parseExecutorSections(user.executorSections);
+      const effectiveSections = assignedSections.length ? assignedSections : (user.executorEnabled || user.role === "executor" ? guessExecutorSections(user) : []);
+      return effectiveSections.includes(sectionName);
+    }).length;
+    const executorLinks = executors.filter((executor) => executorHasSection(executor, sectionName)).length;
+    return userLinks + executorLinks;
+  }
+
+  function deleteCustomExecutorGroup(group) {
+    if (!isFullUserAdmin) {
+      setAdminNotice("Удалять глобальные категории исполнителей может только владелец или главный администратор.");
+      return;
+    }
+    const sectionName = group.section || group.name;
+    const usedCount = executorCategoryUsage(sectionName);
+    if (usedCount > 0) {
+      setAdminNotice(`Категория "${group.name}" используется в ${usedCount} назначениях. Сначала убери её у исполнителей.`);
+      return;
+    }
+    const next = customExecutorGroups.filter((item) => (item.section || item.name) !== sectionName);
+    setCustomExecutorGroups(next);
+    writeStoredValue("smeta.executorSpecializationGroups", next);
+    setAdminNotice(`Категория "${group.name}" удалена из пользовательского справочника.`);
   }
 
   const visibleUsers = users.filter(canSeeUserInAdmin);
@@ -5703,6 +5768,40 @@ function AdminModule({ users, setUsers, session }) {
             <b>Категории партнёров</b>
             <span>{partnerCategoryOptions.length} категорий партнёрской сети</span>
           </div>
+        </div>
+        <div className="admin-custom-category-list">
+          <div className="section-row compact-row">
+            <div>
+              <h3>Пользовательские категории исполнителей</h3>
+              <p className="section-hint">Сюда попадают категории, которые добавили вручную в разделе “Исполнители”. Базовые категории системы не удаляются.</p>
+            </div>
+            <span className="muted-chip">{customExecutorGroups.length} ручных категорий</span>
+          </div>
+          {customExecutorGroups.length ? (
+            customExecutorGroups.map((group) => {
+              const sectionName = group.section || group.name;
+              const usedCount = executorCategoryUsage(sectionName);
+              return (
+                <div key={sectionName} className="admin-custom-category-row">
+                  <div>
+                    <b>{group.name}</b>
+                    <span>{usedCount ? `Используется в назначениях: ${usedCount}` : "Не используется, можно удалить"}</span>
+                  </div>
+                  <button
+                    type="button"
+                    className="danger-light"
+                    onClick={() => deleteCustomExecutorGroup(group)}
+                    disabled={!isFullUserAdmin || usedCount > 0}
+                    title={usedCount > 0 ? "Сначала убери категорию у исполнителей" : "Удалить категорию"}
+                  >
+                    Удалить
+                  </button>
+                </div>
+              );
+            })
+          ) : (
+            <div className="empty small-empty">Ручных категорий пока нет. Их можно добавить в разделе “Исполнители”.</div>
+          )}
         </div>
       </section>
 
@@ -7184,7 +7283,7 @@ function SmetaOfficePrototype() {
 
           {role !== "executor" && activeSection === "tasks" ? <TasksModule allTasks={visibleTasks} onTaskStatusChange={changeTaskStatus} executors={executorDirectory} onGoSection={setActiveSection} /> : null}
           {role !== "executor" && activeSection === "partners" ? <PartnersModule role={role} session={effectiveAccessUser} partnerItems={partners} visiblePartnerItems={visiblePartners} setPartnerItems={setPartners} /> : null}
-          {role !== "executor" && activeSection === "admin" ? <AdminModule users={users} setUsers={setUsers} session={session} /> : null}
+          {role !== "executor" && activeSection === "admin" ? <AdminModule users={users} setUsers={setUsers} session={session} executors={executors} /> : null}
           {role !== "executor" && activeSection === "analytics" ? <AnalyticsModule projectItems={visibleProjects} allTasks={visibleTasks} role={role} /> : null}
           {role !== "executor" && activeSection === "finance" ? <FinanceModule projectItems={visibleProjects} role={role} /> : null}
           {role !== "executor" && activeSection === "client" ? <ClientAppModule projectItems={visibleProjects} /> : null}

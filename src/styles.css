@@ -883,6 +883,51 @@ h3 { margin: 0; }
   font-size: 12px;
   line-height: 1.45;
 }
+.admin-custom-category-list {
+  margin-top: 16px;
+  border: 1px solid #dbe5ef;
+  border-radius: 18px;
+  background: #f8fafc;
+  padding: 14px;
+}
+.compact-row {
+  margin-bottom: 12px;
+}
+.admin-custom-category-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  border-top: 1px solid #e2e8f0;
+  padding: 12px 0;
+}
+.admin-custom-category-row:last-child {
+  padding-bottom: 0;
+}
+.admin-custom-category-row b,
+.admin-custom-category-row span {
+  display: block;
+}
+.admin-custom-category-row span {
+  margin-top: 4px;
+  color: #64748b;
+  font-size: 12px;
+}
+.danger-light {
+  border: 1px solid #fecaca;
+  border-radius: 12px;
+  background: #fff;
+  color: #b91c1c;
+  padding: 10px 12px;
+  font-weight: 900;
+}
+.danger-light:hover:not(:disabled) {
+  background: #fef2f2;
+}
+.danger-light:disabled {
+  cursor: not-allowed;
+  opacity: .45;
+}
 .finance-grid {
   display: grid;
   grid-template-columns: minmax(0, 1.3fr) minmax(260px, .7fr);
@@ -2107,7 +2152,12 @@ h3 { margin: 0; }
   gap: 10px;
   margin-top: 16px;
 }
-.executor-groups > button {
+.executor-group-shell {
+  display: grid;
+  gap: 6px;
+}
+.executor-groups > button,
+.executor-group-shell > button:first-child {
   display: grid;
   grid-template-columns: 54px minmax(0, 1fr);
   gap: 12px;
@@ -2119,12 +2169,14 @@ h3 { margin: 0; }
   text-align: left;
   transition: border-color .15s, box-shadow .15s, transform .15s;
 }
-.executor-groups > button:hover {
+.executor-groups > button:hover,
+.executor-group-shell > button:first-child:hover {
   border-color: #93c5fd;
   box-shadow: 0 12px 28px rgba(15, 23, 42, .08);
   transform: translateY(-1px);
 }
-.executor-groups > button.active {
+.executor-groups > button.active,
+.executor-group-shell > button:first-child.active {
   border-color: #2563eb;
   background: #eff6ff;
   box-shadow: 0 0 0 3px #dbeafe;
@@ -2141,6 +2193,19 @@ h3 { margin: 0; }
 .executor-groups b, .executor-groups span, .executor-groups small { display: block; }
 .executor-groups span { margin-top: 4px; color: #475569; font-size: 13px; line-height: 1.35; }
 .executor-groups small { margin-top: 6px; color: #94a3b8; font-size: 12px; }
+.executor-group-delete {
+  justify-self: end;
+  border: 1px solid #fecaca;
+  border-radius: 999px;
+  background: #fff;
+  color: #b91c1c;
+  padding: 7px 11px;
+  font-size: 12px;
+  font-weight: 900;
+}
+.executor-group-delete:hover {
+  background: #fef2f2;
+}
 .specialization-add {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
