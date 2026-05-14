@@ -5,6 +5,8 @@ import "./styles.css";
 const roles = [
   { id: "owner", name: "Владелец", hint: "видит весь холдинг" },
   { id: "admin", name: "Администратор", hint: "пользователи, роли, справочники" },
+  { id: "regional_admin", name: "Администратор региона", hint: "пользователи и данные только своего региона" },
+  { id: "direction_admin", name: "Администратор направления", hint: "пользователи и данные только своего направления" },
   { id: "deputy", name: "Заместитель", hint: "контроль направлений и регионов" },
   { id: "director", name: "Руководитель направления", hint: "своё направление и свои регионы" },
   { id: "regional_manager", name: "Региональный менеджер", hint: "свой регион" },
@@ -21,6 +23,8 @@ const roles = [
 const rolePermissions = {
   owner: ["viewAll", "viewClient", "viewFinance", "viewProductionBudget", "manageUsers", "manageProjects", "manageExecutors", "assignExecutors", "viewExecutorContacts", "editFinance", "viewOwnerDashboard"],
   admin: ["viewAll", "viewClient", "manageUsers", "manageProjects", "manageExecutors", "assignExecutors", "viewExecutorContacts"],
+  regional_admin: ["viewClient", "manageUsers", "manageExecutors", "viewExecutorContacts"],
+  direction_admin: ["viewClient", "manageUsers", "manageExecutors", "viewExecutorContacts"],
   deputy: ["viewAll", "viewClient", "viewFinance", "viewProductionBudget", "manageProjects", "manageExecutors", "assignExecutors", "viewExecutorContacts", "viewOwnerDashboard"],
   director: ["viewClient", "viewFinance", "viewProductionBudget", "manageProjects", "manageExecutors", "assignExecutors", "viewExecutorContacts", "viewOwnerDashboard"],
   regional_manager: ["viewClient", "viewFinance", "viewProductionBudget", "manageProjects", "manageExecutors", "assignExecutors", "viewExecutorContacts", "viewOwnerDashboard"],
@@ -34,6 +38,10 @@ const rolePermissions = {
   partner: [],
 };
 
+const fullUserAdminRoles = ["owner", "admin"];
+const scopedUserAdminRoles = ["regional_admin", "direction_admin"];
+const scopedAdminManageableRoleIds = ["director", "regional_manager", "pm", "project_manager", "sales_manager", "head_of_sales", "executor", "partner"];
+
 const roleCan = (role, permission) => role === "owner" || (rolePermissions[role] || []).includes(permission);
 const userCan = (user, permission) => roleCan(user?.role, permission);
 
@@ -43,6 +51,8 @@ const AUTH_TOKEN_KEY = "smeta.authToken";
 const demoUsers = [
   { id: "USR-001", login: "owner", password: "owner", role: "owner", name: "Владелец", status: "active", region: "Все регионы", regions: ["Все регионы"], direction: "Все направления", position: "Основатель / владелец" },
   { id: "USR-002", login: "admin", password: "admin", role: "admin", name: "Администратор системы", status: "active", region: "Все регионы", regions: ["Все регионы"], direction: "Все направления", position: "Администратор SmetaOffice" },
+  { id: "USR-014", login: "regionadmin", password: "regionadmin", role: "regional_admin", name: "Администратор региона", status: "active", region: "Чеченская Республика", regions: ["Чеченская Республика"], direction: "Все направления", position: "Администратор региона" },
+  { id: "USR-015", login: "diradmin", password: "diradmin", role: "direction_admin", name: "Администратор направления", status: "active", region: "Чеченская Республика", regions: ["Чеченская Республика"], direction: "Бюро архитектуры и дизайна", position: "Администратор направления" },
   { id: "USR-003", login: "deputy", password: "deputy", role: "deputy", name: "Заместитель", status: "active", region: "Все регионы", regions: ["Все регионы"], direction: "Все направления", position: "Заместитель операционного контура" },
   { id: "USR-004", login: "director", password: "director", role: "director", name: "Руководитель направления", status: "active", region: "ЧР", regions: ["ЧР", "ДНР", "ЛНР"], direction: "Проектный институт", position: "Руководитель направления" },
   { id: "USR-005", login: "regional", password: "regional", role: "regional_manager", name: "Региональный менеджер", status: "active", region: "Ростов", regions: ["Ростов"], direction: "Все направления", position: "Управляющий региона" },
@@ -1529,6 +1539,12 @@ function canAccessProject(user, project, viewRole = user?.role) {
 
   if (!canAccessRegion(user, project)) return false;
 
+  if (role === "regional_admin") {
+    return true;
+  }
+  if (role === "direction_admin") {
+    return project.direction === user.direction || user.direction === "Все направления";
+  }
   if (role === "director") {
     return project.directorUserId === user.id || project.direction === user.direction;
   }
@@ -1562,6 +1578,10 @@ function canAccessPartner(user, partner, viewRole = user?.role) {
   const regionMatch = userRegions.includes("Все регионы") || userRegions.includes(normalizeRegionName(partner.region));
   if (!regionMatch) return false;
 
+  if (role === "regional_admin") return true;
+  if (role === "direction_admin") {
+    return partner.direction === user.direction || user.direction === "Все направления";
+  }
   if (role === "director") {
     return partner.direction === user.direction || user.direction === "Все направления";
   }
@@ -1580,6 +1600,7 @@ function sectionAllowed(role, sectionId) {
   const salesSections = ["dashboard", "sales", ...projectSections, "tasks", "analytics", "client"];
   if (role === "owner" || role === "deputy") return true;
   if (role === "admin") return ["dashboard", ...projectSections, "tasks", "executors", "partners", "integrations", "admin", "client"].includes(sectionId);
+  if (role === "regional_admin" || role === "direction_admin") return ["dashboard", ...projectSections, "tasks", "executors", "partners", "analytics", "admin", "client"].includes(sectionId);
   if (role === "finance" || role === "accountant") return ["dashboard", ...projectSections, "analytics", "finance"].includes(sectionId);
   if (role === "executor") return ["dashboard", "projects", "tasks"].includes(sectionId);
   if (role === "partner") return ["dashboard", "sales", ...projectSections, "tasks"].includes(sectionId);
@@ -1592,6 +1613,8 @@ function sectionAllowed(role, sectionId) {
 function roleScopeText(role, user) {
   if (role === "owner") return "весь холдинг";
   if (role === "admin") return "админка, доступы, справочники, без закрытых финансов";
+  if (role === "regional_admin") return `${user?.region || "свой регион"} · администрирование пользователей региона`;
+  if (role === "direction_admin") return `${user?.direction || "своё направление"} · администрирование пользователей направления`;
   if (role === "deputy") return "операционный контур холдинга";
   if (role === "director") return `${user?.direction || "своё направление"} · ${user?.region || "свои регионы"}`;
   if (role === "regional_manager") return `${user?.region || "свой регион"} · все направления региона`;
@@ -1607,6 +1630,8 @@ function roleScopeText(role, user) {
 
 function dashboardTitleForRole(role) {
   if (role === "admin") return "Панель администратора";
+  if (role === "regional_admin") return "Панель администратора региона";
+  if (role === "direction_admin") return "Панель администратора направления";
   if (role === "director") return "Панель руководителя направления";
   if (role === "regional_manager") return "Панель регионального менеджера";
   if (role === "pm") return "Панель руководителя проекта";
@@ -1620,6 +1645,8 @@ function dashboardTitleForRole(role) {
 
 function dashboardHintForRole(role) {
   if (role === "admin") return "Главная задача администратора: пользователи, роли, регионы, направления, справочники и техническая чистота данных. Финансовые суммы здесь скрыты.";
+  if (role === "regional_admin") return "Администратор региона видит и ведёт пользователей только своего региона. Данные других регионов для него закрыты.";
+  if (role === "direction_admin") return "Администратор направления ведёт пользователей только своего направления и не получает доступ к чужим производственным блокам.";
   if (role === "director") return "Руководитель направления видит только своё направление в назначенных регионах: проекты, задачи, партнёров и аналитику своего блока.";
   if (role === "regional_manager") return "Региональный менеджер видит все направления своего региона: проекты, сроки, риски, исполнителей и партнёров региона.";
   if (role === "pm") return "РП видит только свои проекты: этапы, исполнителей, сроки, задачи, файлы и производственный бюджет.";
@@ -2015,6 +2042,15 @@ function leadCanAccess(user, lead, viewRole = user?.role) {
   const role = viewRole || user?.role;
   if (!lead || !user) return false;
   if (["owner", "admin", "deputy"].includes(role)) return true;
+  if (role === "regional_admin") {
+    const regions = userRegionList(user);
+    return regions.includes("Все регионы") || regions.includes(normalizeRegionName(lead.region));
+  }
+  if (role === "direction_admin") {
+    const regions = userRegionList(user);
+    const regionMatch = regions.includes("Все регионы") || regions.includes(normalizeRegionName(lead.region));
+    return regionMatch && (user.direction === "Все направления" || salesDirections[lead.direction]?.includes(user.direction) || lead.direction === user.direction);
+  }
   if (role === "head_of_sales") {
     const regions = userRegionList(user);
     return regions.includes("Все регионы") || regions.includes(normalizeRegionName(lead.region));
@@ -5076,12 +5112,68 @@ function AdminModule({ users, setUsers, session }) {
   });
   const [adminNotice, setAdminNotice] = useState("");
 
+  const isFullUserAdmin = fullUserAdminRoles.includes(session?.role);
+  const isScopedUserAdmin = scopedUserAdminRoles.includes(session?.role);
+  const sessionRegions = userRegionList(session);
+  const sessionHasAllRegions = sessionRegions.includes("Все регионы");
+  const sessionDirection = normalizeDirectionName(session?.direction || "Все направления");
+  const allDirectionChoices = ["Все направления", ...projectDirectionNames()];
+  const regionChoices = isFullUserAdmin || sessionHasAllRegions
+    ? regionOptions
+    : regionOptions.filter((region) => sessionRegions.includes(normalizeRegionName(region)));
+  const directionChoices = isFullUserAdmin || session?.role === "regional_admin" || sessionDirection === "Все направления"
+    ? allDirectionChoices
+    : [sessionDirection];
+  const roleChoices = isFullUserAdmin ? roles : roles.filter((roleItem) => scopedAdminManageableRoleIds.includes(roleItem.id));
+  const defaultScopedRegion = regionChoices[0] || normalizeRegionName(session?.region || "Все регионы");
+  const defaultScopedDirection = directionChoices[0] || sessionDirection;
+
+  function enforceAdminScope(userDraft) {
+    const nextRole = roleChoices.some((roleItem) => roleItem.id === userDraft.role) ? userDraft.role : "executor";
+    const normalizedRegion = normalizeRegionName(userDraft.region || defaultScopedRegion);
+    const nextRegion = regionChoices.includes(normalizedRegion) ? normalizedRegion : defaultScopedRegion;
+    const normalizedDirection = normalizeDirectionName(userDraft.direction || defaultScopedDirection);
+    const nextDirection = directionChoices.includes(normalizedDirection) ? normalizedDirection : defaultScopedDirection;
+    return {
+      ...userDraft,
+      role: nextRole,
+      region: nextRegion,
+      regions: nextRegion === "Все регионы" ? ["Все регионы"] : [nextRegion],
+      direction: nextDirection,
+    };
+  }
+
+  function canSeeUserInAdmin(user) {
+    if (!user) return false;
+    if (isFullUserAdmin) return true;
+    if (!isScopedUserAdmin) return user.id === session?.id;
+    if (user.id === session?.id) return true;
+
+    const targetRegions = userRegionList(user);
+    const targetHasAllRegions = targetRegions.includes("Все регионы");
+    const regionMatch = sessionHasAllRegions || (!targetHasAllRegions && targetRegions.some((region) => sessionRegions.includes(region)));
+    if (!regionMatch) return false;
+
+    if (session?.role === "direction_admin") {
+      return sessionDirection === "Все направления" || normalizeDirectionName(user.direction) === sessionDirection;
+    }
+    return true;
+  }
+
+  function canEditUserInAdmin(user) {
+    if (!user) return false;
+    if (isFullUserAdmin) return true;
+    return canSeeUserInAdmin(user) && scopedAdminManageableRoleIds.includes(user.role);
+  }
+
+  const visibleUsers = users.filter(canSeeUserInAdmin);
+
   if (!userCan(session, "manageUsers")) {
     return (
       <>
         <SectionIntro section="admin" />
         <section className="office-card">
-          <div className="empty">Админка доступна только владельцу.</div>
+          <div className="empty">Админка доступна только ролям с правом управления пользователями.</div>
         </section>
       </>
     );
@@ -5094,8 +5186,8 @@ function AdminModule({ users, setUsers, session }) {
       password: "",
       role: "executor",
       status: "active",
-      region: "Все регионы",
-      direction: "Все направления",
+      region: defaultScopedRegion,
+      direction: defaultScopedDirection,
       position: "Не назначена",
     });
   }
@@ -5115,16 +5207,17 @@ function AdminModule({ users, setUsers, session }) {
       return;
     }
 
+    const scopedForm = enforceAdminScope(newUserForm);
     const createdUser = {
       id: `USR-${Date.now()}`,
       login,
       password,
-      role: newUserForm.role,
+      role: scopedForm.role,
       name,
       status: newUserForm.status,
-      region: newUserForm.region,
-      regions: newUserForm.region === "Все регионы" ? ["Все регионы"] : [newUserForm.region],
-      direction: newUserForm.direction,
+      region: scopedForm.region,
+      regions: scopedForm.regions,
+      direction: scopedForm.direction,
       position: newUserForm.position,
       createdAt: new Date().toISOString(),
       createdBy: session?.id || session?.login || "system",
@@ -5139,11 +5232,12 @@ function AdminModule({ users, setUsers, session }) {
     setUsers((items) =>
       items.map((user) => {
         if (user.id !== userId) return user;
+        if (!canEditUserInAdmin(user)) {
+          setAdminNotice("Недостаточно прав для изменения этого пользователя.");
+          return user;
+        }
         const next = typeof patch === "function" ? patch(user) : { ...user, ...patch };
-        return {
-          ...next,
-          regions: next.region === "Все регионы" ? ["Все регионы"] : [next.region],
-        };
+        return enforceAdminScope(next);
       })
     );
   }
@@ -5155,9 +5249,9 @@ function AdminModule({ users, setUsers, session }) {
         <div className="section-row">
           <div>
             <h3>Создать пользователя</h3>
-            <p className="section-hint">Регистрация закрытая: аккаунт создаёт владелец или админ, затем назначает роль, регион, направление и должность.</p>
+            <p className="section-hint">Регистрация закрытая: аккаунт создаёт владелец или админ. Администратор региона/направления создаёт людей только в своём контуре.</p>
           </div>
-          <span className="muted-chip">Без публичной регистрации</span>
+          <span className="muted-chip">{isFullUserAdmin ? "Полный админ-доступ" : "Ограниченный контур"}</span>
         </div>
 
         <form className="admin-create-user-form" onSubmit={createUser}>
@@ -5169,14 +5263,14 @@ function AdminModule({ users, setUsers, session }) {
             <option value="pending">Ожидает назначения</option>
             <option value="blocked">Заблокирован</option>
           </select></label>
-          <label><span>Роль</span><select value={newUserForm.role} onChange={(event) => setNewUserForm((next) => ({ ...next, role: event.target.value }))}>
-            {roles.map((roleItem) => <option key={roleItem.id} value={roleItem.id}>{roleItem.name}</option>)}
+          <label><span>Роль</span><select value={roleChoices.some((roleItem) => roleItem.id === newUserForm.role) ? newUserForm.role : "executor"} onChange={(event) => setNewUserForm((next) => ({ ...next, role: event.target.value }))}>
+            {roleChoices.map((roleItem) => <option key={roleItem.id} value={roleItem.id}>{roleItem.name}</option>)}
           </select></label>
-          <label><span>Региональный доступ</span><select value={newUserForm.region} onChange={(event) => setNewUserForm((next) => ({ ...next, region: event.target.value }))}>
-            {regionOptions.map((region) => <option key={region} value={region}>{region}</option>)}
+          <label><span>Региональный доступ</span><select value={regionChoices.includes(normalizeRegionName(newUserForm.region)) ? normalizeRegionName(newUserForm.region) : defaultScopedRegion} onChange={(event) => setNewUserForm((next) => ({ ...next, region: event.target.value }))}>
+            {regionChoices.map((region) => <option key={region} value={region}>{region}</option>)}
           </select></label>
-          <label><span>Направление</span><select value={newUserForm.direction} onChange={(event) => setNewUserForm((next) => ({ ...next, direction: event.target.value }))}>
-            {["Все направления", ...projectDirectionNames()].map((direction) => <option key={direction} value={direction}>{direction}</option>)}
+          <label><span>Направление</span><select value={directionChoices.includes(normalizeDirectionName(newUserForm.direction)) ? normalizeDirectionName(newUserForm.direction) : defaultScopedDirection} onChange={(event) => setNewUserForm((next) => ({ ...next, direction: event.target.value }))}>
+            {directionChoices.map((direction) => <option key={direction} value={direction}>{direction}</option>)}
           </select></label>
           <label><span>Должность</span><input list="position-options" value={newUserForm.position} onChange={(event) => setNewUserForm((next) => ({ ...next, position: event.target.value }))} placeholder="Напр.: ассистент руководителя" /></label>
           <button type="submit" className="primary">Создать пользователя</button>
@@ -5193,39 +5287,45 @@ function AdminModule({ users, setUsers, session }) {
             <h3>Пользователи и доступы</h3>
             <p className="section-hint">Здесь назначается реальная роль в холдинге: регион, должность и уровень доступа. Заявки без назначения не входят в систему.</p>
           </div>
-          <span className="muted-chip">Активных: {users.filter((user) => user.status === "active").length}</span>
+          <span className="muted-chip">Видимых: {visibleUsers.length} · активных: {visibleUsers.filter((user) => user.status === "active").length}</span>
         </div>
 
         <div className="admin-users-table">
-          {users.map((user) => (
+          {visibleUsers.map((user) => {
+            const canEdit = canEditUserInAdmin(user);
+            const rowRoleChoices = canEdit ? roleChoices : roles;
+            const rowRegionChoices = canEdit ? regionChoices : regionOptions;
+            const rowDirectionChoices = canEdit ? directionChoices : allDirectionChoices;
+            return (
             <div key={user.id}>
               <div>
                 <b>{user.name}</b>
                 <span>{user.login} · {user.id}</span>
               </div>
-              <select value={user.status || "pending"} onChange={(event) => updateUser(user.id, { status: event.target.value })}>
+              <select value={user.status || "pending"} onChange={(event) => updateUser(user.id, { status: event.target.value })} disabled={!canEdit}>
                 <option value="pending">Ожидает назначения</option>
                 <option value="active">Активен</option>
                 <option value="blocked">Заблокирован</option>
               </select>
-              <select value={user.role} onChange={(event) => updateUser(user.id, { role: event.target.value })}>
-                {roles.map((roleItem) => (
+              <select value={user.role} onChange={(event) => updateUser(user.id, { role: event.target.value })} disabled={!canEdit}>
+                {rowRoleChoices.map((roleItem) => (
                   <option key={roleItem.id} value={roleItem.id}>{roleItem.name}</option>
                 ))}
               </select>
-              <select value={user.region || "ЧР"} onChange={(event) => updateUser(user.id, { region: event.target.value })}>
-                {regionOptions.map((region) => (
+              <select value={user.region || "ЧР"} onChange={(event) => updateUser(user.id, { region: event.target.value })} disabled={!canEdit}>
+                {rowRegionChoices.map((region) => (
                   <option key={region} value={region}>{region}</option>
                 ))}
               </select>
-              <select value={user.direction || "Все направления"} onChange={(event) => updateUser(user.id, { direction: event.target.value })}>
-                {["Все направления", ...projectDirectionNames()].map((direction) => (
+              <select value={user.direction || "Все направления"} onChange={(event) => updateUser(user.id, { direction: event.target.value })} disabled={!canEdit}>
+                {rowDirectionChoices.map((direction) => (
                   <option key={direction} value={direction}>{direction}</option>
                 ))}
               </select>
-              <input list="position-options" value={user.position || ""} onChange={(event) => updateUser(user.id, { position: event.target.value })} placeholder="Должность" />
+              <input list="position-options" value={user.position || ""} onChange={(event) => updateUser(user.id, { position: event.target.value })} placeholder="Должность" disabled={!canEdit} />
             </div>
-          ))}
+            );
+          })}
         </div>
 
         <div className="admin-directory-grid">
@@ -5256,6 +5356,10 @@ function AdminModule({ users, setUsers, session }) {
         <div>
           <h3>Правило региона</h3>
           <p>Проекты показываются по региону пользователя. Владелец и роли с доступом «Все регионы» видят всю картину.</p>
+        </div>
+        <div>
+          <h3>Админ региона / направления</h3>
+          <p>Такой админ не управляет всем холдингом: он видит пользователей только своего региона или направления и не назначает роли владельца, финансов и главного админа.</p>
         </div>
         <div>
           <h3>Следующий шаг</h3>

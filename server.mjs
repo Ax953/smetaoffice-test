@@ -116,6 +116,84 @@ function publicUsers(users = []) {
   return users.map(publicUser);
 }
 
+const ALL_REGIONS = "Все регионы";
+const ALL_DIRECTIONS = "Все направления";
+const fullUserAdminRoles = ["owner", "admin"];
+const scopedUserAdminRoles = ["regional_admin", "direction_admin"];
+const scopedAdminManageableRoleIds = ["director", "regional_manager", "pm", "project_manager", "sales_manager", "head_of_sales", "executor", "partner"];
+
+function normalizeRegionName(region) {
+  const value = String(region || "").trim();
+  if (!value) return "Без региона";
+  const aliases = {
+    "ЧР": "Чеченская Республика",
+    "Грозный": "Чеченская Республика",
+    "Ростов": "Ростовская область",
+    "Ростов-на-Дону": "Ростовская область",
+    "ЛНР": "ДНР",
+  };
+  return aliases[value] || value;
+}
+
+function normalizeDirectionName(direction) {
+  const value = String(direction || "").trim();
+  if (!value) return "Без направления";
+  const aliases = {
+    "Агентство недвижимости": "Единый центр продаж",
+    "Недвижимость": "Единый центр продаж",
+    "Продажи": "Единый центр продаж",
+  };
+  return aliases[value] || value;
+}
+
+function userRegionList(user) {
+  const list = Array.isArray(user?.regions) && user.regions.length ? user.regions : [user?.region].filter(Boolean);
+  return list.length ? list.map(normalizeRegionName) : [ALL_REGIONS];
+}
+
+function regionScopeMatches(manager, target) {
+  const managerRegions = userRegionList(manager);
+  if (managerRegions.includes(ALL_REGIONS)) return true;
+  const targetRegions = userRegionList(target);
+  if (targetRegions.includes(ALL_REGIONS)) return false;
+  return targetRegions.some((region) => managerRegions.includes(region));
+}
+
+function canManageUserRecord(manager, target) {
+  if (!manager || !target) return false;
+  if (fullUserAdminRoles.includes(manager.role)) return true;
+  if (!scopedUserAdminRoles.includes(manager.role)) return false;
+  if (!scopedAdminManageableRoleIds.includes(target.role)) return false;
+  if (!regionScopeMatches(manager, target)) return false;
+  if (manager.role === "direction_admin") {
+    const managerDirection = normalizeDirectionName(manager.direction || ALL_DIRECTIONS);
+    return managerDirection === ALL_DIRECTIONS || normalizeDirectionName(target.direction) === managerDirection;
+  }
+  return true;
+}
+
+function visibleUsersFor(manager, users = []) {
+  if (!manager) return [];
+  if (fullUserAdminRoles.includes(manager.role) || manager.role === "deputy") return users;
+  return users.filter((user) => user.id === manager.id || canManageUserRecord(manager, user));
+}
+
+function mergeManagedUsers(existingUsers = [], incomingUsers = [], manager) {
+  if (fullUserAdminRoles.includes(manager?.role)) return incomingUsers;
+  const merged = [...existingUsers];
+
+  incomingUsers.forEach((incomingUser) => {
+    const existingIndex = merged.findIndex((user) => user.id === incomingUser.id || user.login === incomingUser.login);
+    const existingUser = existingIndex >= 0 ? merged[existingIndex] : null;
+    const targetUser = { ...existingUser, ...incomingUser };
+    if (!canManageUserRecord(manager, targetUser)) return;
+    if (existingIndex >= 0) merged[existingIndex] = targetUser;
+    else merged.unshift(targetUser);
+  });
+
+  return merged;
+}
+
 function hashPassword(password, salt = randomBytes(16).toString("hex")) {
   const hash = pbkdf2Sync(String(password), salt, 120000, 32, "sha256").toString("hex");
   return { salt, hash };
@@ -169,7 +247,8 @@ function canWriteCollection(user, route) {
   if (route === "/api/partners") return ["director", "regional_manager"].includes(user.role);
   if (route === "/api/sales-leads") return ["head_of_sales", "sales_manager"].includes(user.role);
   if (route === "/api/integration-settings") return user.role === "admin";
-  if (route === "/api/users" || route === "/api/directories") return ["owner", "admin"].includes(user.role);
+  if (route === "/api/users") return [...fullUserAdminRoles, ...scopedUserAdminRoles].includes(user.role);
+  if (route === "/api/directories") return ["owner", "admin"].includes(user.role);
   return false;
 }
 
@@ -375,7 +454,8 @@ const server = http.createServer(async (req, res) => {
     if (req.method === "GET" && route === "/api/db") {
       const auth = requireAuth(req, res, db);
       if (!auth) return;
-      const payload = authMode === "server" ? { ...db, users: publicUsers(db.users || []), authSessions: {}, accessRequests: publicUsers(db.accessRequests || []) } : db;
+      const visibleUsers = authMode === "server" ? visibleUsersFor(auth.user, db.users || []) : db.users;
+      const payload = authMode === "server" ? { ...db, users: publicUsers(visibleUsers), authSessions: {}, accessRequests: publicUsers(db.accessRequests || []) } : db;
       sendJson(res, 200, payload);
       return;
     }
@@ -411,18 +491,23 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (req.method === "GET" && route === "/api/users") {
-      if (!requireAuth(req, res, db)) return;
-      sendJson(res, 200, authMode === "server" ? publicUsers(db.users) : db.users);
+      const auth = requireAuth(req, res, db);
+      if (!auth) return;
+      const users = authMode === "server" ? visibleUsersFor(auth.user, db.users || []) : db.users;
+      sendJson(res, 200, authMode === "server" ? publicUsers(users) : users);
       return;
     }
 
     if (req.method === "PUT" && route === "/api/users") {
-      if (!requireWriteAccess(req, res, db, route)) return;
+      const auth = requireWriteAccess(req, res, db, route);
+      if (!auth) return;
       const incomingUsers = await readJsonBody(req);
-      const users = authMode === "server" ? normalizeIncomingUsers(incomingUsers, db.users || []) : incomingUsers;
+      const normalizedUsers = authMode === "server" ? normalizeIncomingUsers(incomingUsers, db.users || []) : incomingUsers;
+      const users = authMode === "server" ? mergeManagedUsers(db.users || [], normalizedUsers, auth.user) : normalizedUsers;
       const nextDb = { ...db, users };
       await writeDb(nextDb);
-      sendJson(res, 200, authMode === "server" ? publicUsers(nextDb.users) : nextDb.users);
+      const visibleUsers = authMode === "server" ? visibleUsersFor(auth.user, nextDb.users) : nextDb.users;
+      sendJson(res, 200, authMode === "server" ? publicUsers(visibleUsers) : visibleUsers);
       return;
     }
 
