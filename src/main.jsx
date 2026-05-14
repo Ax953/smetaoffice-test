@@ -4017,9 +4017,9 @@ function SalesLeadsModule({ leads, setSalesLeads, projectItems, users, role, ses
   );
 }
 
-function LoginScreen({ users, onLogin, onRegister }) {
-  const [login, setLogin] = useState("owner");
-  const [password, setPassword] = useState("owner");
+function LoginScreen({ users, onLogin, onRegister, allowDemoFallback = false }) {
+  const [login, setLogin] = useState("");
+  const [password, setPassword] = useState("");
   const [mode, setMode] = useState("login");
   const [requestForm, setRequestForm] = useState({ name: "", login: "", password: "", region: "ЧР" });
   const [error, setError] = useState("");
@@ -4031,6 +4031,10 @@ function LoginScreen({ users, onLogin, onRegister }) {
     if (serverLogin?.ok && serverLogin.user) {
       setError("");
       onLogin(serverLogin.user, serverLogin.token);
+      return;
+    }
+    if (!allowDemoFallback) {
+      setError("Неверный логин или пароль.");
       return;
     }
     const user = users.find((item) => item.login === login.trim() && item.password === password);
@@ -4124,13 +4128,15 @@ function LoginScreen({ users, onLogin, onRegister }) {
           </button>
         </form>
 
-        <div className="demo-logins">
-          <b>Демо-доступы</b>
-          <span>owner / owner</span>
-          <span>pm / pm</span>
-          <span>executor / executor</span>
-          <span>finance / finance</span>
-        </div>
+        {allowDemoFallback ? (
+          <div className="demo-logins">
+            <b>Демо-доступы</b>
+            <span>owner / owner</span>
+            <span>pm / pm</span>
+            <span>executor / executor</span>
+            <span>finance / finance</span>
+          </div>
+        ) : null}
       </section>
     </main>
   );
@@ -6400,7 +6406,14 @@ function SmetaOfficePrototype() {
   }
 
   if (!session) {
-    return <LoginScreen users={users} onLogin={login} onRegister={(user) => setUsers((items) => [user, ...items])} />;
+    return (
+      <LoginScreen
+        users={users}
+        onLogin={login}
+        onRegister={(user) => setUsers((items) => [user, ...items])}
+        allowDemoFallback={import.meta.env.DEV}
+      />
+    );
   }
 
   return (
