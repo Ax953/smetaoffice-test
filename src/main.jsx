@@ -5148,11 +5148,12 @@ function AdminModule({ users, setUsers, session }) {
           <label><span>Направление</span><select value={newUserForm.direction} onChange={(event) => setNewUserForm((next) => ({ ...next, direction: event.target.value }))}>
             {["Все направления", ...projectDirectionNames()].map((direction) => <option key={direction} value={direction}>{direction}</option>)}
           </select></label>
-          <label><span>Должность</span><select value={newUserForm.position} onChange={(event) => setNewUserForm((next) => ({ ...next, position: event.target.value }))}>
-            {positionOptions.map((position) => <option key={position} value={position}>{position}</option>)}
-          </select></label>
+          <label><span>Должность</span><input list="position-options" value={newUserForm.position} onChange={(event) => setNewUserForm((next) => ({ ...next, position: event.target.value }))} placeholder="Напр.: ассистент руководителя" /></label>
           <button type="submit" className="primary">Создать пользователя</button>
         </form>
+        <datalist id="position-options">
+          {positionOptions.map((position) => <option key={position} value={position} />)}
+        </datalist>
         {adminNotice ? <div className="login-notice admin-notice">{adminNotice}</div> : null}
       </section>
 
@@ -5192,11 +5193,7 @@ function AdminModule({ users, setUsers, session }) {
                   <option key={direction} value={direction}>{direction}</option>
                 ))}
               </select>
-              <select value={user.position || "Не назначена"} onChange={(event) => updateUser(user.id, { position: event.target.value })}>
-                {positionOptions.map((position) => (
-                  <option key={position} value={position}>{position}</option>
-                ))}
-              </select>
+              <input list="position-options" value={user.position || ""} onChange={(event) => updateUser(user.id, { position: event.target.value })} placeholder="Должность" />
             </div>
           ))}
         </div>
