@@ -2084,6 +2084,11 @@ h3 { margin: 0; }
   box-shadow: 0 12px 28px rgba(15, 23, 42, .08);
   transform: translateY(-1px);
 }
+.executor-groups > button.active {
+  border-color: #2563eb;
+  background: #eff6ff;
+  box-shadow: 0 0 0 3px #dbeafe;
+}
 .executor-groups strong {
   display: grid;
   place-items: center;

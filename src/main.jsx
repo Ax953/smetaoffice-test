@@ -2138,12 +2138,45 @@ function groupToSection(groupName) {
   return "Все";
 }
 
+function inferExecutorSectionsFromText(value) {
+  const raw = String(value || "").trim();
+  if (!raw) return [];
+  const text = raw.toLowerCase();
+  const sections = [];
+  if (text === "ар" || text.includes("архитект") || text.includes("раздел ар") || text.includes("планиров")) sections.push("АР");
+  if (text.includes("дизайн") || text.includes("дизайнер") || text.includes("интерьер")) sections.push("Дизайн");
+  if (text.includes("3d") || text.includes("3д") || text.includes("визуал") || text.includes("рендер")) sections.push("3D");
+  if (text.includes("рабоч") || text.includes("чертеж") || text.includes("чертёж")) sections.push("Рабочка");
+  if (text === "кр" || text.includes("конструкт") || text.includes("конструктив")) sections.push("КР");
+  if (text === "ов" || text.includes("овик") || text.includes("отоп") || text.includes("вентил") || text.includes("кондицион")) sections.push("ОВиК");
+  if (text === "вк" || text.includes("водоснаб") || text.includes("канализац")) sections.push("ВК");
+  if (text.includes("эом") || text.includes("электр") || text.includes("освещ")) sections.push("ЭОМ");
+  if (text === "сс" || text.includes("слаботоч")) sections.push("СС");
+  if (text.includes("пос") || text.includes("ппр") || text.includes("под") || text.includes("поясн")) sections.push("ПОС/ППР/ПОД/ПЗ");
+  if (text.includes("гип")) sections.push("ГИП");
+  if (text.includes("смет")) sections.push("Сметы");
+  if (!sections.length) sections.push(raw);
+  return sections;
+}
+
 function parseExecutorSections(value) {
-  if (Array.isArray(value)) return value.map((item) => String(item).trim()).filter(Boolean);
-  return String(value || "")
-    .split(/[;,]/)
-    .map((item) => item.trim())
-    .filter(Boolean);
+  const items = Array.isArray(value)
+    ? value
+    : String(value || "")
+        .split(/[;,\n]/)
+        .map((item) => item.trim())
+        .filter(Boolean);
+  return [...new Set(items.flatMap(inferExecutorSectionsFromText))];
+}
+
+function executorHasSection(executor, section) {
+  if (section === "Все") return true;
+  return parseExecutorSections(executor?.sections).includes(section);
+}
+
+function executorGroupForSection(section, groups = executorGroups) {
+  if (section === "Все") return { name: "Все исполнители", section: "Все", sections: "Все специализации", source: "База исполнителей SmetaOffice" };
+  return groups.find((group) => (group.section || groupToSection(group.name)) === section) || { name: section, section, sections: section, source: "Добавлено вручную" };
 }
 
 function guessExecutorSections(user) {
@@ -3393,7 +3426,7 @@ function ExecutorsModule({ role, executors, setExecutors, allTasks = [] }) {
     name: "",
     type: "физлицо",
     city: "",
-    section: "АР",
+    sectionsText: "АР",
     rank: 1,
     status: "Новый контакт",
     phone: "",
@@ -3407,11 +3440,12 @@ function ExecutorsModule({ role, executors, setExecutors, allTasks = [] }) {
     const groupSection = group.section || groupToSection(group.name);
     return {
       ...group,
-      count: executors.filter((executor) => parseExecutorSections(executor.sections).includes(groupSection)).length,
+      count: executors.filter((executor) => executorHasSection(executor, groupSection)).length,
       source: "База исполнителей SmetaOffice",
     };
   });
   const sectionOptions = ["Все", ...new Set([...executorSections.filter((item) => item !== "Все"), ...customGroups.map((group) => group.section || group.name)])];
+  const selectedGroup = executorGroupForSection(section, visibleExecutorGroups);
   const liveExecutorStats = useMemo(() => {
     const verified = executors.filter((executor) => ["Проверенный", "Сильный", "Эксперт"].includes(executor.status)).length;
     const needsCheck = executors.filter((executor) => ["Новый контакт", "На проверке"].includes(executor.status)).length;
@@ -3429,8 +3463,9 @@ function ExecutorsModule({ role, executors, setExecutors, allTasks = [] }) {
   const filteredExecutors = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
     return executors.filter((executor) => {
-      const sectionMatch = section === "Все" || executor.sections.includes(section);
-      const haystack = `${executor.name} ${executor.city} ${executor.type} ${executor.sections.join(" ")} ${executor.status}`.toLowerCase();
+      const sections = parseExecutorSections(executor.sections);
+      const sectionMatch = executorHasSection(executor, section);
+      const haystack = `${executor.name} ${executor.city} ${executor.type} ${sections.join(" ")} ${executor.status}`.toLowerCase();
       const queryMatch = !normalizedQuery || haystack.includes(normalizedQuery);
       return sectionMatch && queryMatch;
     });
@@ -3451,7 +3486,7 @@ function ExecutorsModule({ role, executors, setExecutors, allTasks = [] }) {
       name,
       type: form.type,
       city: form.city.trim() || "не указан",
-      sections: [form.section],
+      sections: parseExecutorSections(form.sectionsText).length ? parseExecutorSections(form.sectionsText) : ["Общие работы"],
       rank: Number(form.rank),
       status: form.status,
       rating: 50,
@@ -3478,7 +3513,7 @@ function ExecutorsModule({ role, executors, setExecutors, allTasks = [] }) {
       name: "",
       type: "физлицо",
       city: "",
-      section: "АР",
+      sectionsText: section !== "Все" ? section : "АР",
       rank: 1,
       status: "Новый контакт",
       phone: "",
@@ -3560,8 +3595,31 @@ function ExecutorsModule({ role, executors, setExecutors, allTasks = [] }) {
             </div>
           </div>
           <div className="executor-groups">
+            <button
+              type="button"
+              className={section === "Все" ? "active" : ""}
+              onClick={() => {
+                setSection("Все");
+                setSelectedId("");
+              }}
+            >
+              <strong>{executors.length}</strong>
+              <div>
+                <b>Все исполнители</b>
+                <span>Все специализации и совмещённые роли</span>
+                <small>Общая база SmetaOffice</small>
+              </div>
+            </button>
             {visibleExecutorGroups.map((group) => (
-              <button type="button" key={group.name} onClick={() => setSection(group.section || groupToSection(group.name))}>
+              <button
+                type="button"
+                key={group.name}
+                className={(group.section || groupToSection(group.name)) === section ? "active" : ""}
+                onClick={() => {
+                  setSection(group.section || groupToSection(group.name));
+                  setSelectedId("");
+                }}
+              >
                 <strong>{group.count}</strong>
                 <div>
                   <b>{group.name}</b>
@@ -3618,66 +3676,23 @@ function ExecutorsModule({ role, executors, setExecutors, allTasks = [] }) {
         </div>
       </section>
 
-      <section className="workspace-card add-executor-card">
-        <div className="workspace-head">
-          <div>
-            <h2>Добавить исполнителя</h2>
-            <p>Вносить людей можно прямо в приложении. Контакты увидит только владелец.</p>
-          </div>
-          <button type="button" className="primary" onClick={addExecutor} disabled={!form.name.trim()}>Добавить</button>
-        </div>
-        <div className="executor-form">
-          <input value={form.name} onChange={(event) => setForm((next) => ({ ...next, name: event.target.value }))} placeholder="ФИО / название команды" />
-          <select value={form.type} onChange={(event) => setForm((next) => ({ ...next, type: event.target.value }))}>
-            <option>физлицо</option>
-            <option>ИП</option>
-            <option>компания</option>
-            <option>партнёр</option>
-            <option>внутренняя команда</option>
-          </select>
-          <input value={form.city} onChange={(event) => setForm((next) => ({ ...next, city: event.target.value }))} placeholder="Город / удалённо" />
-          <select value={form.section} onChange={(event) => setForm((next) => ({ ...next, section: event.target.value }))}>
-            {sectionOptions.filter((item) => item !== "Все").map((item) => (
-              <option key={item}>{item}</option>
-            ))}
-          </select>
-          <select value={form.rank} onChange={(event) => setForm((next) => ({ ...next, rank: event.target.value }))}>
-            <option value="1">Ранг 1 — новый</option>
-            <option value="2">Ранг 2 — простые задачи</option>
-            <option value="3">Ранг 3 — стандартные задачи</option>
-            <option value="4">Ранг 4 — сложные задачи</option>
-            <option value="5">Ранг 5 — эксперт</option>
-          </select>
-          <select value={form.status} onChange={(event) => setForm((next) => ({ ...next, status: event.target.value }))}>
-            <option>Новый контакт</option>
-            <option>На проверке</option>
-            <option>Проверенный</option>
-            <option>Сильный</option>
-            <option>Эксперт</option>
-            <option>Ограничен</option>
-          </select>
-          <input value={form.phone} onChange={(event) => setForm((next) => ({ ...next, phone: event.target.value }))} placeholder="Телефон (закрыто для неуправленцев)" />
-          <input value={form.email} onChange={(event) => setForm((next) => ({ ...next, email: event.target.value }))} placeholder="Почта" />
-          <input value={form.telegram} onChange={(event) => setForm((next) => ({ ...next, telegram: event.target.value }))} placeholder="Telegram / WhatsApp" />
-          <input className="wide" value={form.note} onChange={(event) => setForm((next) => ({ ...next, note: event.target.value }))} placeholder="Комментарий руководства" />
-        </div>
-      </section>
-
       <section className="workspace-card">
         <div className="workspace-head">
           <div>
-            <h2>Исполнители выбранной специализации</h2>
-            <p>Карточки появляются только из реальной базы исполнителей или из пользователей, которым в админке включили возможность быть исполнителем.</p>
+            <p className="section-hint">Открытая специализация</p>
+            <h2>{selectedGroup.name}</h2>
+            <p>{section === "Все" ? "Показаны все исполнители, которых можно назначать на этапы." : `Показаны только специалисты категории: ${selectedGroup.sections}. Если человек совмещает несколько ролей, он появится в каждой своей категории.`}</p>
           </div>
           <div className="filters">
             <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Поиск исполнителя" />
-            <select value={section} onChange={(event) => setSection(event.target.value)}>
+            <select value={section} onChange={(event) => { setSection(event.target.value); setSelectedId(""); }}>
               {sectionOptions.map((item) => (
                 <option key={item} value={item}>
                   {item}
                 </option>
               ))}
             </select>
+            {section !== "Все" ? <button type="button" className="secondary" onClick={() => { setSection("Все"); setSelectedId(""); }}>Все</button> : null}
           </div>
         </div>
 
@@ -3701,6 +3716,47 @@ function ExecutorsModule({ role, executors, setExecutors, allTasks = [] }) {
           ) : (
             <div className="empty">Выбери исполнителя.</div>
           )}
+        </div>
+      </section>
+
+      <section className="workspace-card add-executor-card">
+        <div className="workspace-head">
+          <div>
+            <h2>Добавить исполнителя</h2>
+            <p>Добавление находится внизу раздела. Один человек может быть сразу в нескольких специализациях: например `АР, Дизайн, 3D`.</p>
+          </div>
+          <button type="button" className="primary" onClick={addExecutor} disabled={!form.name.trim()}>Добавить</button>
+        </div>
+        <div className="executor-form">
+          <input value={form.name} onChange={(event) => setForm((next) => ({ ...next, name: event.target.value }))} placeholder="ФИО / название команды" />
+          <select value={form.type} onChange={(event) => setForm((next) => ({ ...next, type: event.target.value }))}>
+            <option>физлицо</option>
+            <option>ИП</option>
+            <option>компания</option>
+            <option>партнёр</option>
+            <option>внутренняя команда</option>
+          </select>
+          <input value={form.city} onChange={(event) => setForm((next) => ({ ...next, city: event.target.value }))} placeholder="Город / удалённо" />
+          <input value={form.sectionsText} onChange={(event) => setForm((next) => ({ ...next, sectionsText: event.target.value }))} placeholder="Специализации через запятую: АР, Дизайн, 3D" />
+          <select value={form.rank} onChange={(event) => setForm((next) => ({ ...next, rank: event.target.value }))}>
+            <option value="1">Ранг 1 — новый</option>
+            <option value="2">Ранг 2 — простые задачи</option>
+            <option value="3">Ранг 3 — стандартные задачи</option>
+            <option value="4">Ранг 4 — сложные задачи</option>
+            <option value="5">Ранг 5 — эксперт</option>
+          </select>
+          <select value={form.status} onChange={(event) => setForm((next) => ({ ...next, status: event.target.value }))}>
+            <option>Новый контакт</option>
+            <option>На проверке</option>
+            <option>Проверенный</option>
+            <option>Сильный</option>
+            <option>Эксперт</option>
+            <option>Ограничен</option>
+          </select>
+          <input value={form.phone} onChange={(event) => setForm((next) => ({ ...next, phone: event.target.value }))} placeholder="Телефон (закрыто для неуправленцев)" />
+          <input value={form.email} onChange={(event) => setForm((next) => ({ ...next, email: event.target.value }))} placeholder="Почта" />
+          <input value={form.telegram} onChange={(event) => setForm((next) => ({ ...next, telegram: event.target.value }))} placeholder="Telegram / WhatsApp" />
+          <input className="wide" value={form.note} onChange={(event) => setForm((next) => ({ ...next, note: event.target.value }))} placeholder="Комментарий руководства" />
         </div>
       </section>
     </section>
