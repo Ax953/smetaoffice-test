@@ -1754,6 +1754,16 @@ function riskText(risk) {
   return "В норме";
 }
 
+function riskRank(risk) {
+  if (risk === "red") return 3;
+  if (risk === "yellow") return 2;
+  return 1;
+}
+
+function strongestRisk(...risks) {
+  return risks.reduce((current, next) => (riskRank(next) > riskRank(current) ? next : current), "green");
+}
+
 function statusClass(status) {
   if (status === "Просрочено") return "overdue";
   if (status === "На проверке") return "review";
@@ -1816,6 +1826,10 @@ function daysBetween(start, end) {
   return Math.max(diff, 0);
 }
 
+function clampPercent(value) {
+  return Math.max(0, Math.min(100, Math.round(Number(value) || 0)));
+}
+
 function projectTimeline(project) {
   const start = project.startDate || project.createdAt || "";
   const end = project.endDate || "";
@@ -1828,6 +1842,74 @@ function projectTimeline(project) {
   today.setHours(0, 0, 0, 0);
   const overdue = Boolean(endDate && endDate < today && project.status !== "Завершён");
   return { start, end, elapsed, planned, left, overdue };
+}
+
+function projectScheduleControl(project) {
+  const timeline = projectTimeline(project);
+  const progress = clampPercent(project.progress);
+  const complete = progress >= 100 || ["Завершён", "Закрыто"].includes(project.status);
+  const hasTimeline = Boolean(timeline.start && timeline.end && timeline.planned != null && timeline.planned > 0);
+
+  if (!hasTimeline) {
+    return {
+      ...timeline,
+      hasTimeline: false,
+      tone: "yellow",
+      label: "Нужны даты",
+      progress,
+      timePercent: 0,
+      gap: 0,
+      hint: "Укажите дату начала и плановую дату окончания, чтобы включить контроль срока.",
+    };
+  }
+
+  const elapsed = Math.max(0, timeline.elapsed || 0);
+  const timePercent = clampPercent((elapsed / Math.max(timeline.planned, 1)) * 100);
+  const gap = timePercent - progress;
+  const left = timeline.left == null ? null : timeline.left;
+  const nearDeadline = left != null && left <= Math.max(2, Math.ceil(timeline.planned * 0.15));
+  let tone = "green";
+  let label = "По графику";
+
+  if (complete) {
+    tone = "green";
+    label = "Завершено";
+  } else if (timeline.overdue || gap >= 25 || (timePercent >= 95 && progress < 85)) {
+    tone = "red";
+    label = "Горит срок";
+  } else if (gap >= 12 || (nearDeadline && progress < 85)) {
+    tone = "yellow";
+    label = "Риск срока";
+  }
+
+  const leftText = timeline.overdue
+    ? "срок уже прошёл"
+    : left == null
+    ? "остаток не рассчитан"
+    : `осталось ${left} дн.`;
+  const hint = `Время: ${timePercent}%, работа: ${progress}%, разрыв: ${gap > 0 ? gap : 0} п.п., ${leftText}.`;
+
+  return {
+    ...timeline,
+    hasTimeline: true,
+    tone,
+    label,
+    progress,
+    timePercent,
+    gap,
+    hint,
+  };
+}
+
+function effectiveProjectRisk(project) {
+  const schedule = projectScheduleControl(project);
+  return strongestRisk(project.risk, schedule.hasTimeline ? schedule.tone : "green");
+}
+
+function scheduleLeftLabel(schedule) {
+  if (!schedule.hasTimeline) return "даты не заданы";
+  if (schedule.overdue) return "срок прошёл";
+  return `осталось ${schedule.left} дн.`;
 }
 
 function toMoneyNumber(value) {
@@ -1995,7 +2077,7 @@ function financeSummary(projectItems) {
       summary.companyShare += economy.companyShare;
       summary.managerShare += economy.managerShare;
       summary.payable += economy.realizationCost;
-      if (project.risk === "red") summary.redProjects += 1;
+      if (effectiveProjectRisk(project) === "red") summary.redProjects += 1;
       return summary;
     },
     {
@@ -2226,6 +2308,8 @@ function StatCard({ item }) {
 function ProjectCard({ project, active, onClick }) {
   const economy = projectEconomy(project);
   const timeline = projectTimeline(project);
+  const schedule = projectScheduleControl(project);
+  const projectRisk = effectiveProjectRisk(project);
 
   return (
     <button type="button" onClick={onClick} className={cn("project-card", active && "active")}>
@@ -2233,7 +2317,8 @@ function ProjectCard({ project, active, onClick }) {
         <div>
           <div className="chips">
             <span className="muted-chip">{project.id}</span>
-            <span className={cn("risk-chip", project.risk)}>{riskText(project.risk)}</span>
+            <span className={cn("risk-chip", projectRisk)}>{riskText(projectRisk)}</span>
+            <span className={cn("risk-chip", schedule.tone)}>Срок: {schedule.label}</span>
           </div>
           <h3>{project.title}</h3>
           <p>{project.client} · {project.city}</p>
@@ -2246,8 +2331,18 @@ function ProjectCard({ project, active, onClick }) {
           <span>{project.progress}%</span>
         </div>
         <div className="bar">
-          <span className={cn("bar-fill", project.risk)} style={{ width: `${project.progress}%` }} />
+          <span className={cn("bar-fill", projectRisk)} style={{ width: `${project.progress}%` }} />
         </div>
+      </div>
+      <div className="schedule-mini">
+        <div>
+          <span>Время</span>
+          <b>{schedule.hasTimeline ? `${schedule.timePercent}%` : "нет дат"}</b>
+        </div>
+        <div className="bar">
+          <span className={cn("bar-fill", schedule.tone)} style={{ width: `${schedule.hasTimeline ? Math.max(4, schedule.timePercent) : 0}%` }} />
+        </div>
+        <small>{schedule.hasTimeline ? `Работа: ${schedule.progress}% · ${scheduleLeftLabel(schedule)}` : "Нужны дата начала и дата окончания"}</small>
       </div>
       <div className="project-meta">
         <span>РП: {project.manager}</span>
@@ -2360,7 +2455,7 @@ function projectApprovals(project) {
     {
       id: `${project.id}-approval-status`,
       title: `Статус этапа: ${project.stage}`,
-      status: project.risk === "red" ? "нужна реакция РП" : "можно отправить клиенту",
+      status: effectiveProjectRisk(project) === "red" ? "нужна реакция РП" : "можно отправить клиенту",
       owner: project.manager || "РП",
       channel: "SmetaGo",
     },
@@ -2793,6 +2888,8 @@ function ProjectDetails({ project, role, onUpdateProject, onTaskStatusChange, on
   const canAdminProject = ["owner", "admin"].includes(role);
   const economy = projectEconomy(project);
   const timeline = projectTimeline(project);
+  const schedule = projectScheduleControl(project);
+  const projectRisk = effectiveProjectRisk(project);
 
   return (
     <div className="details-stack">
@@ -2801,7 +2898,8 @@ function ProjectDetails({ project, role, onUpdateProject, onTaskStatusChange, on
           <div>
             <div className="chips">
               <span className="muted-chip">{project.id}</span>
-              <span className={cn("risk-chip", project.risk)}>{riskText(project.risk)}</span>
+              <span className={cn("risk-chip", projectRisk)}>{riskText(projectRisk)}</span>
+              <span className={cn("risk-chip", schedule.tone)}>Контроль срока: {schedule.label}</span>
               <span className="blue-chip">{project.source}</span>
               <span className="muted-chip">{project.status}</span>
             </div>
@@ -2828,13 +2926,34 @@ function ProjectDetails({ project, role, onUpdateProject, onTaskStatusChange, on
           <Info label="Яндекс.Диск" value={<ExternalLinkValue url={project.yandexFolder} />} />
         </div>
 
+        <div className={cn("deadline-control", schedule.tone)}>
+          <div className="deadline-control-head">
+            <div>
+              <span>Контроль срока проекта</span>
+              <h3>{schedule.label}</h3>
+              <p>{schedule.hint}</p>
+            </div>
+            <em className={cn("risk-chip", schedule.tone)}>{scheduleLeftLabel(schedule)}</em>
+          </div>
+          <div className="deadline-bars">
+            <div>
+              <div><span>Прошло времени</span><b>{schedule.hasTimeline ? `${schedule.timePercent}%` : "—"}</b></div>
+              <div className="bar"><span className={cn("bar-fill", schedule.tone)} style={{ width: `${schedule.hasTimeline ? Math.max(4, schedule.timePercent) : 0}%` }} /></div>
+            </div>
+            <div>
+              <div><span>Готовность работы</span><b>{schedule.progress}%</b></div>
+              <div className="bar"><span className={cn("bar-fill", projectRisk)} style={{ width: `${Math.max(4, schedule.progress)}%` }} /></div>
+            </div>
+          </div>
+        </div>
+
         <div className="progress-block large">
           <div>
             <span>Готовность проекта</span>
             <span>{project.progress}%</span>
           </div>
           <div className="bar">
-            <span className={cn("bar-fill", project.risk)} style={{ width: `${project.progress}%` }} />
+            <span className={cn("bar-fill", projectRisk)} style={{ width: `${project.progress}%` }} />
           </div>
         </div>
       </section>
@@ -4524,8 +4643,8 @@ function ProjectsModule({
   }, [visibleProjects, query]);
 
   const groupRisk = (projectItems, fallback = "green") => {
-    if (projectItems.some((project) => project.risk === "red")) return "red";
-    if (projectItems.some((project) => project.risk === "yellow")) return "yellow";
+    if (projectItems.some((project) => effectiveProjectRisk(project) === "red")) return "red";
+    if (projectItems.some((project) => effectiveProjectRisk(project) === "yellow")) return "yellow";
     return fallback;
   };
 
@@ -4553,8 +4672,9 @@ function ProjectsModule({
       item.paidByClient += economy.paidByClient;
       item.realizationCost += economy.realizationCost;
       item.directions.add(project.direction);
-      if (project.risk === "red") item.risk = "red";
-      else if (project.risk === "yellow" && item.risk !== "red") item.risk = "yellow";
+      const risk = effectiveProjectRisk(project);
+      if (risk === "red") item.risk = "red";
+      else if (risk === "yellow" && item.risk !== "red") item.risk = "yellow";
       map.set(key, item);
     });
     return Array.from(map.values());
@@ -5657,7 +5777,7 @@ function AnalyticsModule({ projectItems, allTasks, role }) {
     halfyear: "Полгода",
     year: "Год",
   };
-  const redProjects = projectItems.filter((project) => project.risk === "red").length;
+  const redProjects = projectItems.filter((project) => effectiveProjectRisk(project) === "red").length;
   const reviewTasks = allTasks.filter((task) => task.status === "На проверке").length;
   const overdueTasks = allTasks.filter((task) => task.status === "Просрочено").length;
   const summary = financeSummary(projectItems);
@@ -5726,7 +5846,7 @@ function AnalyticsModule({ projectItems, allTasks, role }) {
             <div key={project.id}>
               <b>{project.id}</b>
               <span>{project.title}</span>
-              <em className={cn("risk-chip", project.risk)}>{riskText(project.risk)}</em>
+              <em className={cn("risk-chip", effectiveProjectRisk(project))}>{riskText(effectiveProjectRisk(project))}</em>
               <strong>{project.progress}%</strong>
             </div>
           ))}
@@ -5785,7 +5905,7 @@ function ClientAppModule({ projectItems }) {
               <span>Согласований: {projectApprovals(project).length}</span>
             </div>
             <div className="bar">
-              <span className={cn("bar-fill", project.risk)} style={{ width: `${project.progress}%` }} />
+              <span className={cn("bar-fill", effectiveProjectRisk(project))} style={{ width: `${project.progress}%` }} />
             </div>
             <button type="button" onClick={() => showAction(`Сообщение менеджеру по проекту ${project.title} открыто`) }>Написать менеджеру</button>
           </div>
@@ -5806,8 +5926,8 @@ function DashboardModule({ visibleProjects, selectedProject, setSelectedId, role
   const dashboardHint = dashboardHintForRole(role);
   const scopeText = roleScopeText(role, session);
   const visibleTasks = flattenTasks(visibleProjects);
-  const redProjects = visibleProjects.filter((project) => project.risk === "red");
-  const yellowProjects = visibleProjects.filter((project) => project.risk === "yellow");
+  const redProjects = visibleProjects.filter((project) => effectiveProjectRisk(project) === "red");
+  const yellowProjects = visibleProjects.filter((project) => effectiveProjectRisk(project) === "yellow");
   const overdueTasks = visibleTasks.filter((task) => task.status === "Просрочено");
   const reviewTasks = visibleTasks.filter((task) => task.status === "На проверке");
   const avgProgress = visibleProjects.length
@@ -5844,8 +5964,9 @@ function DashboardModule({ visibleProjects, selectedProject, setSelectedId, role
       const key = project.region || project.city || "Без региона";
       const item = map.get(key) || { name: key, projects: [], risk: "green" };
       item.projects.push(project);
-      if (project.risk === "red") item.risk = "red";
-      else if (project.risk === "yellow" && item.risk !== "red") item.risk = "yellow";
+      const risk = effectiveProjectRisk(project);
+      if (risk === "red") item.risk = "red";
+      else if (risk === "yellow" && item.risk !== "red") item.risk = "yellow";
       map.set(key, item);
       return map;
     }, new Map()).values()
@@ -5860,8 +5981,9 @@ function DashboardModule({ visibleProjects, selectedProject, setSelectedId, role
       const key = project.direction || "Без направления";
       const item = map.get(key) || { name: key, projects: [], risk: "green" };
       item.projects.push(project);
-      if (project.risk === "red") item.risk = "red";
-      else if (project.risk === "yellow" && item.risk !== "red") item.risk = "yellow";
+      const risk = effectiveProjectRisk(project);
+      if (risk === "red") item.risk = "red";
+      else if (risk === "yellow" && item.risk !== "red") item.risk = "yellow";
       map.set(key, item);
       return map;
     }, new Map()).values()
@@ -6110,10 +6232,10 @@ function DashboardModule({ visibleProjects, selectedProject, setSelectedId, role
         <div className="risk-project-strip">
           {[...redProjects, ...yellowProjects].slice(0, 6).map((project) => (
             <button key={project.id} type="button" onClick={() => openDashboardProject(project)}>
-              <span className={cn("risk-chip", project.risk)}>{riskText(project.risk)}</span>
+              <span className={cn("risk-chip", effectiveProjectRisk(project))}>{riskText(effectiveProjectRisk(project))}</span>
               <b>{project.title}</b>
               <small>{project.region || project.city} · РП: {project.manager} · {project.stage}</small>
-              <div className="bar"><i className={cn("bar-fill", project.risk)} style={{ width: `${Math.max(4, project.progress)}%` }} /></div>
+              <div className="bar"><i className={cn("bar-fill", effectiveProjectRisk(project))} style={{ width: `${Math.max(4, project.progress)}%` }} /></div>
             </button>
           ))}
           {[...redProjects, ...yellowProjects].length === 0 ? <div className="empty">Сейчас нет проектов в красной или жёлтой зоне.</div> : null}

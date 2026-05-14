@@ -490,6 +490,31 @@ input.invalid, select.invalid {
 .bar-fill.yellow { background: #f59e0b; }
 .bar-fill.red { background: #ef4444; }
 .bar-fill.blue { background: #2563eb; }
+.schedule-mini {
+  display: grid;
+  gap: 6px;
+  margin-top: 12px;
+  border: 1px solid #dbe5ef;
+  border-radius: 14px;
+  background: #f8fafc;
+  padding: 10px;
+}
+.schedule-mini > div:first-child {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  color: #64748b;
+  font-size: 12px;
+}
+.schedule-mini b {
+  color: #0f172a;
+}
+.schedule-mini small {
+  color: #64748b;
+  font-size: 12px;
+  line-height: 1.35;
+}
 .project-meta { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 14px; }
 .project-meta span {
   border-radius: 12px;
@@ -676,6 +701,59 @@ input.invalid, select.invalid {
   grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 10px;
   margin-top: 20px;
+}
+.deadline-control {
+  margin-top: 18px;
+  border: 1px solid #dbe5ef;
+  border-radius: 18px;
+  background: #f8fafc;
+  padding: 16px;
+}
+.deadline-control.green { border-color: #bbf7d0; background: #f0fdf4; }
+.deadline-control.yellow { border-color: #fde68a; background: #fffbeb; }
+.deadline-control.red { border-color: #fecaca; background: #fef2f2; }
+.deadline-control-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+}
+.deadline-control-head span {
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 800;
+}
+.deadline-control-head h3 {
+  margin: 4px 0;
+  color: #020617;
+}
+.deadline-control-head p {
+  margin: 0;
+  color: #475569;
+  line-height: 1.45;
+}
+.deadline-bars {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 14px;
+}
+.deadline-bars > div {
+  min-width: 0;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, .7);
+  padding: 12px;
+}
+.deadline-bars > div > div:first-child {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  color: #64748b;
+  font-size: 12px;
+}
+.deadline-bars b {
+  color: #020617;
 }
 .info {
   min-width: 0;
@@ -2537,7 +2615,7 @@ h3 { margin: 0; }
   .office-main { padding-left: 0; }
   .office-header { grid-template-columns: 1fr; align-items: stretch; }
   .workspace-head, .details-head, .account-hero, .project-open-head { align-items: stretch; flex-direction: column; }
-  .stats-grid, .info-grid, .bottom-panels, .pipeline, .summary-grid, .executor-groups, .executor-form, .executor-two-cols, .mvp-days, .integration-form, .client-app-grid, .economy-summary, .production-budget-card, .login-card, .finance-grid, .finance-kpi-list, .plan-grid, .focus-grid, .risk-project-strip, .task-kanban, .executor-process-grid, .bitrix-bridge-grid, .stage-editor-row, .stage-editor-head, .admin-directory-grid, .admin-create-user-form, .empty-start-card, .role-scope-card, .task-meaning-grid, .partner-detail-grid, .analytics-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .stats-grid, .info-grid, .bottom-panels, .pipeline, .summary-grid, .executor-groups, .executor-form, .executor-two-cols, .mvp-days, .integration-form, .client-app-grid, .economy-summary, .production-budget-card, .login-card, .finance-grid, .finance-kpi-list, .plan-grid, .focus-grid, .risk-project-strip, .task-kanban, .executor-process-grid, .bitrix-bridge-grid, .stage-editor-row, .stage-editor-head, .admin-directory-grid, .admin-create-user-form, .empty-start-card, .role-scope-card, .task-meaning-grid, .partner-detail-grid, .analytics-grid, .deadline-bars { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .dashboard-grid, .dashboard-grid.wide { grid-template-columns: 1fr; }
 }
 
@@ -2545,7 +2623,7 @@ h3 { margin: 0; }
   .office-content, .office-header { padding-left: 16px; padding-right: 16px; }
   .header-actions, .filters, .module-head { flex-direction: column; align-items: stretch; }
   .header-actions label, .moscow-clock, .filters input, .filters select { width: 100%; min-width: 0; }
-  .stats-grid, .projects-list, .drill-card-grid, .card-money-row, .drill-metrics, .info-grid, .bottom-panels, .pipeline, .summary-grid, .executor-groups, .executor-list, .executor-form, .executor-two-cols, .chat-input, .project-chat-input, .mvp-days, .integration-form, .quick-form, .task-create-form, .economy-summary, .production-budget-card, .login-card, .finance-grid, .finance-kpi-list, .org-detail-grid, .mini-kpi-grid, .plan-grid, .focus-grid, .risk-project-strip, .task-command-bar, .task-kanban, .executor-process-grid, .task-inspector-actions, .client-participant-form, .sales-grid, .sales-board, .stage-editor-row, .stage-editor-head, .admin-directory-grid, .admin-create-user-form, .empty-start-card, .role-scope-card, .role-scope-meta, .quick-action-grid, .task-meaning-grid, .partner-detail-grid, .analytics-grid, .specialization-add { grid-template-columns: 1fr; }
+  .stats-grid, .projects-list, .drill-card-grid, .card-money-row, .drill-metrics, .info-grid, .bottom-panels, .pipeline, .summary-grid, .executor-groups, .executor-list, .executor-form, .executor-two-cols, .chat-input, .project-chat-input, .mvp-days, .integration-form, .quick-form, .task-create-form, .economy-summary, .production-budget-card, .login-card, .finance-grid, .finance-kpi-list, .org-detail-grid, .mini-kpi-grid, .plan-grid, .focus-grid, .risk-project-strip, .task-command-bar, .task-kanban, .executor-process-grid, .task-inspector-actions, .client-participant-form, .sales-grid, .sales-board, .stage-editor-row, .stage-editor-head, .admin-directory-grid, .admin-create-user-form, .empty-start-card, .role-scope-card, .role-scope-meta, .quick-action-grid, .task-meaning-grid, .partner-detail-grid, .analytics-grid, .specialization-add, .deadline-bars { grid-template-columns: 1fr; }
   .wizard-header, .create-project-summary { flex-direction: column; align-items: stretch; }
   .stage-editor-wide { grid-column: auto; }
   .task-table > div, .partner-table > div, .partner-table > button, .project-account-meta, .mapping-table > div, .sync-log > div, .task-board > div, .analytics-list > div, .sections-table > div:not(.empty), .admin-users-table > div, .finance-table > div, .dashboard-table > div, .dashboard-table > button, .task-status-chart > div, .bitrix-map-table > div, .client-participants-list > div, .approval-list > div { grid-template-columns: 1fr; }
