@@ -1644,6 +1644,10 @@ function authHeaders() {
   return token ? { Authorization: `Bearer ${token}` } : {};
 }
 
+function sanitizeUsersForClient(users = []) {
+  return users.map(({ password, passwordHash, passwordSalt, ...user }) => user);
+}
+
 async function apiGet(path, fallback) {
   try {
     const response = await fetch(`${API_BASE}${path}`, { headers: authHeaders() });
@@ -5030,6 +5034,18 @@ function PartnersModule({ role, session, partnerItems, visiblePartnerItems, setP
 }
 
 function AdminModule({ users, setUsers, session }) {
+  const [newUserForm, setNewUserForm] = useState({
+    name: "",
+    login: "",
+    password: "",
+    role: "executor",
+    status: "active",
+    region: "Все регионы",
+    direction: "Все направления",
+    position: "Не назначена",
+  });
+  const [adminNotice, setAdminNotice] = useState("");
+
   if (!userCan(session, "manageUsers")) {
     return (
       <>
@@ -5039,6 +5055,54 @@ function AdminModule({ users, setUsers, session }) {
         </section>
       </>
     );
+  }
+
+  function resetNewUserForm() {
+    setNewUserForm({
+      name: "",
+      login: "",
+      password: "",
+      role: "executor",
+      status: "active",
+      region: "Все регионы",
+      direction: "Все направления",
+      position: "Не назначена",
+    });
+  }
+
+  function createUser(event) {
+    event.preventDefault();
+    const login = newUserForm.login.trim();
+    const name = newUserForm.name.trim();
+    const password = newUserForm.password.trim();
+
+    if (!name || !login || !password) {
+      setAdminNotice("Заполни ФИО, логин и временный пароль.");
+      return;
+    }
+    if (users.some((user) => user.login.toLowerCase() === login.toLowerCase())) {
+      setAdminNotice("Такой логин уже есть. Укажи другой логин.");
+      return;
+    }
+
+    const createdUser = {
+      id: `USR-${Date.now()}`,
+      login,
+      password,
+      role: newUserForm.role,
+      name,
+      status: newUserForm.status,
+      region: newUserForm.region,
+      regions: newUserForm.region === "Все регионы" ? ["Все регионы"] : [newUserForm.region],
+      direction: newUserForm.direction,
+      position: newUserForm.position,
+      createdAt: new Date().toISOString(),
+      createdBy: session?.id || session?.login || "system",
+    };
+
+    setUsers((items) => [createdUser, ...items]);
+    resetNewUserForm();
+    setAdminNotice("Пользователь создан. Передай логин и временный пароль лично, дальше доступы можно менять в таблице.");
   }
 
   function updateUser(userId, patch) {
@@ -5057,6 +5121,41 @@ function AdminModule({ users, setUsers, session }) {
   return (
     <>
       <SectionIntro section="admin" />
+      <section className="office-card">
+        <div className="section-row">
+          <div>
+            <h3>Создать пользователя</h3>
+            <p className="section-hint">Регистрация закрытая: аккаунт создаёт владелец или админ, затем назначает роль, регион, направление и должность.</p>
+          </div>
+          <span className="muted-chip">Без публичной регистрации</span>
+        </div>
+
+        <form className="admin-create-user-form" onSubmit={createUser}>
+          <label><span>ФИО / название</span><input value={newUserForm.name} onChange={(event) => setNewUserForm((next) => ({ ...next, name: event.target.value }))} placeholder="Напр.: Саидов Саид Магомед" /></label>
+          <label><span>Логин</span><input value={newUserForm.login} onChange={(event) => setNewUserForm((next) => ({ ...next, login: event.target.value }))} placeholder="Напр.: saidov" /></label>
+          <label><span>Временный пароль</span><input value={newUserForm.password} onChange={(event) => setNewUserForm((next) => ({ ...next, password: event.target.value }))} placeholder="Выдать лично" /></label>
+          <label><span>Статус</span><select value={newUserForm.status} onChange={(event) => setNewUserForm((next) => ({ ...next, status: event.target.value }))}>
+            <option value="active">Активен</option>
+            <option value="pending">Ожидает назначения</option>
+            <option value="blocked">Заблокирован</option>
+          </select></label>
+          <label><span>Роль</span><select value={newUserForm.role} onChange={(event) => setNewUserForm((next) => ({ ...next, role: event.target.value }))}>
+            {roles.map((roleItem) => <option key={roleItem.id} value={roleItem.id}>{roleItem.name}</option>)}
+          </select></label>
+          <label><span>Региональный доступ</span><select value={newUserForm.region} onChange={(event) => setNewUserForm((next) => ({ ...next, region: event.target.value }))}>
+            {regionOptions.map((region) => <option key={region} value={region}>{region}</option>)}
+          </select></label>
+          <label><span>Направление</span><select value={newUserForm.direction} onChange={(event) => setNewUserForm((next) => ({ ...next, direction: event.target.value }))}>
+            {["Все направления", ...projectDirectionNames()].map((direction) => <option key={direction} value={direction}>{direction}</option>)}
+          </select></label>
+          <label><span>Должность</span><select value={newUserForm.position} onChange={(event) => setNewUserForm((next) => ({ ...next, position: event.target.value }))}>
+            {positionOptions.map((position) => <option key={position} value={position}>{position}</option>)}
+          </select></label>
+          <button type="submit" className="primary">Создать пользователя</button>
+        </form>
+        {adminNotice ? <div className="login-notice admin-notice">{adminNotice}</div> : null}
+      </section>
+
       <section className="office-card">
         <div className="section-row">
           <div>
@@ -5086,6 +5185,11 @@ function AdminModule({ users, setUsers, session }) {
               <select value={user.region || "ЧР"} onChange={(event) => updateUser(user.id, { region: event.target.value })}>
                 {regionOptions.map((region) => (
                   <option key={region} value={region}>{region}</option>
+                ))}
+              </select>
+              <select value={user.direction || "Все направления"} onChange={(event) => updateUser(user.id, { direction: event.target.value })}>
+                {["Все направления", ...projectDirectionNames()].map((direction) => (
+                  <option key={direction} value={direction}>{direction}</option>
                 ))}
               </select>
               <select value={user.position || "Не назначена"} onChange={(event) => updateUser(user.id, { position: event.target.value })}>
@@ -5904,9 +6008,10 @@ function SmetaOfficePrototype() {
   function setUsers(updater) {
     setUsersState((current) => {
       const next = typeof updater === "function" ? updater(current) : updater;
-      writeStoredValue("smeta.users", next);
+      const safeNext = sanitizeUsersForClient(next);
+      writeStoredValue("smeta.users", safeNext);
       apiPut("/users", next);
-      return next;
+      return safeNext;
     });
   }
 
