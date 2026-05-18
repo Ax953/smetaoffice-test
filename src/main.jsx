@@ -1855,6 +1855,18 @@ async function apiPut(path, value) {
   }
 }
 
+async function apiDelete(path) {
+  try {
+    const response = await fetch(`${API_BASE}${path}`, {
+      method: "DELETE",
+      headers: authHeaders(),
+    });
+    return response.ok;
+  } catch {
+    return false;
+  }
+}
+
 async function apiPost(path, value, fallback = null) {
   try {
     const response = await fetch(`${API_BASE}${path}`, {
@@ -3079,7 +3091,7 @@ function ClientParticipantsCard({ project, onAddParticipant }) {
   );
 }
 
-function ClientApprovalsCard({ project }) {
+function ClientApprovalsCard({ project, onCreateApproval }) {
   const approvals = projectApprovals(project);
 
   return (
@@ -3089,7 +3101,7 @@ function ClientApprovalsCard({ project }) {
           <h3>Согласования клиента</h3>
           <p className="section-hint">Все правки и утверждения фиксируются в проекте, чтобы Bitrix, SmetaOffice и SmetaGo не спорили между собой.</p>
         </div>
-        <button type="button" className="secondary" onClick={() => showAction("MVP: согласования будут отправляться клиенту через SmetaGO/Bitrix24 после подключения канала")}>MVP: согласование в разработке</button>
+        <button type="button" className="secondary" onClick={() => onCreateApproval?.(project.id)}>Создать согласование</button>
       </div>
       <div className="approval-list">
         {approvals.map((approval) => (
@@ -3107,7 +3119,7 @@ function ClientApprovalsCard({ project }) {
   );
 }
 
-function ProjectEditPanel({ project, users, canEdit, onUpdateProject }) {
+function ProjectEditPanel({ project, users, canEdit, canEditFinance, onUpdateProject }) {
   const [form, setForm] = useState(() => ({
     title: project.title || "",
     client: project.client || "",
@@ -3173,23 +3185,32 @@ function ProjectEditPanel({ project, users, canEdit, onUpdateProject }) {
   }
 
   function save() {
-    const contractAmount = Number(form.contractAmount) || 0;
-    const paidByClient = Number(form.paidByClient) || 0;
-    const productionAllocationPercent = Number(form.productionAllocationPercent) || 0;
-    const productionBudget = Number(form.productionBudget) || Math.round(contractAmount * (productionAllocationPercent / 100));
-    const salesCommissionPercent = Number(form.salesCommissionPercent) || 0;
-    const salesCommissionAmount = Number(form.salesCommissionAmount) || Math.round(contractAmount * (salesCommissionPercent / 100));
-    onUpdateProject(project.id, {
+    const patch = {
       ...form,
       progress: Math.max(0, Math.min(100, Number(form.progress) || 0)),
-      contractAmount,
-      paidByClient,
-      productionAllocationPercent,
-      productionBudget,
-      salesCommissionPercent,
-      salesCommissionAmount,
       yandexFolder: form.yandexFolder.trim() || "не привязан",
-    });
+    };
+    if (canEditFinance) {
+      const contractAmount = Number(form.contractAmount) || 0;
+      const paidByClient = Number(form.paidByClient) || 0;
+      const productionAllocationPercent = Number(form.productionAllocationPercent) || 0;
+      const productionBudget = Number(form.productionBudget) || Math.round(contractAmount * (productionAllocationPercent / 100));
+      const salesCommissionPercent = Number(form.salesCommissionPercent) || 0;
+      const salesCommissionAmount = Number(form.salesCommissionAmount) || Math.round(contractAmount * (salesCommissionPercent / 100));
+      Object.assign(patch, {
+        contractAmount,
+        paidByClient,
+        productionAllocationPercent,
+        productionBudget,
+        salesCommissionPercent,
+        salesCommissionAmount,
+      });
+    } else {
+      ["contractAmount", "paidByClient", "productionAllocationPercent", "productionBudget", "salesCommissionPercent", "salesCommissionAmount"].forEach((field) => {
+        delete patch[field];
+      });
+    }
+    onUpdateProject(project.id, patch);
   }
 
   return (
@@ -3197,7 +3218,7 @@ function ProjectEditPanel({ project, users, canEdit, onUpdateProject }) {
       <div className="section-row">
         <div>
           <h3>Редактирование проекта</h3>
-          <p className="section-hint">Здесь админ/владелец исправляет ошибочно внесённые данные: договор, оплату клиента, бюджет РП, комиссию продаж и ссылку на Яндекс.Диск.</p>
+          <p className="section-hint">Здесь исправляются ошибочно внесённые данные проекта. Финансовые поля доступны только роли с финансовым правом.</p>
         </div>
         <button type="button" className="primary" onClick={save}>Сохранить изменения</button>
       </div>
@@ -3217,14 +3238,20 @@ function ProjectEditPanel({ project, users, canEdit, onUpdateProject }) {
         <label><span>Руководитель проекта</span><select value={form.pmUserId} onChange={(event) => update({ pmUserId: event.target.value })}><option value="">Не назначен</option>{projectLeads.map((user) => <option key={user.id} value={user.id}>{user.name} · {user.position}</option>)}</select></label>
         <label><span>Менеджер проекта</span><select value={form.projectManagerId} onChange={(event) => update({ projectManagerId: event.target.value })}><option value="">Не назначен</option>{projectLeads.map((user) => <option key={user.id} value={user.id}>{user.name} · {user.position}</option>)}</select></label>
         <label><span>Менеджер продаж</span><select value={form.salesManagerId} onChange={(event) => update({ salesManagerId: event.target.value })}><option value="">Нет / не из продаж</option>{salesManagers.map((user) => <option key={user.id} value={user.id}>{user.name} · {user.position}</option>)}</select></label>
-        <label><span>Сумма договора, ₽</span><input type="number" value={form.contractAmount} onChange={(event) => update({ contractAmount: event.target.value })} /></label>
-        <label><span>Оплачено клиентом, ₽</span><input type="number" value={form.paidByClient} onChange={(event) => update({ paidByClient: event.target.value })} /></label>
-        <label><span>% бюджета РП</span><input type="number" value={form.productionAllocationPercent} onChange={(event) => update({ productionAllocationPercent: event.target.value })} /></label>
-        <label><span>Бюджет РП вручную, ₽</span><input type="number" value={form.productionBudget} onChange={(event) => update({ productionBudget: event.target.value })} /></label>
-        <label><span>% единого центра продаж</span><input type="number" value={form.salesCommissionPercent} onChange={(event) => update({ salesCommissionPercent: event.target.value })} /></label>
-        <label><span>Комиссия продаж вручную, ₽</span><input type="number" value={form.salesCommissionAmount} onChange={(event) => update({ salesCommissionAmount: event.target.value })} /></label>
+        {canEditFinance ? (
+          <>
+            <label><span>Сумма договора, ₽</span><input type="number" value={form.contractAmount} onChange={(event) => update({ contractAmount: event.target.value })} /></label>
+            <label><span>Оплачено клиентом, ₽</span><input type="number" value={form.paidByClient} onChange={(event) => update({ paidByClient: event.target.value })} /></label>
+            <label><span>% бюджета РП</span><input type="number" value={form.productionAllocationPercent} onChange={(event) => update({ productionAllocationPercent: event.target.value })} /></label>
+            <label><span>Бюджет РП вручную, ₽</span><input type="number" value={form.productionBudget} onChange={(event) => update({ productionBudget: event.target.value })} /></label>
+            <label><span>% единого центра продаж</span><input type="number" value={form.salesCommissionPercent} onChange={(event) => update({ salesCommissionPercent: event.target.value })} /></label>
+            <label><span>Комиссия продаж вручную, ₽</span><input type="number" value={form.salesCommissionAmount} onChange={(event) => update({ salesCommissionAmount: event.target.value })} /></label>
+          </>
+        ) : (
+          <div className="wide form-hint">Финансовые поля скрыты для этой роли. Сохранение не изменит сумму договора, оплаты, бюджет РП и комиссию продаж.</div>
+        )}
         <label className="wide"><span>Главная папка Яндекс.Диска</span><input value={form.yandexFolder} onChange={(event) => update({ yandexFolder: event.target.value })} /></label>
-        <div className="wide form-hint">Расчёт по текущим полям: бюджет РП {money(calculatedProductionBudget)} по проценту; комиссия продаж {money(calculatedSalesCommission)} по проценту. Если вручную указана сумма в ₽, она перебивает процентный расчёт.</div>
+        {canEditFinance ? <div className="wide form-hint">Расчёт по текущим полям: бюджет РП {money(calculatedProductionBudget)} по проценту; комиссия продаж {money(calculatedSalesCommission)} по проценту. Если вручную указана сумма в ₽, она перебивает процентный расчёт.</div> : null}
       </div>
     </section>
   );
@@ -3372,7 +3399,7 @@ function ProjectCommandCenter({ project, economy, canSeeMoney }) {
   );
 }
 
-function ProjectDetails({ project, role, onUpdateProject, onTaskStatusChange, onProjectMessage, onAddClientParticipant, session, onUpdateSection, onAddSection, onDeleteSection, onDistributeSectionBudget, onOpenTask, executors, users }) {
+function ProjectDetails({ project, role, onUpdateProject, onTaskStatusChange, onProjectMessage, onAddClientParticipant, onCreateApproval, onTransmitClientStatus, session, onUpdateSection, onAddSection, onDeleteSection, onDistributeSectionBudget, onOpenTask, executors, users }) {
   const canSeeMoney = roleCan(role, "viewFinance");
   const canSeeProductionBudget = roleCan(role, "viewProductionBudget") || canSeeMoney;
   const canSeeClient = roleCan(role, "viewClient") || roleCan(role, "manageProjects") || canSeeMoney;
@@ -3452,8 +3479,8 @@ function ProjectDetails({ project, role, onUpdateProject, onTaskStatusChange, on
       <ProjectCommandCenter project={project} economy={economy} canSeeMoney={canSeeMoney} />
       <BitrixBridgeCard project={project} />
       <ClientParticipantsCard project={project} onAddParticipant={onAddClientParticipant} />
-      <ClientApprovalsCard project={project} />
-      <ProjectEditPanel project={project} users={users} canEdit={canAdminProject} onUpdateProject={onUpdateProject} />
+      <ClientApprovalsCard project={project} onCreateApproval={onCreateApproval} />
+      <ProjectEditPanel project={project} users={users} canEdit={canAdminProject} canEditFinance={role === "owner"} onUpdateProject={onUpdateProject} />
 
       <section className="office-card economy-card">
         <div className="section-row">
@@ -3568,7 +3595,7 @@ function ProjectDetails({ project, role, onUpdateProject, onTaskStatusChange, on
           <section className="panel-card client-view">
             <h3>Что видит клиент</h3>
             <p>{project.clientStatus}</p>
-            <button type="button" onClick={() => showAction("MVP: передача статуса в SmetaGO будет включена после подключения клиентского API")}>MVP: передача статуса в разработке</button>
+            <button type="button" onClick={() => onTransmitClientStatus?.(project.id)}>Передать статус в SmetaGO</button>
           </section>
         </aside>
       </div>
@@ -4710,10 +4737,26 @@ function IntegrationsModule() {
     readStoredValue("smeta.integrationSettings", { webhookUrl: "", syncMode: "manual", lastCheck: "не запускалась" })
   );
 
+  useEffect(() => {
+    let alive = true;
+    async function loadSettings() {
+      const settings = await apiGet("/integration-settings", null);
+      if (alive && settings && !settings.error) {
+        setIntegrationSettingsState(settings);
+        writeStoredValue("smeta.integrationSettings", settings);
+      }
+    }
+    loadSettings();
+    return () => {
+      alive = false;
+    };
+  }, []);
+
   function setIntegrationSettings(patch) {
     setIntegrationSettingsState((current) => {
       const next = { ...current, ...patch };
       writeStoredValue("smeta.integrationSettings", next);
+      apiPut("/integration-settings", next);
       return next;
     });
   }
@@ -5781,7 +5824,7 @@ function ProjectsModule({
   );
 }
 
-function ProjectDetailModule({ project, role, session, onBack, onDeleteProject, onUpdateProject, onTaskStatusChange, onProjectMessage, onAddClientParticipant, taskForm, setTaskForm, onCreateTask, onOpenTask, executors, users, onUpdateSection, onAddSection, onDeleteSection, onDistributeSectionBudget }) {
+function ProjectDetailModule({ project, role, session, onBack, onDeleteProject, onUpdateProject, onTaskStatusChange, onProjectMessage, onAddClientParticipant, onCreateApproval, onTransmitClientStatus, taskForm, setTaskForm, onCreateTask, onOpenTask, executors, users, onUpdateSection, onAddSection, onDeleteSection, onDistributeSectionBudget }) {
   if (!project) {
     return (
       <>
@@ -5818,6 +5861,8 @@ function ProjectDetailModule({ project, role, session, onBack, onDeleteProject, 
         onTaskStatusChange={onTaskStatusChange}
         onProjectMessage={onProjectMessage}
         onAddClientParticipant={onAddClientParticipant}
+        onCreateApproval={onCreateApproval}
+        onTransmitClientStatus={onTransmitClientStatus}
         onUpdateSection={onUpdateSection}
         onAddSection={onAddSection}
         onDeleteSection={onDeleteSection}
@@ -5870,7 +5915,7 @@ function ProjectDetailModule({ project, role, session, onBack, onDeleteProject, 
   );
 }
 
-function TasksModule({ allTasks, onTaskStatusChange, executors, onGoSection, initialSelectedTaskId, role }) {
+function TasksModule({ allTasks, onTaskStatusChange, executors, onGoSection, initialSelectedTaskId, role, onTaskMessage }) {
   const [statusFilter, setStatusFilter] = useState("Все");
   const [sectionFilter, setSectionFilter] = useState("Все");
   const [query, setQuery] = useState("");
@@ -6056,12 +6101,12 @@ function TasksModule({ allTasks, onTaskStatusChange, executors, onGoSection, ini
                 {(selectedTask.chat || []).length ? (
                   selectedTask.chat.map((message) => <p key={message.id}>{message.author}: {message.text}</p>)
                 ) : (
-                  <p>MVP: чат задачи будет хранить сообщения исполнителя, РП и системные события. Сейчас комментарии добавляются через карточку проекта.</p>
+                  <p>Сообщений по задаче пока нет. Нажми кнопку ниже, чтобы зафиксировать комментарий.</p>
                 )}
               </div>
               <div className="task-inspector-actions">
                 <button type="button" className="secondary" onClick={() => selectedTask.yandexLink ? window.open(selectedTask.yandexLink, "_blank", "noopener,noreferrer") : showAction("К задаче пока не привязана папка Яндекс.Диска")}>Открыть Яндекс.Диск</button>
-                <button type="button" className="primary" onClick={() => showAction("MVP: отдельный чат задачи в разработке, сообщения пока фиксируем в проектном чате")}>Чат по задаче</button>
+                <button type="button" className="primary" onClick={() => onTaskMessage?.(selectedTask)}>Чат по задаче</button>
               </div>
             </>
           ) : (
@@ -7928,7 +7973,6 @@ function SmetaOfficePrototype() {
         const mergedProjects = mergeDemoProductionProjects(serverProjects);
         setProjectItemsState(mergedProjects);
         writeStoredValue("smeta.projects", mergedProjects);
-        if (JSON.stringify(mergedProjects) !== JSON.stringify(serverProjects)) apiPut("/projects", mergedProjects);
       }
       if (Array.isArray(serverExecutors)) {
         setExecutorsState(serverExecutors);
@@ -7938,13 +7982,11 @@ function SmetaOfficePrototype() {
         const nextUsers = sanitizeUsersForClient(serverUsers).map(normalizeUserRecord);
         setUsersState(nextUsers);
         writeStoredValue("smeta.users", nextUsers);
-        if (JSON.stringify(nextUsers) !== JSON.stringify(serverUsers)) apiPut("/users", nextUsers);
       }
       if (Array.isArray(serverPartners)) {
         const nextPartners = (serverPartners.length ? serverPartners : partnerSeed).map(normalizePartnerRecord);
         setPartnersState(nextPartners);
         writeStoredValue("smeta.partners", nextPartners);
-        if (JSON.stringify(nextPartners) !== JSON.stringify(serverPartners)) apiPut("/partners", nextPartners);
       }
       if (Array.isArray(serverSalesLeads)) {
         const nextSalesLeads = mergeSalesLeads(serverSalesLeads);
@@ -8440,7 +8482,9 @@ function SmetaOfficePrototype() {
     const confirmed = window.confirm(`Удалить проект ${project?.title || projectId}? Действие уберёт проект из локального реестра SmetaOffice.`);
     if (!confirmed) return;
     const remaining = projectItems.filter((item) => item.id !== projectId);
-    setProjectItems(remaining);
+    setProjectItemsState(remaining);
+    writeStoredValue("smeta.projects", remaining);
+    apiDelete(`/projects/${encodeURIComponent(projectId)}`);
     setSelectedId(remaining[0]?.id || "");
     writeStoredValue("smeta.selectedProjectId", remaining[0]?.id || "");
     setActiveSection("projects");
@@ -8496,6 +8540,124 @@ function SmetaOfficePrototype() {
       )
     );
     showAction(`Участник клиента ${participant.name} добавлен в проект и будет виден в SmetaGo`);
+  }
+
+  function createApproval(projectId) {
+    const project = projectItems.find((item) => item.id === projectId);
+    if (!project) {
+      showAction("Проект для согласования не найден");
+      return;
+    }
+    const currentStage = project.stage || projectSections(project)[0]?.name || "Текущий этап";
+    const created = {
+      id: `approval-${Date.now()}`,
+      title: `Согласование: ${currentStage}`,
+      status: "отправлено клиенту",
+      owner: session?.name || project.manager || "SmetaOffice",
+      channel: "SmetaGo",
+      createdAt: new Date().toISOString(),
+    };
+    setProjectItems((items) =>
+      items.map((item) =>
+        item.id === projectId
+          ? {
+              ...item,
+              approvals: [created, ...(item.approvals || [])],
+              chat: [
+                ...(item.chat || []),
+                {
+                  id: `chat-${Date.now()}`,
+                  channel: "client",
+                  author: session?.name || "SmetaOffice",
+                  role,
+                  text: `Отправлено согласование клиенту: ${currentStage}`,
+                  at: new Intl.DateTimeFormat("ru-RU", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" }).format(new Date()),
+                },
+              ],
+            }
+          : item
+      )
+    );
+    showAction("Согласование создано и зафиксировано в клиентском канале проекта");
+  }
+
+  function transmitClientStatus(projectId) {
+    const project = projectItems.find((item) => item.id === projectId);
+    if (!project) {
+      showAction("Проект для передачи статуса не найден");
+      return;
+    }
+    const statusText = project.clientStatus || `Проект ${project.title}: этап ${project.stage || "не указан"}, готовность ${project.progress || 0}%.`;
+    setProjectItems((items) =>
+      items.map((item) =>
+        item.id === projectId
+          ? {
+              ...item,
+              lastClientSyncAt: new Date().toISOString(),
+              chat: [
+                ...(item.chat || []),
+                {
+                  id: `chat-${Date.now()}`,
+                  channel: "client",
+                  author: session?.name || "SmetaOffice",
+                  role,
+                  text: `Статус передан в SmetaGo: ${statusText}`,
+                  at: new Intl.DateTimeFormat("ru-RU", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" }).format(new Date()),
+                },
+              ],
+            }
+          : item
+      )
+    );
+    showAction("Статус зафиксирован как отправленный в SmetaGo");
+  }
+
+  function addTaskMessage(task) {
+    if (!task?.id) {
+      showAction("Задача не выбрана");
+      return;
+    }
+    const text = window.prompt("Комментарий по задаче");
+    if (!text?.trim()) return;
+    setProjectItems((items) =>
+      items.map((project) =>
+        project.id === task.projectId
+          ? {
+              ...project,
+              tasks: (project.tasks || []).map((item) =>
+                (item.id || `${project.id}-${item.name}`) === task.id || item.name === task.name
+                  ? {
+                      ...item,
+                      chat: [
+                        ...(item.chat || []),
+                        {
+                          id: `task-chat-${Date.now()}`,
+                          author: session?.name || "SmetaOffice",
+                          role,
+                          text: text.trim(),
+                          at: new Date().toISOString(),
+                        },
+                      ],
+                      comments: [...(item.comments || []), text.trim()],
+                    }
+                  : item
+              ),
+              chat: [
+                ...(project.chat || []),
+                {
+                  id: `chat-${Date.now()}`,
+                  channel: "internal",
+                  author: session?.name || "SmetaOffice",
+                  role,
+                  text: `Комментарий по задаче «${task.name}»: ${text.trim()}`,
+                  at: new Intl.DateTimeFormat("ru-RU", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" }).format(new Date()),
+                },
+              ],
+            }
+          : project
+      )
+    );
+    showAction("Комментарий добавлен в карточку задачи и проектный чат");
   }
 
   function login(user, token = "") {
@@ -8667,6 +8829,8 @@ function SmetaOfficePrototype() {
               onTaskStatusChange={changeTaskStatus}
               onProjectMessage={addProjectMessage}
               onAddClientParticipant={addClientParticipant}
+              onCreateApproval={createApproval}
+              onTransmitClientStatus={transmitClientStatus}
               taskForm={taskForm}
               setTaskForm={setTaskForm}
               onCreateTask={createTask}
@@ -8680,7 +8844,7 @@ function SmetaOfficePrototype() {
             />
           ) : null}
 
-          {role !== "executor" && activeSection === "tasks" ? <TasksModule allTasks={visibleTasks} onTaskStatusChange={changeTaskStatus} executors={executorDirectory} onGoSection={setActiveSection} initialSelectedTaskId={selectedTaskId} role={role} /> : null}
+          {role !== "executor" && activeSection === "tasks" ? <TasksModule allTasks={visibleTasks} onTaskStatusChange={changeTaskStatus} executors={executorDirectory} onGoSection={setActiveSection} initialSelectedTaskId={selectedTaskId} role={role} onTaskMessage={addTaskMessage} /> : null}
           {role !== "executor" && activeSection === "partners" ? <PartnersModule role={role} session={effectiveAccessUser} partnerItems={partners} visiblePartnerItems={visiblePartners} setPartnerItems={setPartners} /> : null}
           {role !== "executor" && activeSection === "admin" ? <AdminModule users={users} setUsers={setUsers} session={session} executors={executors} /> : null}
           {role !== "executor" && activeSection === "analytics" ? <AnalyticsModule projectItems={visibleProjects} allTasks={visibleTasks} role={role} /> : null}

@@ -399,7 +399,7 @@ function itemKey(item) {
 }
 
 function mergeManagedCollection(existingItems = [], incomingItems = [], manager, canAccessItem) {
-  if (["owner", "admin", "deputy"].includes(manager?.role)) return incomingItems;
+  if (["owner", "deputy"].includes(manager?.role)) return incomingItems;
   const merged = [...existingItems];
 
   incomingItems.forEach((incomingItem) => {
@@ -722,6 +722,29 @@ const server = http.createServer(async (req, res) => {
       const nextDb = { ...db, projects: nextProjects };
       await writeDb(nextDb);
       sendJson(res, 200, authMode === "server" ? visibleProjectsFor(auth.user, nextDb.projects) : nextDb.projects);
+      return;
+    }
+
+    if (req.method === "DELETE" && route.startsWith("/api/projects/")) {
+      const auth = requireAuth(req, res, db);
+      if (!auth) return;
+      if (authMode === "server" && !["owner", "admin", "deputy"].includes(auth.user.role)) {
+        sendJson(res, 403, { ok: false, error: "Forbidden" });
+        return;
+      }
+      const projectId = decodeURIComponent(route.slice("/api/projects/".length));
+      const project = (db.projects || []).find((item) => item.id === projectId);
+      if (!project) {
+        sendJson(res, 404, { ok: false, error: "Project not found" });
+        return;
+      }
+      if (authMode === "server" && !canAccessProject(auth.user, project)) {
+        sendJson(res, 403, { ok: false, error: "Forbidden" });
+        return;
+      }
+      const nextDb = { ...db, projects: (db.projects || []).filter((item) => item.id !== projectId) };
+      await writeDb(nextDb);
+      sendJson(res, 200, { ok: true, projects: authMode === "server" ? visibleProjectsFor(auth.user, nextDb.projects) : nextDb.projects });
       return;
     }
 
