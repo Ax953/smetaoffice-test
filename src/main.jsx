@@ -6980,6 +6980,71 @@ function DashboardModule({ visibleProjects, selectedProject, setSelectedId, role
   ];
 
   const problemCards = portfolioProblemCards(visibleProjects);
+  const ownerPanelRole = ["owner", "deputy"].includes(role);
+  const ownerKpis = canSeeFinance
+    ? [
+        { label: "Сумма договоров", value: money(summary.contractAmount), hint: `${visibleProjects.length} проектов`, tone: "blue" },
+        { label: "Оплачено клиентами", value: money(summary.paidByClient), hint: "деньги пришли", tone: "green" },
+        { label: "Осталось получить", value: money(summary.receivable), hint: "контроль оплат", tone: summary.receivable ? "yellow" : "green" },
+        { label: "Красная зона", value: String(redProjects.length), hint: redProjects.length ? "нужны решения" : "пожаров нет", tone: redProjects.length ? "red" : "green" },
+      ]
+    : ownerStats.slice(0, 4).map((item) => ({ ...item, hint: "" }));
+  const featuredProject = redProjects[0] || yellowProjects[0] || selectedProject || visibleProjects[0] || null;
+  const featuredEconomy = featuredProject ? projectEconomy(featuredProject) : null;
+  const featuredSignals = featuredProject ? projectOperationalSignals(featuredProject) : null;
+  const featuredSections = featuredProject ? projectSections(featuredProject).slice(0, 6) : [];
+  const featuredPaymentRows = visibleProjects
+    .flatMap((project) =>
+      projectSections(project).map((section, index) => {
+        const executorCost = Number(section.executorCost) || 0;
+        const paid = Number(section.paid) || 0;
+        const executorName = section.executorName || section.executor || section.owner || section.assignee || section.executorId || "не назначен";
+        const status = !section.executorId && !section.executorName && !section.executor
+          ? "не назначен"
+          : executorCost > 0 && paid >= executorCost
+          ? "выплачено"
+          : executorCost > 0 && paid > 0
+          ? "частично"
+          : executorCost > 0
+          ? "к выплате"
+          : section.financeStatus || "не рассчитан";
+        return {
+          id: `${project.id}-${section.id || section.name || index}`,
+          project,
+          section,
+          executorName,
+          sectionName: section.name || "Раздел",
+          accrued: executorCost,
+          paid,
+          status,
+        };
+      })
+    )
+    .filter((row) => row.accrued || row.paid || row.executorName !== "не назначен")
+    .slice(0, 6);
+  const ownerPeopleCards = [
+    {
+      title: "Исполнители",
+      value: featuredSignals?.missingExecutorSections.length ? `${featuredSignals.missingExecutorSections.length} этапов без исполнителя` : "назначения под контролем",
+      hint: featuredSignals?.missingExecutorSections[0]?.name || "проверить базу исполнителей и загрузку",
+      tone: featuredSignals?.missingExecutorSections.length ? "yellow" : "green",
+      section: "executors",
+    },
+    {
+      title: "Доступная работа",
+      value: featuredSignals?.missingExecutorSections[0]?.name || "нет открытого набора",
+      hint: "этапы без исполнителя должны уходить в набор специалистов",
+      tone: featuredSignals?.missingExecutorSections.length ? "yellow" : "green",
+      section: "projects",
+    },
+    {
+      title: "Партнёры",
+      value: "карточки партнёров",
+      hint: "недвижимость, изыскания, поставщики, строительство, сервис",
+      tone: "blue",
+      section: "partners",
+    },
+  ];
 
   function openDashboardProject(project) {
     if (!project) {
@@ -7000,6 +7065,229 @@ function DashboardModule({ visibleProjects, selectedProject, setSelectedId, role
       return;
     }
     showAction(`${item.title}: ${item.hint}`);
+  }
+
+  function openRegionProjects(item) {
+    setQuery(item.name);
+    chooseFirstAvailable?.(role, direction, item.name);
+    onGoSection?.("projects");
+  }
+
+  function openDirectionProjects(item) {
+    setDirection(item.name);
+    setQuery("");
+    chooseFirstAvailable?.(role, item.name, "");
+    onGoSection?.("projects");
+  }
+
+  function sectionTone(section) {
+    if (!section) return "yellow";
+    if (section.status === "Просрочено") return "red";
+    if (section.status === "На проверке" || section.status === "Правки") return "yellow";
+    if (Number(section.progress) >= 100 || section.status === "Принято") return "green";
+    if (Number(section.progress) > 0 || section.status === "В работе") return "blue";
+    return "slate";
+  }
+
+  if (ownerPanelRole) {
+    return (
+      <>
+        <SectionIntro section="dashboard" />
+
+        <section className="owner-command-dashboard">
+          <div className="owner-kpi-grid">
+            {ownerKpis.map((item) => (
+              <button key={item.label} type="button" onClick={() => item.label === "Красная зона" ? openDashboardFocus(todayFocus[0]) : onGoSection?.(item.label.includes("Оплач") || item.label.includes("получ") ? "finance" : "projects")}>
+                <span>{item.label}</span>
+                <b>{item.value}</b>
+                <em className={cn("risk-chip", item.tone)}>{item.hint || "контроль"}</em>
+              </button>
+            ))}
+          </div>
+
+          <div className="owner-two-grid">
+            <section className="office-card owner-map-card">
+              <div className="section-row">
+                <div>
+                  <h3>Регионы и направления</h3>
+                  <p className="section-hint">Владелец сначала видит карту холдинга, потом проваливается в регион, направление и проект.</p>
+                </div>
+                <button type="button" className="secondary" onClick={() => onGoSection?.("analytics")}>Открыть аналитику</button>
+              </div>
+              <div className="owner-region-grid">
+                {regionRows.map((item) => (
+                  <button key={item.name} type="button" onClick={() => openRegionProjects(item)}>
+                    <h4>{item.name}</h4>
+                    <div><span>Проекты</span><b>{item.projects.length}</b></div>
+                    {canSeeFinance ? <div><span>Оплачено</span><b>{money(item.economy.paidByClient)}</b></div> : null}
+                    <div><span>Выполнение</span><b>{item.progress}%</b></div>
+                    <em className={cn("risk-chip", item.risk)}>{riskText(item.risk)}</em>
+                  </button>
+                ))}
+                {!regionRows.length ? <div className="empty">По выбранной роли нет региональных проектов.</div> : null}
+              </div>
+              <div className="owner-direction-strip">
+                {directionRows.slice(0, 7).map((item) => (
+                  <button key={item.name} type="button" onClick={() => openDirectionProjects(item)}>
+                    <b>{item.name}</b>
+                    <span>{item.projects.length} проектов{canSeeFinance ? ` · ${money(item.economy.contractAmount)}` : ""}</span>
+                    <i className={cn("bar-fill", item.risk)} style={{ width: `${Math.max(8, summary.contractAmount ? Math.round((item.economy.contractAmount / summary.contractAmount) * 100) : 8)}%` }} />
+                  </button>
+                ))}
+              </div>
+            </section>
+
+            <section className="office-card owner-risk-card">
+              <div className="section-row">
+                <div>
+                  <h3>Центр проблем</h3>
+                  <p className="section-hint">Здесь не все задачи, а только то, где нужно управленческое решение.</p>
+                </div>
+              </div>
+              <div className="owner-risk-list">
+                {problemCards.map((item) => (
+                  <button key={item.title} type="button" onClick={() => openDashboardFocus(item)}>
+                    <span className={cn("risk-chip", item.tone)}>{item.title}</span>
+                    <div>
+                      <b>{item.value}</b>
+                      <p>{item.hint}</p>
+                    </div>
+                    <strong>Открыть</strong>
+                  </button>
+                ))}
+              </div>
+            </section>
+          </div>
+
+          <div className="owner-project-grid">
+            <section className="office-card owner-live-project">
+              {featuredProject ? (
+                <>
+                  <div className="owner-project-head">
+                    <div>
+                      <span className={cn("risk-chip", effectiveProjectRisk(featuredProject))}>{riskText(effectiveProjectRisk(featuredProject))}</span>
+                      <h3>{featuredProject.title}</h3>
+                      <p className="section-hint">{featuredProject.region || featuredProject.city} · {featuredProject.direction} · {featuredProject.projectType || "тип не указан"}</p>
+                    </div>
+                    <button type="button" className="primary" onClick={() => openDashboardProject(featuredProject)}>Открыть проект</button>
+                  </div>
+                  <div className="owner-meta-grid">
+                    <Info label="РП" value={featuredProject.manager || "не назначен"} />
+                    <Info label="Текущий этап" value={featuredProject.stage || "не указан"} />
+                    <Info label="Готовность" value={`${featuredProject.progress || 0}%`} />
+                    <Info label="Срок" value={featuredProject.deadline || formatProjectDate(projectTimeline(featuredProject).end)} />
+                  </div>
+                  <div className="owner-stage-timeline">
+                    {featuredSections.map((section) => (
+                      <button key={section.id || section.name} type="button" onClick={() => openDashboardProject(featuredProject)}>
+                        <i className={cn("owner-stage-dot", sectionTone(section))} />
+                        <div>
+                          <b>{section.name}</b>
+                          <span>{section.executorName || section.executor || section.executorId || "исполнитель не назначен"} · {section.due || "срок не указан"}</span>
+                        </div>
+                        <em className={cn("risk-chip", sectionTone(section))}>{Number(section.progress) || 0}%</em>
+                      </button>
+                    ))}
+                    {!featuredSections.length ? <div className="empty">В проекте пока нет этапов.</div> : null}
+                  </div>
+                </>
+              ) : (
+                <div className="empty">Нет доступного проекта для панели владельца.</div>
+              )}
+            </section>
+
+            <section className="office-card owner-economy-card">
+              <h3>Экономика проекта</h3>
+              <p className="section-hint">Только производственная валовая картина: без аренды, общей бухгалтерии и лишних расчётов в карточке проекта.</p>
+              {featuredEconomy ? (
+                <div className="owner-money-grid">
+                  <Info label="Сумма договора" value={money(featuredEconomy.contractAmount)} />
+                  <Info label="Оплачено клиентом" value={money(featuredEconomy.paidByClient)} />
+                  <Info label="Бюджет реализации РП" value={money(featuredEconomy.allocatedProductionBudget)} />
+                  <Info label="Зарезервировано исполнителям" value={money(featuredEconomy.executorCost)} />
+                  <Info label="К выплате исполнителям" value={money(Math.max(featuredEconomy.executorCost - featuredEconomy.paidToExecutors, 0))} />
+                  <Info label="Плановая валовая часть" value={money(featuredEconomy.companyPlannedGross)} />
+                </div>
+              ) : (
+                <div className="empty">Нет финансовых данных.</div>
+              )}
+              <div className="owner-approval-strip">
+                <div><span className="risk-chip blue">Согласования</span><b>{featuredSignals?.pendingApprovals.length || 0}</b></div>
+                <div><span className="risk-chip yellow">Без исполнителя</span><b>{featuredSignals?.missingExecutorSections.length || 0}</b></div>
+                <div><span className="risk-chip red">Просрочки</span><b>{featuredSignals?.overdueTasks.length || 0}</b></div>
+              </div>
+            </section>
+          </div>
+
+          <div className="owner-people-grid">
+            {ownerPeopleCards.map((item) => (
+              <button key={item.title} type="button" onClick={() => onGoSection?.(item.section)}>
+                <div>
+                  <h3>{item.title}</h3>
+                  <p>{item.hint}</p>
+                </div>
+                <b className={cn("risk-chip", item.tone)}>{item.value}</b>
+              </button>
+            ))}
+          </div>
+
+          <div className="owner-two-grid">
+            <section className="office-card owner-payment-ledger">
+              <div className="section-row">
+                <div>
+                  <h3>Ведомость выплат</h3>
+                  <p className="section-hint">Бухгалтерия должна видеть, кому начислено, что выплачено и что ждёт согласования.</p>
+                </div>
+                <button type="button" className="secondary" onClick={() => onGoSection?.("finance")}>Финансы</button>
+              </div>
+              <div className="owner-payment-table">
+                <div className="owner-payment-head"><span>Исполнитель</span><span>Раздел</span><span>Начислено</span><span>Выплачено</span><span>Статус</span></div>
+                {featuredPaymentRows.map((item) => (
+                  <button key={item.id} type="button" onClick={() => openDashboardProject(item.project)}>
+                    <b>{item.executorName}</b>
+                    <span>{item.sectionName}</span>
+                    <strong>{money(item.accrued)}</strong>
+                    <span>{money(item.paid)}</span>
+                    <em className={cn("risk-chip", item.status === "выплачено" ? "green" : item.status === "не назначен" ? "red" : "yellow")}>{item.status}</em>
+                  </button>
+                ))}
+                {!featuredPaymentRows.length ? <div className="empty">Пока нет начислений исполнителям по этапам.</div> : null}
+              </div>
+            </section>
+
+            <section className="owner-client-preview">
+              <span>Что видит клиент в SmetaGO</span>
+              <h3>{featuredProject?.clientStatus ? "Проект в работе" : "Клиентская витрина"}</h3>
+              <p>{featuredProject?.clientStatus || "После подключения клиентского приложения здесь будет внешний статус проекта, файлы, согласования и чат."}</p>
+              <div>
+                <button type="button" onClick={() => featuredProject ? openDashboardProject(featuredProject) : onGoSection?.("client")}>Открыть проект</button>
+                <button type="button" onClick={() => onGoSection?.("client")}>Клиентское приложение</button>
+              </div>
+            </section>
+          </div>
+
+          <section className="office-card owner-control-path">
+            <h3>Сквозной путь контроля</h3>
+            <div className="pipeline">
+              {[
+                { title: "Bitrix / заявка", desc: "квалифицированный лид", section: "sales" },
+                { title: "Проект", desc: "карточка, сроки, бюджет", section: "projects" },
+                { title: "Этапы", desc: "исполнители и разделы", section: "projectDetail" },
+                { title: "Согласования", desc: "РП, клиент, оплата", section: "tasks" },
+                { title: "Финансы", desc: "начислено и к выплате", section: "finance" },
+                { title: "Клиент", desc: "статус в SmetaGO", section: "client" },
+              ].map((step, index) => (
+                <button key={step.title} type="button" onClick={() => onGoSection?.(step.section)}>
+                  <b>{index + 1}</b>
+                  <strong>{step.title}</strong>
+                  <span>{step.desc}</span>
+                </button>
+              ))}
+            </div>
+          </section>
+        </section>
+      </>
+    );
   }
 
   return (
