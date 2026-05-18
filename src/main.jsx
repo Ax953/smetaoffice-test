@@ -463,9 +463,9 @@ const partnerRelationOptions = [
 ];
 
 const partnerSeed = [
-  { id: "P-001", name: "BuildPro Ростов", category: "Строительная компания / ремонт", region: "Ростовская область", direction: "Строительство и ремонт", rating: 91, active: 4, overdue: 0, level: "Проверенный", status: "Активен", accrued: 420000, paid: 280000, relation: "Партнёр выполняет наши заявки", commissionRule: "Процент по договорённости", serviceDescription: "Ремонт и строительная реализация", contact: "контакт скрыт в демо" },
-  { id: "P-002", name: "CityRealty", category: "Агентство недвижимости / риелтор", region: "Ростовская область", direction: "Единый центр продаж", rating: 78, active: 2, overdue: 1, level: "Надёжный", status: "Активен", accrued: 36000, paid: 0, relation: "Партнёр приводит нам клиентов", commissionRule: "Партнёрское вознаграждение за клиента", serviceDescription: "Подбор и сопровождение недвижимости", contact: "контакт скрыт в демо" },
-  { id: "P-003", name: "Геология-Партнёр", category: "Изыскания / геодезия / обследования", region: "ДНР", direction: "Изыскания / обследования / обмеры", rating: 64, active: 1, overdue: 1, level: "Базовый", status: "Проверка", accrued: 120000, paid: 60000, relation: "Партнёр выполняет наши заявки", commissionRule: "Смета по работам", serviceDescription: "Геология, геодезия, обследования", contact: "контакт скрыт в демо" },
+  { id: "P-001", name: "BuildPro Ростов", category: "Строительная компания / ремонт", region: "Ростовская область", direction: "Строительство и ремонт", rating: 91, active: 4, overdue: 0, level: "Проверенный", status: "Активен", accrued: 0, paid: 0, relation: "Партнёр выполняет наши заявки", commissionRule: "Процент по договорённости", serviceDescription: "Ремонт и строительная реализация", contact: "контакт скрыт в демо" },
+  { id: "P-002", name: "CityRealty", category: "Агентство недвижимости / риелтор", region: "Ростовская область", direction: "Единый центр продаж", rating: 78, active: 2, overdue: 1, level: "Надёжный", status: "Активен", accrued: 0, paid: 0, relation: "Партнёр приводит нам клиентов", commissionRule: "Партнёрское вознаграждение за клиента", serviceDescription: "Подбор и сопровождение недвижимости", contact: "контакт скрыт в демо" },
+  { id: "P-003", name: "Геология-Партнёр", category: "Изыскания / геодезия / обследования", region: "ДНР", direction: "Изыскания / обследования / обмеры", rating: 64, active: 1, overdue: 1, level: "Базовый", status: "Проверка", accrued: 0, paid: 0, relation: "Партнёр выполняет наши заявки", commissionRule: "Смета по работам", serviceDescription: "Геология, геодезия, обследования", contact: "контакт скрыт в демо" },
   { id: "P-004", name: "CleanHome", category: "Бытовой сервис", region: "Чеченская Республика", direction: "Бытовые услуги / сервис", rating: 88, active: 0, overdue: 0, level: "Надёжный", status: "Резерв", accrued: 0, paid: 0, relation: "Мы передаём клиента партнёру", commissionRule: "Комиссия за переданную услугу", serviceDescription: "Клининг и сервис после ремонта", contact: "контакт скрыт в демо" },
 ];
 
@@ -517,6 +517,11 @@ function normalizeUserRecord(user) {
     executorStatus: user.executorStatus || (executorEnabled ? "Внутренний исполнитель" : "Не исполнитель"),
     executorRating: clampPercent(user.executorRating || (executorEnabled ? 50 : 0)),
     executorQualification: user.executorQualification || (executorEnabled ? rankName(executorRank) : ""),
+    executorPaymentModel: user.executorPaymentModel || (executorEnabled ? "piecework" : ""),
+    executorHourlyRate: Number(user.executorHourlyRate) || 0,
+    executorSalaryBase: Number(user.executorSalaryBase) || 0,
+    executorPercentRate: Number(user.executorPercentRate) || 0,
+    executorPremiumRule: user.executorPremiumRule || "",
   };
 }
 
@@ -983,6 +988,14 @@ const executorRankOptions = [
 
 const executorStatusOptions = ["Не исполнитель", "Новый контакт", "На проверке", "Внутренний исполнитель", "Проверенный", "Сильный", "Эксперт", "Ограничен"];
 
+const compensationModeOptions = [
+  { id: "piecework", label: "Сделка / задача", hint: "Фиксированная сумма за этап или задачу после приёмки" },
+  { id: "hourly", label: "Ставка за часы", hint: "Часы × ставка после подтверждения руководителем" },
+  { id: "percent", label: "Процент", hint: "Процент от договора, этапа или согласованной базы" },
+  { id: "salary", label: "Оклад", hint: "Штатный оклад, а задачи нужны для учёта трудозатрат" },
+  { id: "mixed", label: "Смешанная", hint: "Оклад / сделка / процент + премии и удержания" },
+];
+
 const executorQualificationOptions = [
   "Архитектор",
   "Ведущий архитектор",
@@ -1037,6 +1050,14 @@ const executorProfiles = [
     onTime: 91,
     firstAccept: 74,
     price: "средний",
+    paymentModel: "piecework",
+    hourlyRate: 0,
+    salaryBase: 0,
+    percentRate: 0,
+    premiumRule: "Премия за сдачу без правок",
+    accrued: 0,
+    paid: 0,
+    payable: 0,
     contacts: { phone: "+7 *** ***-**-**", email: "hidden@smeta.local", telegram: "@hidden_arch" },
     note: "Можно давать стандартные архитектурные задачи и рабочую документацию после проверки РП.",
     chat: [
@@ -1056,6 +1077,14 @@ const executorProfiles = [
     onTime: 87,
     firstAccept: 81,
     price: "выше среднего",
+    paymentModel: "mixed",
+    hourlyRate: 0,
+    salaryBase: 0,
+    percentRate: 0,
+    premiumRule: "Фикс за раздел + премия за отсутствие замечаний",
+    accrued: 0,
+    paid: 0,
+    payable: 0,
     contacts: { phone: "+7 *** ***-**-**", email: "hidden@smeta.local", telegram: "@hidden_struct" },
     note: "Подходит для сложных расчётов и ответственных узлов. В SmetaOffice лучше вести как партнёра.",
     chat: [{ id: "m2", author: "ГИП", text: "Можно привлекать на сложные КР, но сроки фиксировать этапами.", at: "10 мая, 03:42" }],
@@ -1073,6 +1102,14 @@ const executorProfiles = [
     onTime: 80,
     firstAccept: 68,
     price: "средний",
+    paymentModel: "piecework",
+    hourlyRate: 0,
+    salaryBase: 0,
+    percentRate: 0,
+    premiumRule: "Оплата за принятый раздел",
+    accrued: 0,
+    paid: 0,
+    payable: 0,
     contacts: { phone: "+7 *** ***-**-**", email: "hidden@smeta.local", telegram: "@hidden_ovik" },
     note: "Нужна тестовая задача и проверка ГИПом перед сложными объектами.",
     chat: [],
@@ -1090,6 +1127,14 @@ const executorProfiles = [
     onTime: 93,
     firstAccept: 86,
     price: "дорогой",
+    paymentModel: "piecework",
+    hourlyRate: 0,
+    salaryBase: 0,
+    percentRate: 0,
+    premiumRule: "Повышенная ставка за сложные сметы",
+    accrued: 0,
+    paid: 0,
+    payable: 0,
     contacts: { phone: "+7 *** ***-**-**", email: "hidden@smeta.local", telegram: "@hidden_estimate" },
     note: "Сильный специалист для спорных ведомостей, коммерческих смет и проверки чужих расчётов.",
     chat: [],
@@ -1107,6 +1152,14 @@ const executorProfiles = [
     onTime: 84,
     firstAccept: 72,
     price: "средний",
+    paymentModel: "piecework",
+    hourlyRate: 0,
+    salaryBase: 0,
+    percentRate: 0,
+    premiumRule: "Оплата за принятый раздел",
+    accrued: 0,
+    paid: 0,
+    payable: 0,
     contacts: { phone: "+7 *** ***-**-**", email: "hidden@smeta.local", telegram: "@hidden_pos" },
     note: "Закрывает организационные разделы, которые нельзя терять в общей массе проектировщиков.",
     chat: [],
@@ -1124,6 +1177,14 @@ const executorProfiles = [
     onTime: 0,
     firstAccept: 0,
     price: "не проверен",
+    paymentModel: "piecework",
+    hourlyRate: 0,
+    salaryBase: 0,
+    percentRate: 0,
+    premiumRule: "Пока только тестовая задача",
+    accrued: 0,
+    paid: 0,
+    payable: 0,
     contacts: { phone: "+7 *** ***-**-**", email: "hidden@smeta.local", telegram: "@hidden_viz" },
     note: "Из большой базы. Сначала портфолио, потом тестовая задача, потом допуск к обычным заказам.",
     chat: [],
@@ -1139,62 +1200,50 @@ const executorAccount = {
   xp: 7420,
   nextLevelXp: 9000,
   rating: 88,
-  balance: "42 000 ₽",
-  bonusPoints: 1860,
+  balance: "0 ₽",
+  bonusPoints: 0,
   streak: "5 задач без просрочки",
+  paymentModel: "piecework",
+  paymentTitle: "Сделка за принятый этап + премии",
+  finance: {
+    assigned: 0,
+    earned: 0,
+    paid: 0,
+    payable: 0,
+    inWork: 0,
+    inReview: 0,
+    hold: 0,
+    monthTarget: 0,
+  },
   badges: ["Сроки", "Качество", "Визуализация"],
   permissions: ["Дизайн", "3D", "Рабочка до ранга 3"],
-  projects: [
-    {
-      id: "SG-154",
-      title: "Дизайн-проект квартиры 96 м²",
-      stage: "Визуализация",
-      task: "Сделать визуализацию кухни-гостиной",
-      status: "В работе",
-      due: "14 мая",
-      reward: "18 000 ₽",
-      bonus: "+220 XP",
-      progress: 62,
-    },
-    {
-      id: "SG-233",
-      title: "Рабочая документация спальни",
-      stage: "Правки",
-      task: "Поправить листы освещения и развертки",
-      status: "Правки",
-      due: "Сегодня",
-      reward: "9 500 ₽",
-      bonus: "+90 XP",
-      progress: 80,
-    },
-    {
-      id: "SG-198",
-      title: "Концепция интерьера гостиной",
-      stage: "Принято",
-      task: "Подбор референсов и мудборд",
-      status: "Принято",
-      due: "Закрыто",
-      reward: "7 000 ₽",
-      bonus: "+140 XP",
-      progress: 100,
-    },
-  ],
+  projects: [],
   rewards: [
     { title: "Бонус за сдачу без правок", value: "+500 ₽", status: "доступно" },
     { title: "Открыть задачи ранга 4", value: "нужно 1 580 XP", status: "цель" },
     { title: "Приоритетные срочные задачи", value: "+25% к ставке", status: "после ранга 4" },
   ],
-  payouts: [
-    { title: "SG-198 · Концепция интерьера", value: "7 000 ₽", status: "к выплате" },
-    { title: "SG-154 · Визуализация", value: "18 000 ₽", status: "после приёмки" },
-    { title: "Бонус качества", value: "1 500 ₽", status: "начислен" },
+  payRules: [
+    { title: "Сделка / задача", value: "сумма фиксируется в этапе", status: "основная модель" },
+    { title: "Премия", value: "за срок и приёмку без правок", status: "добавляется руководителем" },
+    { title: "Удержание", value: "за просрочку или качество", status: "только с причиной" },
   ],
+  payouts: [],
+  marketplace: [],
   feed: [
     "РП принял мудборд по SG-198 без правок.",
     "По SG-233 пришли правки: уточнить лист освещения.",
     "До уровня 13 осталось 1 580 XP.",
   ],
 };
+
+const executorGuideSteps = [
+  { title: "1. Смотри назначенное", text: "В личном кабинете видны только твои проекты, задачи, сроки, файлы и деньги." },
+  { title: "2. Бери доступные работы", text: "Если РП открыл набор исполнителей, можно отправить предложение по сумме, сроку и условиям." },
+  { title: "3. Работай через карточку", text: "Вопросы, файлы, ссылки и результат фиксируются внутри SmetaOffice, а не в личных чатах." },
+  { title: "4. Получи согласование", text: "Оплата возможна после согласования клиента и ответственного РП / управляющего." },
+  { title: "5. Получай оплату", text: "После согласования сумма попадает в к выплате, затем бухгалтерия отмечает фактическую выплату." },
+];
 
 const mvpScope = [
   { day: "День 1", title: "Ядро", items: ["роли", "проекты", "задачи", "исполнители", "личный кабинет"] },
@@ -1523,6 +1572,8 @@ function flattenTasks(projectItems) {
       chat: task.chat || [],
       clientBudget: Number(task.clientBudget) || 0,
       executorCost: Number(task.executorCost) || 0,
+      paid: Number(task.paid ?? task.paidToExecutor ?? 0) || 0,
+      paymentStatus: task.paymentStatus || task.finStatus || "не рассчитан",
       ...task,
     }));
 
@@ -1543,6 +1594,9 @@ function flattenTasks(projectItems) {
       yandexLink: section.yandexLink,
       clientBudget: Number(section.clientBudget) || 0,
       executorCost: Number(section.executorCost) || 0,
+      paid: Number(section.paid) || 0,
+      paymentStatus: section.paymentStatus || section.finStatus || "не рассчитан",
+      balance: Number(section.balance) || Math.max((Number(section.executorCost) || 0) - (Number(section.paid) || 0), 0),
     }));
 
     return [...operationTasks, ...sectionTasks];
@@ -1814,6 +1868,112 @@ function executorStatusClass(status) {
 
 function money(value) {
   return new Intl.NumberFormat("ru-RU", { style: "currency", currency: "RUB", maximumFractionDigits: 0 }).format(Number(value) || 0);
+}
+
+function compensationModeName(mode) {
+  return compensationModeOptions.find((item) => item.id === mode)?.label || "Сделка / задача";
+}
+
+function taskXpValue(task) {
+  const costBonus = Math.min(250, Math.round((Number(task.executorCost) || 0) / 1000));
+  if (task.status === "Принято") return 120 + costBonus;
+  if (task.status === "На проверке") return 70;
+  if (task.status === "В работе") return 35;
+  if (task.status === "Просрочено") return -80;
+  return 15;
+}
+
+function approvalFlag(value) {
+  if (value === true) return true;
+  const text = String(value || "").toLowerCase();
+  return ["согласовано", "approved", "approve", "yes", "да", "принято", "оплатить"].some((item) => text.includes(item));
+}
+
+function taskApprovalState(task) {
+  const clientRequired = task.clientApprovalRequired !== false;
+  const clientApproved = approvalFlag(task.clientApproved ?? task.clientApproval);
+  const internalApproved = approvalFlag(task.internalApproved ?? task.internalApproval ?? task.managerApproval ?? task.paymentApproved);
+  const paymentApproved = approvalFlag(task.paymentApproved) || internalApproved && (!clientRequired || clientApproved);
+  if (paymentApproved) return { id: "approved", label: "Согласовано к выплате", clientApproved, internalApproved, paymentApproved };
+  if (task.status !== "Принято") return { id: "work", label: "В работе", clientApproved, internalApproved, paymentApproved };
+  if (clientRequired && !clientApproved) return { id: "client", label: "Ждёт клиента", clientApproved, internalApproved, paymentApproved };
+  return { id: "internal", label: "Ждёт РП / управляющего", clientApproved, internalApproved, paymentApproved };
+}
+
+function taskPaymentBucket(task) {
+  const approval = taskApprovalState(task);
+  if (approval.paymentApproved) return "earned";
+  if (task.status === "Принято") return "pendingApproval";
+  if (task.status === "На проверке") return "inReview";
+  if (["В работе", "Правки", "Новая"].includes(task.status)) return "inWork";
+  return "assigned";
+}
+
+function calculateExecutorFinance(tasks, fallback = {}) {
+  if (!tasks.length) return fallback;
+  const summary = tasks.reduce(
+    (summary, task) => {
+      const cost = Number(task.executorCost) || 0;
+      const paid = Number(task.paid ?? task.paidToExecutor ?? 0) || 0;
+      const bucket = taskPaymentBucket(task);
+      summary.assigned += cost;
+      summary.paid += paid;
+      summary.xpDelta += taskXpValue(task);
+      if (bucket === "earned") summary.earned += cost;
+      if (bucket === "pendingApproval") summary.pendingApproval += cost;
+      if (bucket === "inReview") summary.inReview += cost;
+      if (bucket === "inWork") summary.inWork += cost;
+      return summary;
+    },
+    { assigned: 0, earned: 0, paid: 0, payable: 0, pendingApproval: 0, inWork: 0, inReview: 0, hold: 0, monthTarget: fallback.monthTarget || 0, xpDelta: 0 }
+  );
+  summary.payable = Math.max(summary.earned - summary.paid - summary.hold, 0);
+  return summary;
+}
+
+function executorPayoutRows(projectItems) {
+  const map = new Map();
+  flattenTasks(projectItems)
+    .filter((task) => Number(task.executorCost) || Number(task.paid))
+    .forEach((task) => {
+      const name = task.owner || task.executor || (task.executorId ? task.executorId : "Не назначен");
+      const key = task.executorId || name;
+      const row = map.get(key) || {
+        key,
+        name,
+        sections: new Set(),
+        projects: new Set(),
+        tasks: 0,
+        assigned: 0,
+        earned: 0,
+        paid: 0,
+        payable: 0,
+        pendingApproval: 0,
+        inWork: 0,
+        inReview: 0,
+      };
+      const cost = Number(task.executorCost) || 0;
+      const paid = Number(task.paid ?? task.paidToExecutor) || 0;
+      const bucket = taskPaymentBucket(task);
+      row.tasks += 1;
+      row.assigned += cost;
+      row.paid += paid;
+      row.sections.add(task.section || task.name || "работа");
+      row.projects.add(task.projectId);
+      if (bucket === "earned") row.earned += cost;
+      if (bucket === "pendingApproval") row.pendingApproval += cost;
+      if (bucket === "inReview") row.inReview += cost;
+      if (bucket === "inWork") row.inWork += cost;
+      row.payable = Math.max(row.earned - row.paid, 0);
+      map.set(key, row);
+    });
+  return Array.from(map.values())
+    .map((row) => ({
+      ...row,
+      sectionsText: Array.from(row.sections).slice(0, 3).join(", "),
+      projectCount: row.projects.size,
+    }))
+    .sort((a, b) => b.payable - a.payable || b.earned - a.earned);
 }
 
 function formatShortDateTime(value) {
@@ -2205,6 +2365,20 @@ function executorHasSection(executor, section) {
   return parseExecutorSections(executor?.sections).includes(section);
 }
 
+function taskMatchesExecutorSections(task, sections) {
+  if (!sections.length || sections.includes("Все")) return true;
+  const taskSections = parseExecutorSections(`${task.section || ""}, ${task.name || ""}, ${task.direction || ""}`);
+  const taskText = `${task.section || ""} ${task.name || ""} ${task.direction || ""}`.toLowerCase();
+  return sections.some((section) => taskSections.includes(section) || taskText.includes(String(section).toLowerCase()));
+}
+
+function isAvailableExecutorWork(task, sections = []) {
+  const assigned = Boolean(task.executorId || task.assigneeId);
+  const closed = ["Принято", "Закрыто"].includes(task.status);
+  const hasBudget = Number(task.executorCost) > 0;
+  return !assigned && !closed && hasBudget && taskMatchesExecutorSections(task, sections);
+}
+
 function executorGroupForSection(section, groups = executorGroups) {
   if (section === "Все") return { name: "Все исполнители", section: "Все", sections: "Все специализации", source: "База исполнителей SmetaOffice" };
   return groups.find((group) => (group.section || groupToSection(group.name)) === section) || { name: section, section, sections: section, source: "Добавлено вручную" };
@@ -2244,6 +2418,14 @@ function userToExecutorProfile(user) {
     onTime: Number(user.executorOnTime) || 0,
     firstAccept: Number(user.executorFirstAccept) || 0,
     price: user.executorPrice || "не указан",
+    paymentModel: user.executorPaymentModel || "piecework",
+    hourlyRate: Number(user.executorHourlyRate) || 0,
+    salaryBase: Number(user.executorSalaryBase) || 0,
+    percentRate: Number(user.executorPercentRate) || 0,
+    premiumRule: user.executorPremiumRule || "",
+    accrued: Number(user.executorAccrued) || 0,
+    paid: Number(user.executorPaid) || 0,
+    payable: Math.max((Number(user.executorAccrued) || 0) - (Number(user.executorPaid) || 0), 0),
     contacts: {
       phone: user.phone || user.contacts?.phone || "—",
       email: user.email || user.contacts?.email || "—",
@@ -3312,6 +3494,16 @@ function ExecutorDetails({ executor, canSeeContacts, onMessage, assignedTasks = 
   const [message, setMessage] = useState("");
   const completed = executor.completedProjects ?? Math.max(0, Math.round((executor.rating || 50) / 4));
   const activeProjects = executor.activeProjects ?? Math.max(0, Math.round((executor.workload || 0) / 22));
+  const finance = calculateExecutorFinance(assignedTasks, {
+    assigned: Number(executor.accrued) || 0,
+    earned: Number(executor.accrued) || 0,
+    paid: Number(executor.paid) || 0,
+    payable: Number(executor.payable) || Math.max((Number(executor.accrued) || 0) - (Number(executor.paid) || 0), 0),
+    inWork: 0,
+    inReview: 0,
+    hold: 0,
+    monthTarget: 0,
+  });
 
   function sendMessage() {
     const text = message.trim();
@@ -3349,6 +3541,22 @@ function ExecutorDetails({ executor, canSeeContacts, onMessage, assignedTasks = 
         <Info label="Приёмка с первого раза" value={executor.firstAccept ? `${executor.firstAccept}%` : "нет истории"} />
         <Info label="Градация" value={rankName(executor.rank)} />
         <Info label="Квалификация" value={executor.qualification || rankName(executor.rank)} />
+        <Info label="Модель оплаты" value={compensationModeName(executor.paymentModel)} />
+        <Info label="Начислено" value={money(finance.earned || finance.assigned || 0)} />
+        <Info label="Выплачено" value={money(finance.paid || 0)} />
+        <Info label="К выплате" value={money(finance.payable || 0)} />
+      </div>
+
+      <div className="executor-pay-card">
+        <div>
+          <b>Как считаем деньги</b>
+          <span>{executor.premiumRule || "Основная сумма берётся из этапов проекта. Премии и удержания фиксируются отдельно с комментарием руководителя."}</span>
+        </div>
+        <div>
+          <em>{Number(executor.hourlyRate) ? `${money(executor.hourlyRate)} / час` : "ставка не указана"}</em>
+          <em>{Number(executor.salaryBase) ? `оклад ${money(executor.salaryBase)}` : "оклад не указан"}</em>
+          <em>{Number(executor.percentRate) ? `${executor.percentRate}%` : "процент не указан"}</em>
+        </div>
       </div>
 
       <div className="executor-metrics">
@@ -3464,6 +3672,11 @@ function ExecutorsModule({ role, executors, setExecutors, allTasks = [] }) {
     email: "",
     telegram: "",
     note: "",
+    paymentModel: "piecework",
+    hourlyRate: "",
+    salaryBase: "",
+    percentRate: "",
+    premiumRule: "",
   });
   const canSeeContacts = roleCan(role, "viewExecutorContacts");
   const canManageExecutors = roleCan(role, "manageExecutors");
@@ -3531,6 +3744,11 @@ function ExecutorsModule({ role, executors, setExecutors, allTasks = [] }) {
       onTime: 0,
       firstAccept: 0,
       price: "не указан",
+      paymentModel: form.paymentModel,
+      hourlyRate: Number(form.hourlyRate) || 0,
+      salaryBase: Number(form.salaryBase) || 0,
+      percentRate: Number(form.percentRate) || 0,
+      premiumRule: form.premiumRule.trim(),
       contacts: {
         phone: form.phone.trim() || "—",
         email: form.email.trim() || "—",
@@ -3552,6 +3770,11 @@ function ExecutorsModule({ role, executors, setExecutors, allTasks = [] }) {
       email: "",
       telegram: "",
       note: "",
+      paymentModel: "piecework",
+      hourlyRate: "",
+      salaryBase: "",
+      percentRate: "",
+      premiumRule: "",
     });
   }
 
@@ -3824,6 +4047,13 @@ function ExecutorsModule({ role, executors, setExecutors, allTasks = [] }) {
           <input value={form.phone} onChange={(event) => setForm((next) => ({ ...next, phone: event.target.value }))} placeholder="Телефон (закрыто для неуправленцев)" />
           <input value={form.email} onChange={(event) => setForm((next) => ({ ...next, email: event.target.value }))} placeholder="Почта" />
           <input value={form.telegram} onChange={(event) => setForm((next) => ({ ...next, telegram: event.target.value }))} placeholder="Telegram / WhatsApp" />
+          <select value={form.paymentModel} onChange={(event) => setForm((next) => ({ ...next, paymentModel: event.target.value }))}>
+            {compensationModeOptions.map((option) => <option key={option.id} value={option.id}>{option.label}</option>)}
+          </select>
+          <input type="number" value={form.hourlyRate} onChange={(event) => setForm((next) => ({ ...next, hourlyRate: event.target.value }))} placeholder="Ставка/час, ₽" />
+          <input type="number" value={form.salaryBase} onChange={(event) => setForm((next) => ({ ...next, salaryBase: event.target.value }))} placeholder="Оклад, ₽" />
+          <input type="number" value={form.percentRate} onChange={(event) => setForm((next) => ({ ...next, percentRate: event.target.value }))} placeholder="Процент, %" />
+          <input className="wide" value={form.premiumRule} onChange={(event) => setForm((next) => ({ ...next, premiumRule: event.target.value }))} placeholder="Правило премий / удержаний" />
           <input className="wide" value={form.note} onChange={(event) => setForm((next) => ({ ...next, note: event.target.value }))} placeholder="Комментарий руководства" />
         </div>
       </section>
@@ -3834,6 +4064,18 @@ function ExecutorsModule({ role, executors, setExecutors, allTasks = [] }) {
 function ExecutorPersonalAccount({ allTasks, session, activeSection }) {
   const executorId = session?.executorId || "EX-001";
   const personalTasks = allTasks.filter((task) => task.executorId === executorId || task.assigneeId === executorId);
+  const applicationStorageKey = `smeta.executorApplications.${executorId}`;
+  const [applications, setApplications] = useState(() => readStoredValue(applicationStorageKey, []));
+  const [bidDrafts, setBidDrafts] = useState({});
+  useEffect(() => {
+    setApplications(readStoredValue(applicationStorageKey, []));
+  }, [applicationStorageKey]);
+  const finance = calculateExecutorFinance(personalTasks, executorAccount.finance);
+  const payable = Math.max((Number(finance.earned) || 0) - (Number(finance.paid) || 0) - (Number(finance.hold) || 0), 0);
+  const monthTarget = Number(finance.monthTarget) || Number(executorAccount.finance.monthTarget) || 0;
+  const moneyProgress = monthTarget > 0 ? Math.min(100, Math.round(((Number(finance.earned) || 0) / monthTarget) * 100)) : 0;
+  const dynamicXp = personalTasks.length ? Math.max(0, executorAccount.xp + (Number(finance.xpDelta) || 0)) : executorAccount.xp;
+  const executorScopeSections = parseExecutorSections(session?.executorSections?.length ? session.executorSections : executorAccount.permissions.join(", "));
   const projectSummaries = Array.from(
     personalTasks.reduce((map, task) => {
       const item = map.get(task.projectId) || {
@@ -3849,19 +4091,85 @@ function ExecutorPersonalAccount({ allTasks, session, activeSection }) {
       return map;
     }, new Map()).values()
   );
-  const visibleProjects = personalTasks.length
-    ? personalTasks.map((task) => ({
+  const visibleProjects = personalTasks.map((task) => ({
         id: task.projectId,
         title: task.projectTitle,
         task: task.name,
         status: task.status,
         due: task.due,
-        reward: "по задаче",
-        bonus: "+XP после приёмки",
+        reward: money(task.executorCost || 0),
+        bonus: `${taskXpValue(task)} XP`,
         progress: task.status === "Принято" ? 100 : task.status === "На проверке" ? 80 : task.status === "В работе" ? 55 : 15,
-      }))
-    : executorAccount.projects;
-  const xpPercent = Math.round((executorAccount.xp / executorAccount.nextLevelXp) * 100);
+      }));
+  const xpPercent = Math.min(100, Math.round((dynamicXp / executorAccount.nextLevelXp) * 100));
+  const paymentRows = personalTasks.slice(0, 5).map((task) => ({
+        title: `${task.projectId} · ${task.name}`,
+        value: money(task.executorCost || 0),
+        status: taskApprovalState(task).paymentApproved
+          ? `к выплате ${money(Math.max((Number(task.executorCost) || 0) - (Number(task.paid) || 0), 0))}`
+          : task.status === "Принято"
+            ? taskApprovalState(task).label
+            : task.status,
+      }));
+  const availableWorks = allTasks.filter((task) => isAvailableExecutorWork(task, executorScopeSections)).slice(0, 8);
+  const visibleAvailableWorks = availableWorks;
+  const appliedIds = new Set(applications.map((item) => item.id));
+
+  function updateBidDraft(taskId, patch) {
+    setBidDrafts((current) => ({ ...current, [taskId]: { ...(current[taskId] || {}), ...patch } }));
+  }
+
+  function applyForWork(task) {
+    const draft = bidDrafts[task.id] || {};
+    const requestedAmount = Number(draft.amount) || Number(task.executorCost) || 0;
+    const application = {
+      id: task.id,
+      projectId: task.projectId,
+      name: task.name,
+      requestedAmount,
+      offeredDue: draft.due || task.due || "",
+      comment: draft.comment || "",
+      at: new Date().toISOString(),
+      status: "Отклик отправлен",
+    };
+    const next = [application, ...applications.filter((item) => item.id !== task.id)];
+    setApplications(next);
+    writeStoredValue(applicationStorageKey, next);
+    showAction(`Отклик отправлен РП по работе: ${task.name}`);
+  }
+
+  function renderAvailableWorks() {
+    return (
+      <div className="available-work-list">
+        {visibleAvailableWorks.map((task) => {
+          const applied = appliedIds.has(task.id);
+          const draft = bidDrafts[task.id] || {};
+          return (
+            <div key={task.id}>
+              <div>
+                <span className="muted-chip">{task.projectId} · {task.section || task.kind}</span>
+                <h3>{task.name}</h3>
+                <p>{task.projectTitle || "Проект открыт для набора исполнителей"}</p>
+                <small className="auction-note">Можно предложить свою сумму, срок и комментарий. РП выбирает не только цену, а рейтинг, скорость, качество и ответственность.</small>
+              </div>
+              <div className="available-work-meta">
+                <b>{money(task.executorCost || 0)}</b>
+                <span>Бюджет РП: {money(task.executorCost || 0)}</span>
+                <input type="number" value={draft.amount ?? ""} onChange={(event) => updateBidDraft(task.id, { amount: event.target.value })} placeholder="Моя сумма, ₽" disabled={applied} />
+                <input value={draft.due ?? ""} onChange={(event) => updateBidDraft(task.id, { due: event.target.value })} placeholder={`Срок: ${task.due || "предложить"}`} disabled={applied} />
+                <input value={draft.comment ?? ""} onChange={(event) => updateBidDraft(task.id, { comment: event.target.value })} placeholder="Комментарий: опыт, скорость, условия" disabled={applied} />
+                <em>{task.paymentStatus || task.status || "условия в карточке"}</em>
+                <button type="button" className={applied ? "secondary" : "primary"} onClick={() => applyForWork(task)} disabled={applied}>
+                  {applied ? "Отклик отправлен" : "Отправить предложение"}
+                </button>
+              </div>
+            </div>
+          );
+        })}
+        {!visibleAvailableWorks.length ? <div className="empty">Пока нет открытых работ по твоему профилю.</div> : null}
+      </div>
+    );
+  }
 
   if (activeSection === "projects") {
     return (
@@ -3900,6 +4208,16 @@ function ExecutorPersonalAccount({ allTasks, session, activeSection }) {
             ))}
           </div>
           {!projectSummaries.length ? <p className="section-hint">Пока нет назначенных проектов из рабочей базы.</p> : null}
+        </section>
+        <section className="office-card">
+          <div className="section-row">
+            <div>
+              <h3>Доступные работы</h3>
+              <p className="section-hint">Работы по всем доступным регионам, где РП ещё не назначил исполнителя. Исполнитель отправляет предложение, а назначение подтверждает руководитель проекта.</p>
+            </div>
+            <span className="muted-chip">Откликов: {applications.length}</span>
+          </div>
+          {renderAvailableWorks()}
         </section>
       </section>
     );
@@ -3951,6 +4269,7 @@ function ExecutorPersonalAccount({ allTasks, session, activeSection }) {
           <p>Личный кабинет исполнителя</p>
           <h2>{session?.name || executorAccount.name}</h2>
           <span>{session?.position || executorAccount.role} · {session?.region || executorAccount.city}</span>
+          <small className="account-payline">Оплата: {executorAccount.paymentTitle}. Деньги считаются из принятых этапов и выплат.</small>
           <div className="executor-chips">
             {executorAccount.badges.map((badge) => (
               <span key={badge}>{badge}</span>
@@ -3965,54 +4284,98 @@ function ExecutorPersonalAccount({ allTasks, session, activeSection }) {
       </div>
 
       <div className="stats-grid compact">
-        <StatCard item={{ label: "Баланс к выплате", value: executorAccount.balance, tone: "green" }} />
-        <StatCard item={{ label: "Бонусные баллы", value: String(executorAccount.bonusPoints), tone: "blue" }} />
-        <StatCard item={{ label: "Текущий XP", value: String(executorAccount.xp), tone: "orange" }} />
-        <StatCard item={{ label: "Серия", value: "5", tone: "red" }} />
+        <StatCard item={{ label: "Заработано", value: money(finance.earned || 0), tone: "green" }} />
+        <StatCard item={{ label: "Выплачено", value: money(finance.paid || 0), tone: "blue" }} />
+        <StatCard item={{ label: "К выплате", value: money(payable), tone: "orange" }} />
+        <StatCard item={{ label: "На согласовании / в работе", value: money((finance.pendingApproval || 0) + (finance.inWork || 0) + (finance.inReview || 0)), tone: "red" }} />
       </div>
 
-      <section className="office-card xp-card">
+      <section className="office-card xp-card account-progress-grid">
+        <div>
+          <div className="section-row">
+            <div>
+              <h3>Уровень и допуск</h3>
+              <p className="section-hint">{executorAccount.streak}. До следующего уровня осталось {Math.max(executorAccount.nextLevelXp - dynamicXp, 0)} XP.</p>
+            </div>
+            <b>{xpPercent}%</b>
+          </div>
+          <div className="bar">
+            <span className="bar-fill green" style={{ width: `${xpPercent}%` }} />
+          </div>
+        </div>
+        <div>
+          <div className="section-row">
+            <div>
+              <h3>План дохода</h3>
+              <p className="section-hint">Ориентир на месяц. Это не бухгалтерия, а личный счётчик результата.</p>
+            </div>
+            <b>{moneyProgress}%</b>
+          </div>
+          <div className="bar">
+            <span className="bar-fill blue" style={{ width: `${moneyProgress}%` }} />
+          </div>
+        </div>
+      </section>
+
+      <section className="office-card executor-guide-card">
         <div className="section-row">
           <div>
-            <h3>Прогресс уровня</h3>
-            <p className="section-hint">{executorAccount.streak}. До следующего уровня осталось {executorAccount.nextLevelXp - executorAccount.xp} XP.</p>
+            <h3>Как пользоваться кабинетом</h3>
+            <p className="section-hint">Короткая памятка для исполнителей: без лишней теории, только порядок работы.</p>
           </div>
-          <b>{xpPercent}%</b>
         </div>
-        <div className="bar">
-          <span className="bar-fill green" style={{ width: `${xpPercent}%` }} />
+        <div className="executor-guide-grid">
+          {executorGuideSteps.map((step) => (
+            <div key={step.title}>
+              <b>{step.title}</b>
+              <span>{step.text}</span>
+            </div>
+          ))}
         </div>
       </section>
 
       <div className="account-layout">
-        <section className="office-card">
-          <div className="section-row">
-            <div>
-              <h3>Мои проекты и задачи</h3>
-              <p className="section-hint">Исполнитель видит только свои задачи, сроки, оплату и статус проверки.</p>
-            </div>
-          </div>
-          <div className="executor-task-list">
-            {visibleProjects.map((project) => (
-              <div key={project.id}>
-                <div>
-                  <span className="muted-chip">{project.id}</span>
-                  <h3>{project.title}</h3>
-                  <p>{project.task}</p>
-                </div>
-                <div className="project-account-meta">
-                  <em className={cn("status", statusClass(project.status))}>{project.status}</em>
-                  <span>Срок: {project.due}</span>
-                  <b>{project.reward}</b>
-                  <small>{project.bonus}</small>
-                </div>
-                <div className="bar">
-                  <span className="bar-fill green" style={{ width: `${project.progress}%` }} />
-                </div>
+        <div className="account-main-stack">
+          <section className="office-card">
+            <div className="section-row">
+              <div>
+                <h3>Мои проекты и задачи</h3>
+                <p className="section-hint">Исполнитель видит только свои задачи, сроки, оплату и статус проверки.</p>
               </div>
-            ))}
-          </div>
-        </section>
+            </div>
+            <div className="executor-task-list">
+              {visibleProjects.map((project) => (
+                <div key={project.id}>
+                  <div>
+                    <span className="muted-chip">{project.id}</span>
+                    <h3>{project.title}</h3>
+                    <p>{project.task}</p>
+                  </div>
+                  <div className="project-account-meta">
+                    <em className={cn("status", statusClass(project.status))}>{project.status}</em>
+                    <span>Срок: {project.due}</span>
+                    <b>{project.reward}</b>
+                    <small>{project.bonus}</small>
+                  </div>
+                  <div className="bar">
+                    <span className="bar-fill green" style={{ width: `${project.progress}%` }} />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </section>
+
+          <section className="office-card">
+            <div className="section-row">
+              <div>
+                <h3>Доступные работы</h3>
+                <p className="section-hint">Если руководитель проекта открыл набор специалистов, работа появляется здесь независимо от региона доступа. Предложение не назначает тебя автоматически, а отправляет заявку РП.</p>
+              </div>
+              <span className="muted-chip">Откликов: {applications.length}</span>
+            </div>
+            {renderAvailableWorks()}
+          </section>
+        </div>
 
         <aside className="account-side">
           <section className="panel-card">
@@ -4023,6 +4386,19 @@ function ExecutorPersonalAccount({ allTasks, session, activeSection }) {
                   <span>{item}</span>
                   <b>✓</b>
                 </button>
+              ))}
+            </div>
+          </section>
+
+          <section className="panel-card">
+            <h3>Как считается</h3>
+            <div className="reward-list">
+              {executorAccount.payRules.map((item) => (
+                <div key={item.title}>
+                  <b>{item.title}</b>
+                  <span>{item.value}</span>
+                  <em>{item.status}</em>
+                </div>
               ))}
             </div>
           </section>
@@ -4043,7 +4419,7 @@ function ExecutorPersonalAccount({ allTasks, session, activeSection }) {
           <section className="panel-card">
             <h3>Выплаты</h3>
             <div className="reward-list">
-              {executorAccount.payouts.map((item) => (
+              {paymentRows.map((item) => (
                 <div key={item.title}>
                   <b>{item.title}</b>
                   <span>{item.value}</span>
@@ -5833,6 +6209,44 @@ function AdminModule({ users, setUsers, session, executors = [] }) {
                       disabled={!canEdit || !isExecutorEnabled}
                     />
                   </label>
+                  <label>
+                    <span>Оплата</span>
+                    <select
+                      value={user.executorPaymentModel || (isExecutorEnabled ? "piecework" : "")}
+                      onChange={(event) => updateUser(user.id, { executorEnabled: true, executorPaymentModel: event.target.value })}
+                      disabled={!canEdit || !isExecutorEnabled}
+                    >
+                      <option value="">не указано</option>
+                      {compensationModeOptions.map((option) => <option key={option.id} value={option.id}>{option.label}</option>)}
+                    </select>
+                  </label>
+                  <label>
+                    <span>Ставка/час ₽</span>
+                    <input
+                      type="number"
+                      value={user.executorHourlyRate || 0}
+                      onChange={(event) => updateUser(user.id, { executorEnabled: true, executorHourlyRate: Number(event.target.value) || 0 })}
+                      disabled={!canEdit || !isExecutorEnabled}
+                    />
+                  </label>
+                  <label>
+                    <span>Оклад ₽</span>
+                    <input
+                      type="number"
+                      value={user.executorSalaryBase || 0}
+                      onChange={(event) => updateUser(user.id, { executorEnabled: true, executorSalaryBase: Number(event.target.value) || 0 })}
+                      disabled={!canEdit || !isExecutorEnabled}
+                    />
+                  </label>
+                  <label>
+                    <span>Процент %</span>
+                    <input
+                      type="number"
+                      value={user.executorPercentRate || 0}
+                      onChange={(event) => updateUser(user.id, { executorEnabled: true, executorPercentRate: Number(event.target.value) || 0 })}
+                      disabled={!canEdit || !isExecutorEnabled}
+                    />
+                  </label>
                 </div>
               </div>
             </div>
@@ -5919,6 +6333,18 @@ function AdminModule({ users, setUsers, session, executors = [] }) {
 function FinanceModule({ projectItems, role }) {
   const canSeeFinance = roleCan(role, "viewFinance");
   const summary = financeSummary(projectItems);
+  const executorPayouts = executorPayoutRows(projectItems);
+  const payoutTotals = executorPayouts.reduce(
+    (total, row) => ({
+      assigned: total.assigned + row.assigned,
+      earned: total.earned + row.earned,
+      paid: total.paid + row.paid,
+      payable: total.payable + row.payable,
+      pendingApproval: total.pendingApproval + row.pendingApproval,
+      inWork: total.inWork + row.inWork + row.inReview,
+    }),
+    { assigned: 0, earned: 0, paid: 0, payable: 0, pendingApproval: 0, inWork: 0 }
+  );
 
   if (!canSeeFinance) {
     return (
@@ -5993,6 +6419,48 @@ function FinanceModule({ projectItems, role }) {
         <div className="office-card">
           <h3>Правило доступа</h3>
           <p className="section-hint">Финансист видит суммы, оплаты, акты, задолженность и выплаты, но не получает права управлять пользователями и раздавать роли. Руководитель направления должен видеть только своё направление и свой расчёт.</p>
+        </div>
+      </section>
+
+      <section className="office-card">
+        <div className="section-row">
+          <div>
+            <h3>Выплаты исполнителям</h3>
+            <p className="section-hint">Это рабочая ведомость для бухгалтера и финансиста. Деньги становятся “к выплате” только после согласования клиента и ответственного РП/управляющего. Согласующий принимает ответственность за качество результата.</p>
+          </div>
+          <span className="muted-chip">К выплате: {money(payoutTotals.payable)}</span>
+        </div>
+        <div className="finance-plain-grid executor-payout-summary">
+          <div><span>Назначено работ</span><b>{money(payoutTotals.assigned)}</b></div>
+          <div><span>Согласовано к выплате</span><b>{money(payoutTotals.earned)}</b></div>
+          <div><span>Ждёт согласования</span><b>{money(payoutTotals.pendingApproval)}</b></div>
+          <div><span>Уже выплачено</span><b>{money(payoutTotals.paid)}</b></div>
+          <div><span>В работе / на проверке</span><b>{money(payoutTotals.inWork)}</b></div>
+        </div>
+        <div className="executor-payout-table">
+          <div className="executor-payout-head">
+            <b>Исполнитель</b>
+            <span>Разделы</span>
+            <em>Работ</em>
+            <strong>Согласовано</strong>
+            <strong>Ждёт соглас.</strong>
+            <strong>Выплачено</strong>
+            <strong>К выплате</strong>
+            <strong>В работе</strong>
+          </div>
+          {executorPayouts.map((row) => (
+            <div key={row.key}>
+              <b>{row.name}</b>
+              <span>{row.sectionsText || "не указано"}</span>
+              <em>{row.tasks} · {row.projectCount} пр.</em>
+              <strong>{money(row.earned)}</strong>
+              <strong>{money(row.pendingApproval)}</strong>
+              <strong>{money(row.paid)}</strong>
+              <strong className={row.payable ? "good" : ""}>{money(row.payable)}</strong>
+              <strong>{money(row.inWork + row.inReview)}</strong>
+            </div>
+          ))}
+          {!executorPayouts.length ? <div className="empty">Пока нет этапов с суммами исполнителей.</div> : null}
         </div>
       </section>
 
