@@ -1659,6 +1659,42 @@ function canAccessProject(user, project, viewRole = user?.role) {
   return canAccessRegion(user, project);
 }
 
+function taskAssignedToUser(user, task) {
+  if (!user || !task) return false;
+  const executorId = user.executorId || user.id;
+  return Boolean(
+    executorId && (task.executorId === executorId || task.assigneeId === executorId) ||
+    task.owner === user.name ||
+    task.executor === user.name
+  );
+}
+
+function canAccessTask(user, task, viewRole = user?.role) {
+  const role = viewRole || user?.role;
+  if (!task || !user) return false;
+  if (role === "executor" || role === "partner") return taskAssignedToUser(user, task);
+  return true;
+}
+
+function restrictProjectForRole(user, project, viewRole = user?.role) {
+  const role = viewRole || user?.role;
+  if (!project || !user) return null;
+  if (role !== "executor" && role !== "partner") return project;
+
+  const ownTasks = (project.tasks || []).filter((task) => canAccessTask(user, task, role));
+  const ownSections = projectSections(project).filter((section) => canAccessTask(user, section, role));
+  const partnerHasProjectAccess = role === "partner" && project.partnerUserId === user.id;
+
+  if (!ownTasks.length && !ownSections.length && !partnerHasProjectAccess) return null;
+
+  return {
+    ...project,
+    tasks: ownTasks,
+    sections: ownSections,
+    clientStatus: partnerHasProjectAccess ? project.clientStatus : "Доступен только назначенный объём работ.",
+  };
+}
+
 function canAccessPartner(user, partner, viewRole = user?.role) {
   const role = viewRole || user?.role;
   if (!partner || !user) return false;
@@ -4316,7 +4352,8 @@ function ExecutorPersonalAccount({ allTasks, session, activeSection }) {
       return map;
     }, new Map()).values()
   );
-  const visibleProjects = personalTasks.map((task) => ({
+  const visibleProjects = personalTasks.map((task, index) => ({
+        rowId: `${task.projectId}-${task.id || task.name || index}`,
         id: task.projectId,
         title: task.projectTitle,
         task: task.name,
@@ -4570,7 +4607,7 @@ function ExecutorPersonalAccount({ allTasks, session, activeSection }) {
             </div>
             <div className="executor-task-list">
               {visibleProjects.map((project) => (
-                <div key={project.id}>
+                <div key={project.rowId || project.id}>
                   <div>
                     <span className="muted-chip">{project.id}</span>
                     <h3>{project.title}</h3>
@@ -5833,7 +5870,7 @@ function ProjectDetailModule({ project, role, session, onBack, onDeleteProject, 
   );
 }
 
-function TasksModule({ allTasks, onTaskStatusChange, executors, onGoSection, initialSelectedTaskId }) {
+function TasksModule({ allTasks, onTaskStatusChange, executors, onGoSection, initialSelectedTaskId, role }) {
   const [statusFilter, setStatusFilter] = useState("Все");
   const [sectionFilter, setSectionFilter] = useState("Все");
   const [query, setQuery] = useState("");
@@ -5865,6 +5902,7 @@ function TasksModule({ allTasks, onTaskStatusChange, executors, onGoSection, ini
   const acceptedTasks = allTasks.filter((task) => task.status === "Принято");
   const taskMoney = allTasks.reduce((sum, task) => sum + (Number(task.executorCost) || 0), 0);
   const boardStatuses = ["Новая", "В работе", "На проверке", "Правки", "Просрочено"];
+  const canSeeTaskMoney = roleCan(role, "viewProductionBudget") || roleCan(role, "viewFinance") || role === "partner";
 
   function executorLabel(task) {
     const executor = executors.find((item) => item.id === task.executorId);
@@ -5879,7 +5917,7 @@ function TasksModule({ allTasks, onTaskStatusChange, executors, onGoSection, ini
         <StatCard item={{ label: "Открытые работы", value: String(openTasks.length), tone: "blue" }} />
         <StatCard item={{ label: "На проверке", value: String(reviewTasks.length), tone: "orange" }} />
         <StatCard item={{ label: "Просрочено", value: String(overdueTasks.length), tone: overdueTasks.length ? "red" : "green" }} />
-        <StatCard item={{ label: "Бюджет исполнителей", value: money(taskMoney), tone: "green" }} />
+        <StatCard item={{ label: canSeeTaskMoney ? "Бюджет исполнителей" : "Доступные задачи", value: canSeeTaskMoney ? money(taskMoney) : String(allTasks.length), tone: "green" }} />
       </section>
 
       <section className="office-card task-meaning-card">
@@ -5994,8 +6032,8 @@ function TasksModule({ allTasks, onTaskStatusChange, executors, onGoSection, ini
                 <Info label="Исполнитель" value={executorLabel(selectedTask)} />
                 <Info label="Срок" value={selectedTask.due} />
                 <Info label="Статус" value={selectedTask.status} />
-                <Info label="Бюджет клиента" value={money(selectedTask.clientBudget)} />
-                <Info label="Оплата исполнителю" value={money(selectedTask.executorCost)} />
+                <Info label="Бюджет клиента" value={canSeeTaskMoney ? money(selectedTask.clientBudget) : "Скрыто"} />
+                <Info label="Оплата исполнителю" value={canSeeTaskMoney ? money(selectedTask.executorCost) : "Скрыто"} />
               </div>
               <div className="task-card-block">
                 <b>Описание</b>
@@ -6893,7 +6931,7 @@ function ClientAppModule({ projectItems }) {
   );
 }
 
-function DashboardModule({ visibleProjects, selectedProject, setSelectedId, role, session, query, setQuery, direction, setDirection, chooseFirstAvailable, currentRole, onProjectMessage, onGoSection }) {
+function DashboardModule({ visibleProjects, selectedProject, setSelectedId, role, session, query, setQuery, direction, setDirection, chooseFirstAvailable, currentRole, onProjectMessage, onGoSection, salesLeads = [], partners = [], executors = [], users = [] }) {
   const summary = financeSummary(visibleProjects);
   const canSeeFinance = roleCan(role, "viewFinance");
   const canSeeProductionBudget = roleCan(role, "viewProductionBudget") || canSeeFinance;
@@ -7045,6 +7083,148 @@ function DashboardModule({ visibleProjects, selectedProject, setSelectedId, role
       section: "partners",
     },
   ];
+  const scopedUsers = (users || []).filter((user) => {
+    if (!user) return false;
+    if (role === "owner" || role === "admin" || role === "deputy") return true;
+    if (role === "regional_admin") {
+      const regions = userRegionList(session);
+      return regions.includes("Все регионы") || regions.includes(normalizeRegionName(user.region));
+    }
+    if (role === "direction_admin") {
+      const regions = userRegionList(session);
+      const regionMatch = regions.includes("Все регионы") || regions.includes(normalizeRegionName(user.region));
+      return regionMatch && (session?.direction === "Все направления" || user.direction === session?.direction);
+    }
+    return false;
+  });
+  const visibleSalesLeads = (salesLeads || []).filter((lead) => leadCanAccess(session, lead, role));
+  const leadStats = salesLeadStats(visibleSalesLeads);
+  const payoutRows = executorPayoutRows(visibleProjects);
+  const executorPayable = payoutRows.reduce((sum, row) => sum + (Number(row.payable) || 0), 0);
+  const executorPendingApproval = payoutRows.reduce((sum, row) => sum + (Number(row.pendingApproval) || 0), 0);
+  const missingExecutorSections = visibleProjects.flatMap((project) =>
+    projectOperationalSignals(project).missingExecutorSections.map((section) => ({ project, section }))
+  );
+  const clientDebtProjects = visibleProjects.filter((project) => projectEconomy(project).receivable > 0);
+  const salesTransferReady = visibleSalesLeads.filter((lead) => ["contract_and_advance", "contract_advance", "deposit"].includes(lead.stage) || lead.projectId);
+  const partnerTaskRows = visibleTasks.filter((task) => Number(task.executorCost) || Number(task.paid) || task.status).slice(0, 6);
+  const rolePrimaryCards = (() => {
+    if (["admin", "regional_admin", "direction_admin"].includes(role)) {
+      return [
+        { label: "Пользователи в контуре", value: String(scopedUsers.length), hint: role === "admin" ? "вся система" : scopeText, tone: "blue", section: "admin" },
+        { label: "Исполнители в базе", value: String(executors.length), hint: "кого можно назначать на этапы", tone: executors.length ? "green" : "yellow", section: "executors" },
+        { label: "Проекты контура", value: String(visibleProjects.length), hint: "для проверки данных и прав", tone: "slate", section: "projects" },
+        { label: "Партнёры контура", value: String(partners.length), hint: "доступ только по региону/направлению", tone: "blue", section: "partners" },
+      ];
+    }
+    if (["director", "regional_manager"].includes(role)) {
+      return [
+        { label: role === "director" ? "Проекты направления" : "Проекты региона", value: String(visibleProjects.length), hint: scopeText, tone: "blue", section: "projects" },
+        { label: "Красная зона", value: String(redProjects.length), hint: redProjects[0]?.title || "пожаров нет", tone: redProjects.length ? "red" : "green", project: redProjects[0] },
+        { label: "Этапы без исполнителя", value: String(missingExecutorSections.length), hint: missingExecutorSections[0]?.section?.name || "все назначено", tone: missingExecutorSections.length ? "yellow" : "green", section: "projects" },
+        { label: "Партнёры", value: String(partners.length), hint: "по доступному контуру", tone: "blue", section: "partners" },
+      ];
+    }
+    if (["pm", "project_manager"].includes(role)) {
+      return [
+        { label: "Мои проекты", value: String(visibleProjects.length), hint: "только назначенные", tone: "blue", section: "projects" },
+        { label: "На проверке", value: String(reviewTasks.length), hint: reviewTasks[0]?.name || "проверок нет", tone: reviewTasks.length ? "yellow" : "green", section: "tasks" },
+        { label: "Без исполнителя", value: String(missingExecutorSections.length), hint: missingExecutorSections[0]?.section?.name || "все этапы закрыты", tone: missingExecutorSections.length ? "red" : "green", section: "projects" },
+        { label: "К выплате", value: money(executorPayable), hint: "после согласований", tone: executorPayable ? "orange" : "green", section: "tasks" },
+      ];
+    }
+    if (["sales_manager", "head_of_sales"].includes(role)) {
+      return [
+        { label: "Лиды Bitrix/SmetaGO", value: String(visibleSalesLeads.length), hint: "только доступный отдел продаж", tone: "blue", section: "sales" },
+        { label: "SLA нарушен", value: String(leadStats.breached), hint: "нужно быстро реагировать", tone: leadStats.breached ? "red" : "green", section: "sales" },
+        { label: "КП отправлено", value: String(leadStats.proposal), hint: "ждут доведения до договора", tone: "yellow", section: "sales" },
+        { label: "Передача в проект", value: String(salesTransferReady.length), hint: "договор/аванс или связанный проект", tone: salesTransferReady.length ? "green" : "slate", section: "projects" },
+      ];
+    }
+    if (["finance", "accountant"].includes(role)) {
+      return [
+        { label: "Оплачено клиентами", value: money(summary.paidByClient), hint: "факт поступлений", tone: "green", section: "finance" },
+        { label: "Долг клиентов", value: money(summary.receivable), hint: `${clientDebtProjects.length} проектов`, tone: summary.receivable ? "orange" : "green", section: "finance" },
+        { label: "К выплате исполнителям", value: money(executorPayable), hint: "после согласований", tone: executorPayable ? "yellow" : "green", section: "finance" },
+        { label: "Ждёт согласования", value: money(executorPendingApproval), hint: "РП/клиент должны подтвердить", tone: executorPendingApproval ? "yellow" : "green", section: "tasks" },
+      ];
+    }
+    if (role === "partner") {
+      return [
+        { label: "Мои работы", value: String(visibleTasks.length), hint: "только назначенные проекты/задачи", tone: "blue", section: "projects" },
+        { label: "На проверке", value: String(reviewTasks.length), hint: reviewTasks[0]?.name || "проверок нет", tone: reviewTasks.length ? "yellow" : "green", section: "tasks" },
+        { label: "Начислено", value: money(partnerTaskRows.reduce((sum, task) => sum + (Number(task.executorCost) || 0), 0)), hint: "по своим работам", tone: "green", section: "tasks" },
+        { label: "Выплачено", value: money(partnerTaskRows.reduce((sum, task) => sum + (Number(task.paid) || 0), 0)), hint: "по своим работам", tone: "slate", section: "tasks" },
+      ];
+    }
+    return ownerStats.map((item) => ({ ...item, hint: "", section: "projects" }));
+  })();
+  const roleInstructionCards = (() => {
+    if (["admin", "regional_admin", "direction_admin"].includes(role)) {
+      return [
+        { title: "Роли и доступы", text: "Назначать регион, направление, должность, роль и исполнительский профиль. Финансовая аналитика закрыта, если роль не финансовая.", section: "admin" },
+        { title: "Справочники", text: "Проверять категории исполнителей, партнёров, направления и корректность карточек без вмешательства в чужие финансы.", section: "executors" },
+        { title: "Чистота данных", text: "Искать проекты без региона, направления, РП, Яндекс.Диска и сроков, чтобы аналитика не врала.", section: "projects" },
+      ];
+    }
+    if (["director", "regional_manager"].includes(role)) {
+      return [
+        { title: "Контроль блока", text: "Видеть только свой регион/направление: проекты, просрочки, исполнителей, партнёров и операционный результат.", section: "projects" },
+        { title: "Ресурсы", text: "Проверять, где не хватает исполнителей, какие этапы зависли и каких специалистов нужно усилить.", section: "executors" },
+        { title: "Проблемы", text: "Открывать красные проекты сразу из панели и принимать управленческое решение.", section: "analytics" },
+      ];
+    }
+    if (["pm", "project_manager"].includes(role)) {
+      return [
+        { title: "Проект как центр", text: "Работать внутри своих проектов: этапы, задачи, файлы, чат, согласования и сроки.", section: "projects" },
+        { title: "Набор исполнителей", text: "Этапы без исполнителя нужно закрывать назначением или открытым набором специалистов.", section: "executors" },
+        { title: "Согласования оплат", text: "Исполнитель получает деньги только после результата, клиента и подтверждения ответственного.", section: "tasks" },
+      ];
+    }
+    if (["sales_manager", "head_of_sales"].includes(role)) {
+      return [
+        { title: "Не вторая CRM", text: "SmetaOffice показывает только тёплые лиды и сделки, которые надо довести до проекта. Основная CRM остаётся Bitrix24.", section: "sales" },
+        { title: "Hunter / Farmer", text: "Hunter реагирует быстро, Farmer доводит до договора, после аванса создаётся проект.", section: "sales" },
+        { title: "Передача в производство", text: "После договора/аванса продажа должна превратиться в проект с регионом, направлением, РП и Яндекс.Диском.", section: "projects" },
+      ];
+    }
+    if (["finance", "accountant"].includes(role)) {
+      return [
+        { title: "Долги клиентов", text: "Контроль оплат: сумма договора, оплачено, остаток и проекты, где надо добирать деньги.", section: "finance" },
+        { title: "Выплаты исполнителям", text: "Начислено, выплачено, к выплате и что ещё ждёт согласование РП/клиента.", section: "finance" },
+        { title: "Без управления ролями", text: "Финансы не назначают права и не вмешиваются в производство, только видят денежный контур.", section: "finance" },
+      ];
+    }
+    if (role === "partner") {
+      return [
+        { title: "Свои работы", text: "Партнёр видит только назначенные заявки, задачи, документы, выплаты и статус проверки.", section: "projects" },
+        { title: "Связь через систему", text: "Коммуникация, файлы и отчёты должны оставаться в SmetaOffice/SmetaGO, без вывода клиента из системы.", section: "tasks" },
+        { title: "Рейтинг и история", text: "Качество, сроки и просрочки должны влиять на рейтинг и дальнейшие заказы.", section: "tasks" },
+      ];
+    }
+    return [];
+  })();
+  const roleWorkRows = (() => {
+    if (["finance", "accountant"].includes(role)) {
+      return payoutRows.slice(0, 6).map((row) => ({ id: row.key, title: row.name, meta: `${row.projectCount} проектов · ${row.sectionsText || "разделы не указаны"}`, value: money(row.payable), tone: row.payable ? "yellow" : "green", section: "finance" }));
+    }
+    if (["sales_manager", "head_of_sales"].includes(role)) {
+      return visibleSalesLeads.slice(0, 6).map((lead) => ({ id: lead.id, title: `${lead.id} · ${lead.clientName}`, meta: `${lead.city || lead.region} · ${salesDirections[lead.direction] || lead.direction} · ${salesStageLabels[lead.stage] || lead.stage}`, value: slaText(leadSlaStatus(lead)), tone: slaTone(leadSlaStatus(lead)), section: "sales" }));
+    }
+    if (role === "partner") {
+      return partnerTaskRows.map((task) => ({ id: task.id, title: task.name, meta: `${task.projectTitle} · срок: ${task.due || "не указан"}`, value: task.status, tone: statusClass(task.status) === "danger" ? "red" : statusClass(task.status) === "warning" ? "yellow" : "green", projectId: task.projectId }));
+    }
+    if (["pm", "project_manager", "director", "regional_manager"].includes(role)) {
+      return visibleProjects.slice(0, 6).map((project) => {
+        const signals = projectOperationalSignals(project);
+        return { id: project.id, title: project.title, meta: `${project.region || project.city} · ${project.stage || "этап не указан"} · ${signals.schedule.label}`, value: `${project.progress || 0}%`, tone: effectiveProjectRisk(project), project };
+      });
+    }
+    if (["admin", "regional_admin", "direction_admin"].includes(role)) {
+      return scopedUsers.slice(0, 6).map((user) => ({ id: user.id, title: user.name, meta: `${roles.find((item) => item.id === user.role)?.name || user.role} · ${user.region || "регион не указан"} · ${user.direction || "направление не указано"}`, value: user.status || "active", tone: user.status === "active" ? "green" : "yellow", section: "admin" }));
+    }
+    return [];
+  })();
 
   function openDashboardProject(project) {
     if (!project) {
@@ -7065,6 +7245,25 @@ function DashboardModule({ visibleProjects, selectedProject, setSelectedId, role
       return;
     }
     showAction(`${item.title}: ${item.hint}`);
+  }
+
+  function openRoleItem(item) {
+    if (!item) return;
+    if (item.project) {
+      openDashboardProject(item.project);
+      return;
+    }
+    if (item.projectId) {
+      const project = visibleProjects.find((nextProject) => nextProject.id === item.projectId);
+      if (project) openDashboardProject(project);
+      else showAction("Проект по этой задаче скрыт текущей ролью или не найден");
+      return;
+    }
+    if (item.section && sectionAllowed(role, item.section)) {
+      onGoSection?.(item.section);
+      return;
+    }
+    showAction(item.hint || item.text || item.title || "Действие недоступно");
   }
 
   function openRegionProjects(item) {
@@ -7314,6 +7513,87 @@ function DashboardModule({ visibleProjects, selectedProject, setSelectedId, role
         </div>
       </section>
 
+      <section className="role-command-grid">
+        <div className="office-card role-kpi-panel">
+          <div className="section-row">
+            <div>
+              <span className="muted-chip">Рабочая панель роли</span>
+              <h3>{dashboardTitle}: что важно сегодня</h3>
+              <p className="section-hint">Ниже не общая витрина, а набор показателей именно для этой роли. Клики ведут в разрешённые разделы.</p>
+            </div>
+          </div>
+          <div className="role-kpi-grid">
+            {rolePrimaryCards.map((item) => (
+              <button key={item.label} type="button" onClick={() => item.project ? openDashboardProject(item.project) : openRoleItem(item)}>
+                <span>{item.label}</span>
+                <b>{item.value}</b>
+                <em className={cn("risk-chip", item.tone)}>{item.hint || "открыть"}</em>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="office-card role-playbook-card">
+          <div className="section-row">
+            <div>
+              <span className="muted-chip">Регламент роли</span>
+              <h3>Что делает этот пользователь</h3>
+            </div>
+          </div>
+          <div className="role-playbook-list">
+            {roleInstructionCards.map((item) => (
+              <button key={item.title} type="button" onClick={() => openRoleItem(item)}>
+                <b>{item.title}</b>
+                <span>{item.text}</span>
+              </button>
+            ))}
+            {!roleInstructionCards.length ? <div className="empty">Для роли пока нет отдельного регламента.</div> : null}
+          </div>
+        </div>
+      </section>
+
+      <section className="office-card role-work-card">
+        <div className="section-row">
+          <div>
+            <span className="muted-chip">
+              {["finance", "accountant"].includes(role)
+                ? "Выплаты"
+                : ["sales_manager", "head_of_sales"].includes(role)
+                ? "Лиды"
+                : role === "partner"
+                ? "Мои работы"
+                : ["admin", "regional_admin", "direction_admin"].includes(role)
+                ? "Пользователи"
+                : "Проекты"}
+            </span>
+            <h3>
+              {["finance", "accountant"].includes(role)
+                ? "Кому платить и что ждёт согласования"
+                : ["sales_manager", "head_of_sales"].includes(role)
+                ? "Продажи, которые должны дойти до проекта"
+                : role === "partner"
+                ? "Работы партнёра"
+                : ["admin", "regional_admin", "direction_admin"].includes(role)
+                ? "Пользователи в зоне администрирования"
+                : "Рабочий портфель роли"}
+            </h3>
+            <p className="section-hint">Здесь показаны только строки, доступные текущей роли по реальной фильтрации данных.</p>
+          </div>
+        </div>
+        <div className="role-work-list">
+          {roleWorkRows.map((item) => (
+            <button key={item.id} type="button" onClick={() => openRoleItem(item)}>
+              <div>
+                <b>{item.title}</b>
+                <span>{item.meta}</span>
+              </div>
+              <em className={cn("risk-chip", item.tone)}>{item.value}</em>
+            </button>
+          ))}
+          {!roleWorkRows.length ? <div className="empty">В выбранном контуре пока нет данных для этого блока.</div> : null}
+        </div>
+      </section>
+
       <section className="office-card owner-problem-center">
         <div className="section-row">
           <div>
@@ -7429,7 +7709,7 @@ function DashboardModule({ visibleProjects, selectedProject, setSelectedId, role
                 <span>Регион</span><span>Проекты</span><span>{canSeeFinance ? "Договоры" : "Задачи"}</span><span>{canSeeFinance ? "Оплачено" : "На проверке"}</span><span>Выполнение</span><span>Светофор</span>
               </div>
               {regionRows.map((item) => (
-                <button key={item.name} type="button" onClick={() => showAction(`Регион: ${item.name}`)}>
+                <button key={item.name} type="button" onClick={() => openRegionProjects(item)}>
                   <b>{item.name}</b>
                   <span>{item.projects.length}</span>
                   <span>{canSeeFinance ? money(item.economy.contractAmount) : flattenTasks(item.projects).length}</span>
@@ -7452,7 +7732,7 @@ function DashboardModule({ visibleProjects, selectedProject, setSelectedId, role
               {directionRows.map((item) => {
                 const percent = summary.contractAmount ? Math.round((item.economy.contractAmount / summary.contractAmount) * 100) : 0;
                 return (
-                  <button key={item.name} type="button" onClick={() => showAction(`Направление: ${item.name}`)}>
+                  <button key={item.name} type="button" onClick={() => openDirectionProjects(item)}>
                     <div>
                       <b>{item.name}</b>
                       <span>{item.projects.length} проектов{canSeeFinance ? ` · ${money(item.economy.contractAmount)}` : ""}</span>
@@ -7743,18 +8023,19 @@ function SmetaOfficePrototype() {
   const visibleProjects = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
 
-    return projectItems.filter((project) => {
+    return projectItems.map((project) => {
       const hasAccess = canAccessProject(effectiveAccessUser, project, role);
       const hasRegionAccess = canAccessRegion(effectiveAccessUser, project);
       const searchableText = `${project.title} ${project.client} ${project.city} ${project.direction}`.toLowerCase();
       const matchesQuery = normalizedQuery === "" || searchableText.includes(normalizedQuery);
       const matchesDirection = direction === "Все" || project.direction.includes(direction);
 
-      return hasAccess && hasRegionAccess && matchesQuery && matchesDirection;
-    });
+      if (!(hasAccess && hasRegionAccess && matchesQuery && matchesDirection)) return null;
+      return restrictProjectForRole(effectiveAccessUser, project, role);
+    }).filter(Boolean);
   }, [projectItems, role, query, direction, effectiveAccessUser]);
 
-  const visibleTasks = useMemo(() => flattenTasks(visibleProjects), [visibleProjects]);
+  const visibleTasks = useMemo(() => flattenTasks(visibleProjects).filter((task) => canAccessTask(effectiveAccessUser, task, role)), [visibleProjects, effectiveAccessUser, role]);
   const visiblePartners = useMemo(
     () => partners.filter((partner) => canAccessPartner(effectiveAccessUser, partner, role)),
     [partners, effectiveAccessUser, role]
@@ -8312,7 +8593,7 @@ function SmetaOfficePrototype() {
         </header>
 
         <div className="office-content">
-          {role === "executor" ? <ExecutorPersonalAccount allTasks={allTasks} session={session} activeSection={activeSection} /> : null}
+          {role === "executor" ? <ExecutorPersonalAccount allTasks={allTasks} session={effectiveAccessUser} activeSection={activeSection} /> : null}
 
           {role !== "executor" && activeSection === "executors" ? <ExecutorsModule role={role} executors={executorDirectory} setExecutors={setExecutors} allTasks={visibleTasks} /> : null}
 
@@ -8335,7 +8616,7 @@ function SmetaOfficePrototype() {
               selectedProject={selectedProject}
               setSelectedId={selectProject}
               role={role}
-              session={session}
+              session={effectiveAccessUser}
               query={query}
               setQuery={setQuery}
               direction={direction}
@@ -8344,6 +8625,10 @@ function SmetaOfficePrototype() {
               currentRole={currentRole}
               onProjectMessage={addProjectMessage}
               onGoSection={setActiveSection}
+              salesLeads={salesLeads}
+              partners={visiblePartners}
+              executors={executorDirectory}
+              users={users}
             />
           ) : null}
 
@@ -8395,7 +8680,7 @@ function SmetaOfficePrototype() {
             />
           ) : null}
 
-          {role !== "executor" && activeSection === "tasks" ? <TasksModule allTasks={visibleTasks} onTaskStatusChange={changeTaskStatus} executors={executorDirectory} onGoSection={setActiveSection} initialSelectedTaskId={selectedTaskId} /> : null}
+          {role !== "executor" && activeSection === "tasks" ? <TasksModule allTasks={visibleTasks} onTaskStatusChange={changeTaskStatus} executors={executorDirectory} onGoSection={setActiveSection} initialSelectedTaskId={selectedTaskId} role={role} /> : null}
           {role !== "executor" && activeSection === "partners" ? <PartnersModule role={role} session={effectiveAccessUser} partnerItems={partners} visiblePartnerItems={visiblePartners} setPartnerItems={setPartners} /> : null}
           {role !== "executor" && activeSection === "admin" ? <AdminModule users={users} setUsers={setUsers} session={session} executors={executors} /> : null}
           {role !== "executor" && activeSection === "analytics" ? <AnalyticsModule projectItems={visibleProjects} allTasks={visibleTasks} role={role} /> : null}

@@ -1660,6 +1660,102 @@ h3 { margin: 0; }
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
 }
+.role-command-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(340px, .65fr);
+  gap: 18px;
+}
+.role-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 14px;
+}
+.role-kpi-grid > button {
+  min-width: 0;
+  min-height: 122px;
+  border: 1px solid #dbe5ef;
+  border-radius: 18px;
+  background: #f8fafc;
+  padding: 15px;
+  text-align: left;
+}
+.role-kpi-grid > button:hover,
+.role-playbook-list > button:hover,
+.role-work-list > button:hover {
+  border-color: #93b4e8;
+  background: #fff;
+}
+.role-kpi-grid span,
+.role-kpi-grid b,
+.role-kpi-grid em {
+  display: block;
+}
+.role-kpi-grid span {
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 800;
+}
+.role-kpi-grid b {
+  margin: 8px 0 12px;
+  color: #020617;
+  font-size: clamp(20px, 1.8vw, 28px);
+  line-height: 1.05;
+  overflow-wrap: anywhere;
+}
+.role-kpi-grid em {
+  width: fit-content;
+  white-space: normal;
+  font-style: normal;
+  line-height: 1.25;
+}
+.role-playbook-card {
+  align-content: start;
+}
+.role-playbook-list,
+.role-work-list {
+  display: grid;
+  gap: 10px;
+  margin-top: 14px;
+}
+.role-playbook-list > button {
+  display: grid;
+  gap: 6px;
+  width: 100%;
+  border: 1px solid #dbe5ef;
+  border-radius: 16px;
+  background: #f8fafc;
+  padding: 13px;
+  text-align: left;
+}
+.role-playbook-list b,
+.role-work-list b {
+  color: #020617;
+}
+.role-playbook-list span,
+.role-work-list span {
+  color: #64748b;
+  font-size: 13px;
+  line-height: 1.4;
+}
+.role-work-list > button {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 14px;
+  align-items: center;
+  width: 100%;
+  border: 1px solid #dbe5ef;
+  border-radius: 16px;
+  background: #f8fafc;
+  padding: 14px;
+  text-align: left;
+}
+.role-work-list em {
+  max-width: 170px;
+  white-space: normal;
+  font-style: normal;
+  line-height: 1.2;
+}
 .dashboard-period {
   display: flex;
   flex-wrap: wrap;
@@ -3342,8 +3438,8 @@ h3 { margin: 0; }
   .workspace-grid, .projects-layout, .details-grid, .project-chat-layout, .executors-layout, .executor-profile-layout, .account-layout, .integration-grid, .client-app-grid, .task-detail-grid, .bitrix-bridge-grid, .safe-sync-grid { grid-template-columns: 1fr; }
   .projects-list, .drill-card-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .executor-list { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .owner-two-grid, .owner-project-grid { grid-template-columns: 1fr; }
-  .owner-kpi-grid, .owner-region-grid, .owner-people-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .owner-two-grid, .owner-project-grid, .role-command-grid { grid-template-columns: 1fr; }
+  .owner-kpi-grid, .owner-region-grid, .owner-people-grid, .role-kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
 @media (max-width: 980px) {
@@ -3358,7 +3454,7 @@ h3 { margin: 0; }
     backdrop-filter: none;
   }
   .workspace-head, .details-head, .account-hero, .project-open-head { align-items: stretch; flex-direction: column; }
-  .stats-grid, .info-grid, .bottom-panels, .pipeline, .summary-grid, .executor-groups, .executor-form, .executor-two-cols, .mvp-days, .integration-form, .client-app-grid, .economy-summary, .production-budget-card, .login-card, .finance-grid, .finance-kpi-list, .finance-plain-grid, .plan-grid, .focus-grid, .risk-project-strip, .task-kanban, .executor-process-grid, .bitrix-bridge-grid, .stage-editor-row, .stage-editor-head, .admin-directory-grid, .admin-create-user-form, .empty-start-card, .role-scope-card, .task-meaning-grid, .partner-detail-grid, .analytics-grid, .deadline-bars, .account-progress-grid, .executor-pay-card, .executor-guide-grid, .available-work-list > div, .executor-payout-table > div { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .stats-grid, .info-grid, .bottom-panels, .pipeline, .summary-grid, .executor-groups, .executor-form, .executor-two-cols, .mvp-days, .integration-form, .client-app-grid, .economy-summary, .production-budget-card, .login-card, .finance-grid, .finance-kpi-list, .finance-plain-grid, .plan-grid, .focus-grid, .risk-project-strip, .task-kanban, .executor-process-grid, .bitrix-bridge-grid, .stage-editor-row, .stage-editor-head, .admin-directory-grid, .admin-create-user-form, .empty-start-card, .role-scope-card, .role-kpi-grid, .task-meaning-grid, .partner-detail-grid, .analytics-grid, .deadline-bars, .account-progress-grid, .executor-pay-card, .executor-guide-grid, .available-work-list > div, .executor-payout-table > div { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .dashboard-grid, .dashboard-grid.wide { grid-template-columns: 1fr; }
   .owner-direction-strip, .owner-money-grid, .owner-meta-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
@@ -3368,7 +3464,7 @@ h3 { margin: 0; }
   .office-header h1 { font-size: 24px; }
   .header-actions, .filters, .module-head { flex-direction: column; align-items: stretch; }
   .header-actions label, .moscow-clock, .filters input, .filters select { width: 100%; min-width: 0; }
-  .stats-grid, .projects-list, .drill-card-grid, .card-money-row, .drill-metrics, .info-grid, .bottom-panels, .pipeline, .summary-grid, .executor-groups, .executor-list, .executor-form, .executor-two-cols, .chat-input, .project-chat-input, .mvp-days, .integration-form, .quick-form, .task-create-form, .economy-summary, .production-budget-card, .login-card, .finance-grid, .finance-kpi-list, .finance-plain-grid, .org-detail-grid, .mini-kpi-grid, .plan-grid, .focus-grid, .risk-project-strip, .task-command-bar, .task-kanban, .executor-process-grid, .task-inspector-actions, .client-participant-form, .sales-grid, .sales-board, .stage-editor-row, .stage-editor-head, .admin-directory-grid, .admin-create-user-form, .empty-start-card, .role-scope-card, .role-scope-meta, .quick-action-grid, .task-meaning-grid, .partner-detail-grid, .analytics-grid, .specialization-add, .deadline-bars, .account-progress-grid, .executor-pay-card, .executor-guide-grid, .available-work-list > div, .executor-payout-table > div { grid-template-columns: 1fr; }
+  .stats-grid, .projects-list, .drill-card-grid, .card-money-row, .drill-metrics, .info-grid, .bottom-panels, .pipeline, .summary-grid, .executor-groups, .executor-list, .executor-form, .executor-two-cols, .chat-input, .project-chat-input, .mvp-days, .integration-form, .quick-form, .task-create-form, .economy-summary, .production-budget-card, .login-card, .finance-grid, .finance-kpi-list, .finance-plain-grid, .org-detail-grid, .mini-kpi-grid, .plan-grid, .focus-grid, .risk-project-strip, .task-command-bar, .task-kanban, .executor-process-grid, .task-inspector-actions, .client-participant-form, .sales-grid, .sales-board, .stage-editor-row, .stage-editor-head, .admin-directory-grid, .admin-create-user-form, .empty-start-card, .role-scope-card, .role-scope-meta, .role-command-grid, .role-kpi-grid, .role-work-list > button, .quick-action-grid, .task-meaning-grid, .partner-detail-grid, .analytics-grid, .specialization-add, .deadline-bars, .account-progress-grid, .executor-pay-card, .executor-guide-grid, .available-work-list > div, .executor-payout-table > div { grid-template-columns: 1fr; }
   .owner-kpi-grid, .owner-region-grid, .owner-direction-strip, .owner-project-grid, .owner-two-grid, .owner-money-grid, .owner-meta-grid, .owner-approval-strip, .owner-people-grid, .owner-payment-table > div, .owner-payment-table > button { grid-template-columns: 1fr; }
   .owner-project-head, .owner-people-grid > button { flex-direction: column; align-items: stretch; }
   .owner-risk-list > button, .owner-stage-timeline > button { grid-template-columns: 1fr; }
@@ -3383,14 +3479,17 @@ h3 { margin: 0; }
 @media (max-width: 1280px) {
   .project-command-center { grid-template-columns: 1fr; }
   .owner-problem-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-  .owner-two-grid, .owner-project-grid { grid-template-columns: 1fr; }
-  .owner-kpi-grid, .owner-region-grid, .owner-people-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .owner-two-grid, .owner-project-grid, .role-command-grid { grid-template-columns: 1fr; }
+  .owner-kpi-grid, .owner-region-grid, .owner-people-grid, .role-kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .project-lifecycle-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
 
 @media (max-width: 680px) {
   .owner-problem-grid,
   .owner-kpi-grid,
+  .role-kpi-grid,
+  .role-command-grid,
+  .role-work-list > button,
   .owner-region-grid,
   .owner-direction-strip,
   .owner-people-grid,
