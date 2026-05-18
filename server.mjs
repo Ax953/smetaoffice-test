@@ -178,6 +178,241 @@ function visibleUsersFor(manager, users = []) {
   return users.filter((user) => user.id === manager.id || canManageUserRecord(manager, user));
 }
 
+function canViewFullIntegrationSettings(user) {
+  return ["owner", "admin", "deputy"].includes(user?.role);
+}
+
+function visibleIntegrationSettingsFor(user, settings = defaultDb.integrationSettings) {
+  if (canViewFullIntegrationSettings(user)) return settings;
+  return {
+    ...settings,
+    webhookUrl: settings.webhookUrl ? "configured" : "",
+  };
+}
+
+function canAccessRegion(user, item) {
+  if (!user) return false;
+  if (["owner", "admin", "deputy", "finance", "accountant"].includes(user.role)) return true;
+  const userRegions = userRegionList(user);
+  return userRegions.includes(ALL_REGIONS) || userRegions.includes(normalizeRegionName(item?.region || item?.city));
+}
+
+function projectSections(project) {
+  return Array.isArray(project?.sections) ? project.sections : [];
+}
+
+function taskAssignedToUser(user, task) {
+  if (!user || !task) return false;
+  const executorId = user.executorId || user.id;
+  return Boolean(
+    (executorId && (task.executorId === executorId || task.assigneeId === executorId)) ||
+      task.owner === user.name ||
+      task.executor === user.name
+  );
+}
+
+function canAccessProject(user, project) {
+  if (!user || !project) return false;
+  if (["owner", "admin", "deputy", "finance", "accountant"].includes(user.role)) return true;
+
+  if (user.role === "executor" || user.role === "partner") {
+    if (user.role === "partner" && project.partnerUserId === user.id) return true;
+    return [...(project.tasks || []), ...projectSections(project)].some((task) => taskAssignedToUser(user, task));
+  }
+
+  if (!canAccessRegion(user, project)) return false;
+  if (user.role === "regional_admin" || user.role === "regional_manager") return true;
+  if (user.role === "direction_admin") return user.direction === ALL_DIRECTIONS || normalizeDirectionName(project.direction) === normalizeDirectionName(user.direction);
+  if (user.role === "director") return project.directorUserId === user.id || normalizeDirectionName(project.direction) === normalizeDirectionName(user.direction);
+  if (user.role === "pm") return project.pmUserId === user.id || project.managerId === user.id || project.manager === user.name;
+  if (user.role === "project_manager") return project.projectManagerId === user.id || project.pmUserId === user.id || project.managerId === user.id || project.manager === user.name;
+  if (user.role === "sales_manager") return project.salesManagerId === user.id;
+  if (user.role === "head_of_sales") return project.headOfSalesId === user.id || Boolean(project.salesManagerId) || project.source === "SmetaGo";
+  return false;
+}
+
+function restrictProjectForUser(user, project) {
+  if (!project || !user) return null;
+  if (!["executor", "partner"].includes(user.role)) return project;
+
+  const tasks = (project.tasks || []).filter((task) => taskAssignedToUser(user, task));
+  const sections = projectSections(project).filter((section) => taskAssignedToUser(user, section));
+  const partnerProject = user.role === "partner" && project.partnerUserId === user.id;
+  if (!tasks.length && !sections.length && !partnerProject) return null;
+
+  return {
+    ...project,
+    tasks,
+    sections,
+    client: partnerProject ? project.client : "Скрыто",
+    clientStatus: partnerProject ? project.clientStatus : "Доступен только назначенный объём работ.",
+  };
+}
+
+const projectFinanceFields = [
+  "budget",
+  "margin",
+  "contractAmount",
+  "paidByClient",
+  "productionBudget",
+  "directCosts",
+  "plannedExpenses",
+  "actualExpenses",
+  "executorCost",
+  "partnerPayouts",
+  "paidToExecutors",
+  "paidToPartners",
+  "operatingCosts",
+  "payrollCosts",
+  "salesCommissionPercent",
+  "salesCommissionAmount",
+  "companyPlannedGross",
+  "grossProfit",
+  "contractProfit",
+  "netProfit",
+  "marginPercent",
+];
+
+const projectProductionFinanceFields = projectFinanceFields.filter((field) => !["contractAmount", "paidByClient", "budget"].includes(field));
+const sectionClientFinanceFields = ["clientBudget", "clientPrice", "priceForClient"];
+const sectionExecutorFinanceFields = ["executorCost", "paid", "balance", "bonus", "penalty", "holdback", "financialStatus"];
+
+function omitFields(item, fields) {
+  const next = { ...item };
+  fields.forEach((field) => delete next[field]);
+  return next;
+}
+
+function projectFinanceAccessLevel(user) {
+  if (!user) return "none";
+  if (["owner", "deputy", "finance", "accountant", "director", "regional_manager", "pm", "project_manager"].includes(user.role)) return "full";
+  if (["sales_manager", "head_of_sales"].includes(user.role)) return "sales";
+  if (["executor", "partner"].includes(user.role)) return "ownPayout";
+  return "none";
+}
+
+function sanitizeSectionFinanceForUser(user, section) {
+  const level = projectFinanceAccessLevel(user);
+  if (level === "full") return section;
+  if (level === "sales") return omitFields(section, sectionExecutorFinanceFields);
+  if (level === "ownPayout") return omitFields(section, sectionClientFinanceFields);
+  return omitFields(section, [...sectionClientFinanceFields, ...sectionExecutorFinanceFields]);
+}
+
+function sanitizeProjectFinanceForUser(user, project) {
+  const level = projectFinanceAccessLevel(user);
+  const withSections = {
+    ...project,
+    tasks: (project.tasks || []).map((task) => sanitizeSectionFinanceForUser(user, task)),
+    sections: projectSections(project).map((section) => sanitizeSectionFinanceForUser(user, section)),
+  };
+
+  if (level === "full") return withSections;
+  if (level === "sales") return omitFields(withSections, projectProductionFinanceFields);
+  return omitFields(withSections, projectFinanceFields);
+}
+
+function visibleProjectsFor(user, projects = []) {
+  if (!user) return [];
+  return projects
+    .filter((project) => canAccessProject(user, project))
+    .map((project) => restrictProjectForUser(user, project))
+    .filter(Boolean)
+    .map((project) => sanitizeProjectFinanceForUser(user, project));
+}
+
+function canAccessPartner(user, partner) {
+  if (!user || !partner) return false;
+  if (["owner", "admin", "deputy", "finance", "accountant"].includes(user.role)) return true;
+  if (user.role === "partner") return partner.userId === user.id || partner.partnerUserId === user.id || partner.name === user.name;
+  if (!canAccessRegion(user, partner)) return false;
+  if (user.role === "regional_admin" || user.role === "regional_manager") return true;
+  if (user.role === "direction_admin" || user.role === "director" || user.role === "pm" || user.role === "project_manager") {
+    return user.direction === ALL_DIRECTIONS || normalizeDirectionName(partner.direction) === normalizeDirectionName(user.direction);
+  }
+  if (user.role === "head_of_sales" || user.role === "sales_manager") {
+    return normalizeDirectionName(partner.direction) === "Единый центр продаж" || partner.relation === "Партнёр приводит нам клиентов";
+  }
+  return false;
+}
+
+function visiblePartnersFor(user, partners = []) {
+  return partners.filter((partner) => canAccessPartner(user, partner));
+}
+
+const salesLeadDirectionMap = {
+  design: "Бюро архитектуры и дизайна",
+  architecture: "Бюро архитектуры и дизайна",
+  project_institute: "Проектный институт",
+  repair: "Строительство и ремонт",
+  realty: "Единый центр продаж",
+  surveys: "Изыскания / обследования / обмеры",
+  completion: "Комплектация",
+  service: "Бытовые услуги / сервис",
+};
+
+function leadDirectionMatches(user, lead) {
+  const userDirection = normalizeDirectionName(user?.direction || ALL_DIRECTIONS);
+  if (userDirection === ALL_DIRECTIONS) return true;
+  const leadDirection = normalizeDirectionName(salesLeadDirectionMap[lead?.direction] || lead?.direction);
+  return leadDirection === userDirection || userDirection === "Единый центр продаж";
+}
+
+function canAccessSalesLead(user, lead) {
+  if (!user || !lead) return false;
+  if (["owner", "admin", "deputy", "finance", "accountant"].includes(user.role)) return true;
+  if (user.role === "regional_admin") return canAccessRegion(user, lead);
+  if (user.role === "direction_admin") return canAccessRegion(user, lead) && leadDirectionMatches(user, lead);
+  if (user.role === "head_of_sales") return canAccessRegion(user, lead);
+  if (user.role === "sales_manager") return lead.hunterId === user.id || lead.farmerId === user.id;
+  if (user.role === "partner") return lead.partnerId === user.id || lead.farmerId === user.id;
+  if (user.role === "pm" || user.role === "project_manager") return lead.farmerId === user.id || Boolean(lead.projectId);
+  if (user.role === "director") return canAccessRegion(user, lead) && leadDirectionMatches(user, lead);
+  if (user.role === "regional_manager") return canAccessRegion(user, lead);
+  return false;
+}
+
+function visibleSalesLeadsFor(user, salesLeads = []) {
+  return salesLeads.filter((lead) => canAccessSalesLead(user, lead));
+}
+
+function canAccessExecutor(user, executor) {
+  if (!user || !executor) return false;
+  if (["owner", "admin", "deputy", "finance", "accountant"].includes(user.role)) return true;
+  if (user.role === "executor" || user.role === "partner") return executor.id === user.executorId || executor.userId === user.id || executor.name === user.name;
+  const hasRegion = !executor.region && !executor.city ? true : canAccessRegion(user, executor);
+  if (!hasRegion) return false;
+  if (user.role === "regional_admin" || user.role === "regional_manager" || user.role === "pm" || user.role === "project_manager") return true;
+  if (user.role === "direction_admin" || user.role === "director") {
+    const direction = normalizeDirectionName(executor.direction || ALL_DIRECTIONS);
+    return direction === ALL_DIRECTIONS || user.direction === ALL_DIRECTIONS || direction === normalizeDirectionName(user.direction);
+  }
+  return false;
+}
+
+function visibleExecutorsFor(user, executors = []) {
+  return executors.filter((executor) => canAccessExecutor(user, executor));
+}
+
+function itemKey(item) {
+  return item?.id || item?.login || item?.name;
+}
+
+function mergeManagedCollection(existingItems = [], incomingItems = [], manager, canAccessItem) {
+  if (["owner", "admin", "deputy"].includes(manager?.role)) return incomingItems;
+  const merged = [...existingItems];
+
+  incomingItems.forEach((incomingItem) => {
+    if (!canAccessItem(manager, incomingItem)) return;
+    const key = itemKey(incomingItem);
+    const existingIndex = merged.findIndex((item) => itemKey(item) === key);
+    if (existingIndex >= 0) merged[existingIndex] = { ...merged[existingIndex], ...incomingItem };
+    else merged.unshift(incomingItem);
+  });
+
+  return merged;
+}
+
 function mergeManagedUsers(existingUsers = [], incomingUsers = [], manager) {
   if (fullUserAdminRoles.includes(manager?.role)) return incomingUsers;
   const merged = [...existingUsers];
@@ -243,8 +478,8 @@ function canWriteCollection(user, route) {
   if (!user || user.status === "disabled") return false;
   if (["owner", "admin", "deputy"].includes(user.role)) return true;
   if (route === "/api/projects") return ["director", "regional_manager", "pm", "project_manager"].includes(user.role);
-  if (route === "/api/executors") return ["director", "regional_manager", "pm"].includes(user.role);
-  if (route === "/api/partners") return ["director", "regional_manager"].includes(user.role);
+  if (route === "/api/executors") return ["regional_admin", "direction_admin", "director", "regional_manager", "pm"].includes(user.role);
+  if (route === "/api/partners") return ["regional_admin", "direction_admin", "director", "regional_manager"].includes(user.role);
   if (route === "/api/sales-leads") return ["head_of_sales", "sales_manager"].includes(user.role);
   if (route === "/api/integration-settings") return user.role === "admin";
   if (route === "/api/users") return [...fullUserAdminRoles, ...scopedUserAdminRoles].includes(user.role);
@@ -455,38 +690,56 @@ const server = http.createServer(async (req, res) => {
       const auth = requireAuth(req, res, db);
       if (!auth) return;
       const visibleUsers = authMode === "server" ? visibleUsersFor(auth.user, db.users || []) : db.users;
-      const payload = authMode === "server" ? { ...db, users: publicUsers(visibleUsers), authSessions: {}, accessRequests: publicUsers(db.accessRequests || []) } : db;
+      const payload = authMode === "server"
+        ? {
+            ...db,
+            projects: visibleProjectsFor(auth.user, db.projects || []),
+            executors: visibleExecutorsFor(auth.user, db.executors || []),
+            users: publicUsers(visibleUsers),
+            partners: visiblePartnersFor(auth.user, db.partners || []),
+            salesLeads: visibleSalesLeadsFor(auth.user, db.salesLeads || []),
+            integrationSettings: visibleIntegrationSettingsFor(auth.user, db.integrationSettings),
+            authSessions: {},
+            accessRequests: publicUsers(visibleUsersFor(auth.user, db.accessRequests || [])),
+          }
+        : db;
       sendJson(res, 200, payload);
       return;
     }
 
     if (req.method === "GET" && route === "/api/projects") {
-      if (!requireAuth(req, res, db)) return;
-      sendJson(res, 200, db.projects);
+      const auth = requireAuth(req, res, db);
+      if (!auth) return;
+      sendJson(res, 200, authMode === "server" ? visibleProjectsFor(auth.user, db.projects || []) : db.projects);
       return;
     }
 
     if (req.method === "PUT" && route === "/api/projects") {
-      if (!requireWriteAccess(req, res, db, route)) return;
+      const auth = requireWriteAccess(req, res, db, route);
+      if (!auth) return;
       const projects = await readJsonBody(req);
-      const nextDb = { ...db, projects };
+      const nextProjects = authMode === "server" ? mergeManagedCollection(db.projects || [], projects, auth.user, canAccessProject) : projects;
+      const nextDb = { ...db, projects: nextProjects };
       await writeDb(nextDb);
-      sendJson(res, 200, nextDb.projects);
+      sendJson(res, 200, authMode === "server" ? visibleProjectsFor(auth.user, nextDb.projects) : nextDb.projects);
       return;
     }
 
     if (req.method === "GET" && route === "/api/executors") {
-      if (!requireAuth(req, res, db)) return;
-      sendJson(res, 200, db.executors);
+      const auth = requireAuth(req, res, db);
+      if (!auth) return;
+      sendJson(res, 200, authMode === "server" ? visibleExecutorsFor(auth.user, db.executors || []) : db.executors);
       return;
     }
 
     if (req.method === "PUT" && route === "/api/executors") {
-      if (!requireWriteAccess(req, res, db, route)) return;
+      const auth = requireWriteAccess(req, res, db, route);
+      if (!auth) return;
       const executors = await readJsonBody(req);
-      const nextDb = { ...db, executors };
+      const nextExecutors = authMode === "server" ? mergeManagedCollection(db.executors || [], executors, auth.user, canAccessExecutor) : executors;
+      const nextDb = { ...db, executors: nextExecutors };
       await writeDb(nextDb);
-      sendJson(res, 200, nextDb.executors);
+      sendJson(res, 200, authMode === "server" ? visibleExecutorsFor(auth.user, nextDb.executors) : nextDb.executors);
       return;
     }
 
@@ -512,32 +765,38 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (req.method === "GET" && route === "/api/partners") {
-      if (!requireAuth(req, res, db)) return;
-      sendJson(res, 200, db.partners || []);
+      const auth = requireAuth(req, res, db);
+      if (!auth) return;
+      sendJson(res, 200, authMode === "server" ? visiblePartnersFor(auth.user, db.partners || []) : db.partners || []);
       return;
     }
 
     if (req.method === "PUT" && route === "/api/partners") {
-      if (!requireWriteAccess(req, res, db, route)) return;
+      const auth = requireWriteAccess(req, res, db, route);
+      if (!auth) return;
       const partners = await readJsonBody(req);
-      const nextDb = { ...db, partners };
+      const nextPartners = authMode === "server" ? mergeManagedCollection(db.partners || [], partners, auth.user, canAccessPartner) : partners;
+      const nextDb = { ...db, partners: nextPartners };
       await writeDb(nextDb);
-      sendJson(res, 200, nextDb.partners);
+      sendJson(res, 200, authMode === "server" ? visiblePartnersFor(auth.user, nextDb.partners) : nextDb.partners);
       return;
     }
 
     if (req.method === "GET" && route === "/api/sales-leads") {
-      if (!requireAuth(req, res, db)) return;
-      sendJson(res, 200, db.salesLeads || []);
+      const auth = requireAuth(req, res, db);
+      if (!auth) return;
+      sendJson(res, 200, authMode === "server" ? visibleSalesLeadsFor(auth.user, db.salesLeads || []) : db.salesLeads || []);
       return;
     }
 
     if (req.method === "PUT" && route === "/api/sales-leads") {
-      if (!requireWriteAccess(req, res, db, route)) return;
+      const auth = requireWriteAccess(req, res, db, route);
+      if (!auth) return;
       const salesLeads = await readJsonBody(req);
-      const nextDb = { ...db, salesLeads };
+      const nextSalesLeads = authMode === "server" ? mergeManagedCollection(db.salesLeads || [], salesLeads, auth.user, canAccessSalesLead) : salesLeads;
+      const nextDb = { ...db, salesLeads: nextSalesLeads };
       await writeDb(nextDb);
-      sendJson(res, 200, nextDb.salesLeads);
+      sendJson(res, 200, authMode === "server" ? visibleSalesLeadsFor(auth.user, nextDb.salesLeads) : nextDb.salesLeads);
       return;
     }
 
@@ -557,7 +816,12 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (req.method === "GET" && route === "/api/integration-settings") {
-      if (!requireAuth(req, res, db)) return;
+      const auth = requireAuth(req, res, db);
+      if (!auth) return;
+      if (authMode === "server" && !canViewFullIntegrationSettings(auth.user)) {
+        sendJson(res, 403, { ok: false, error: "Forbidden" });
+        return;
+      }
       sendJson(res, 200, db.integrationSettings);
       return;
     }
