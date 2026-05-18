@@ -6939,15 +6939,15 @@ function DashboardModule({ visibleProjects, selectedProject, setSelectedId, role
 
   const regionRows = Array.from(
     visibleProjects.filter(isRegionalOperatingProject).reduce((map, project) => {
-      const key = project.region || project.city || "Без региона";
-      const item = map.get(key) || { name: key, projects: [], risk: "green" };
+      const key = normalizeRegionName(project.region || project.city);
+      const item = map.get(key) || { name: key, city: "", manager: "", projects: [], risk: "green" };
       item.projects.push(project);
       const risk = effectiveProjectRisk(project);
       if (risk === "red") item.risk = "red";
       else if (risk === "yellow" && item.risk !== "red") item.risk = "yellow";
       map.set(key, item);
       return map;
-    }, new Map()).values()
+    }, new Map(baseRegions.map((region) => [region.name, { ...region, projects: [], risk: "green" }]))).values()
   ).map((item) => {
     const economy = financeSummary(item.projects);
     const progress = item.projects.length ? Math.round(item.projects.reduce((sum, project) => sum + (Number(project.progress) || 0), 0) / item.projects.length) : 0;
@@ -7068,8 +7068,9 @@ function DashboardModule({ visibleProjects, selectedProject, setSelectedId, role
   }
 
   function openRegionProjects(item) {
-    setQuery(item.name);
-    chooseFirstAvailable?.(role, direction, item.name);
+    const searchAlias = item.projects[0]?.region || item.projects[0]?.city || "";
+    setQuery(searchAlias);
+    chooseFirstAvailable?.(role, direction, searchAlias);
     onGoSection?.("projects");
   }
 
