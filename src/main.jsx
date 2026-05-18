@@ -2296,6 +2296,131 @@ function financeSummary(projectItems) {
   );
 }
 
+function isExecutorUnassigned(value) {
+  const text = String(value || "").trim().toLowerCase();
+  return !text || text === "—" || text.includes("не назнач");
+}
+
+function projectOperationalSignals(project) {
+  const sections = projectSections(project);
+  const tasks = Array.isArray(project?.tasks) ? project.tasks : [];
+  const economy = projectEconomy(project);
+  const schedule = projectScheduleControl(project);
+  const missingExecutorSections = sections.filter((section) => isBillableProductionStage(section) && !section.executorId && isExecutorUnassigned(section.executor));
+  const overdueTasks = tasks.filter((task) => task.status === "Просрочено");
+  const reviewTasks = tasks.filter((task) => task.status === "На проверке");
+  const pendingApprovals = tasks.filter((task) => task.status === "Принято" && !taskApprovalState(task).paymentApproved);
+  const payableToExecutors = Math.max(economy.executorCost - economy.paidToExecutors, 0);
+  const yandexMissing = !String(project.yandexFolder || "").startsWith("http");
+  const risk = effectiveProjectRisk(project);
+
+  return {
+    risk,
+    schedule,
+    sections,
+    tasks,
+    missingExecutorSections,
+    overdueTasks,
+    reviewTasks,
+    pendingApprovals,
+    yandexMissing,
+    receivable: economy.receivable,
+    payableToExecutors,
+    hasClientDebt: economy.receivable > 0,
+    hasExecutorDebt: payableToExecutors > 0,
+  };
+}
+
+function portfolioProblemCards(projectItems = []) {
+  const tasks = flattenTasks(projectItems);
+  const redProjects = projectItems.filter((project) => effectiveProjectRisk(project) === "red");
+  const yellowProjects = projectItems.filter((project) => effectiveProjectRisk(project) === "yellow");
+  const sectionsWithoutExecutors = projectItems.reduce((sum, project) => sum + projectOperationalSignals(project).missingExecutorSections.length, 0);
+  const pendingApprovals = tasks.filter((task) => task.status === "Принято" && !taskApprovalState(task).paymentApproved);
+  const overdueTasks = tasks.filter((task) => task.status === "Просрочено");
+  const summary = financeSummary(projectItems);
+  const payoutRows = executorPayoutRows(projectItems);
+  const executorPayable = payoutRows.reduce((sum, row) => sum + (Number(row.payable) || 0), 0);
+
+  return [
+    {
+      title: "Красные проекты",
+      value: String(redProjects.length),
+      hint: redProjects[0]?.title || "Нет проектов в красной зоне",
+      tone: redProjects.length ? "red" : "green",
+      project: redProjects[0],
+    },
+    {
+      title: "Риски по срокам",
+      value: String(yellowProjects.length),
+      hint: yellowProjects[0]?.title || "Жёлтая зона под контролем",
+      tone: yellowProjects.length ? "yellow" : "green",
+      project: yellowProjects[0],
+    },
+    {
+      title: "Этапы без исполнителя",
+      value: String(sectionsWithoutExecutors),
+      hint: sectionsWithoutExecutors ? "Есть оплачиваемые этапы, где не выбран исполнитель" : "Все оплачиваемые этапы закрыты исполнителями",
+      tone: sectionsWithoutExecutors ? "red" : "green",
+      section: "projects",
+    },
+    {
+      title: "Согласования оплат",
+      value: String(pendingApprovals.length),
+      hint: pendingApprovals[0]?.name || "Нет зависших согласований оплаты",
+      tone: pendingApprovals.length ? "yellow" : "green",
+      section: "tasks",
+    },
+    {
+      title: "Долг клиентов",
+      value: money(summary.receivable),
+      hint: "Сумма договоров минус оплачено клиентами",
+      tone: summary.receivable ? "orange" : "green",
+      section: "finance",
+    },
+    {
+      title: "К выплате исполнителям",
+      value: money(executorPayable),
+      hint: "Только согласованные и заработанные суммы по задачам",
+      tone: executorPayable ? "blue" : "green",
+      section: "finance",
+    },
+    {
+      title: "Просроченные задачи",
+      value: String(overdueTasks.length),
+      hint: overdueTasks[0]?.name || "Просроченных задач нет",
+      tone: overdueTasks.length ? "red" : "green",
+      section: "tasks",
+    },
+  ];
+}
+
+function projectObjectPassport(project) {
+  const participants = projectClientParticipants(project);
+  const approvals = projectApprovals(project);
+  const files = Array.isArray(project.files) ? project.files : [];
+  return {
+    address: [project.country, project.region, project.city, project.address].filter(Boolean).join(", ") || "Адрес не указан",
+    folderReady: String(project.yandexFolder || "").startsWith("http"),
+    documents: files.length,
+    participants: participants.length,
+    approvals: approvals.length,
+    objectType: project.projectType || project.direction || "Тип проекта не указан",
+  };
+}
+
+function projectLifecycleRows(project) {
+  const signals = projectOperationalSignals(project);
+  const passport = projectObjectPassport(project);
+  return [
+    { label: "Паспорт объекта", value: passport.folderReady ? "папка привязана" : "нужна папка", tone: passport.folderReady ? "green" : "yellow" },
+    { label: "Разделы / этапы", value: `${signals.sections.length} блоков`, tone: signals.missingExecutorSections.length ? "yellow" : "green" },
+    { label: "Задачи", value: `${signals.tasks.length} задач`, tone: signals.overdueTasks.length ? "red" : "green" },
+    { label: "Согласования", value: `${signals.pendingApprovals.length} ждут оплаты`, tone: signals.pendingApprovals.length ? "yellow" : "green" },
+    { label: "Деньги", value: signals.hasClientDebt || signals.hasExecutorDebt ? "есть хвосты" : "без хвостов", tone: signals.hasClientDebt || signals.hasExecutorDebt ? "yellow" : "green" },
+  ];
+}
+
 function isProjectInstituteProject(project) {
   const direction = normalizeDirectionName(project?.direction);
   const type = String(project?.projectType || "").toLowerCase();
@@ -3126,7 +3251,92 @@ function ProjectSectionsEditor({ project, sections, executors, canEdit, onUpdate
   );
 }
 
-function ProjectDetails({ project, role, onUpdateProject, onTaskStatusChange, onProjectMessage, onAddClientParticipant, session, onUpdateSection, onAddSection, onDeleteSection, onDistributeSectionBudget, executors, users }) {
+function ProjectCommandCenter({ project, economy, canSeeMoney }) {
+  const signals = projectOperationalSignals(project);
+  const passport = projectObjectPassport(project);
+  const lifecycle = projectLifecycleRows(project);
+  const nextAction =
+    signals.missingExecutorSections[0]?.name ||
+    signals.pendingApprovals[0]?.name ||
+    signals.overdueTasks[0]?.name ||
+    (signals.yandexMissing ? "Привязать папку Яндекс.Диска" : "Проект под контролем");
+
+  return (
+    <section className="project-command-center">
+      <div className="office-card command-main-card">
+        <div className="section-row">
+          <div>
+            <span className={cn("risk-chip", signals.risk)}>{riskText(signals.risk)}</span>
+            <h3>Центр управления проектом</h3>
+            <p className="section-hint">Здесь собраны ключевые блоки проекта: объект, этапы, исполнители, согласования, файлы, деньги и следующее управленческое действие.</p>
+          </div>
+          <div className="command-next-action">
+            <span>Следующее действие</span>
+            <b>{nextAction}</b>
+          </div>
+        </div>
+        <div className="project-lifecycle-grid">
+          {lifecycle.map((item) => (
+            <div key={item.label}>
+              <span className={cn("risk-chip", item.tone)}>{item.label}</span>
+              <b>{item.value}</b>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="office-card object-passport-card">
+        <h3>Паспорт объекта</h3>
+        <div className="passport-list">
+          <Info label="Тип / продукт" value={passport.objectType} />
+          <Info label="Адрес" value={passport.address} />
+          <Info label="Яндекс.Диск" value={passport.folderReady ? <ExternalLinkValue url={project.yandexFolder} /> : "папка не привязана"} />
+          <Info label="Документы" value={`${passport.documents} файлов`} />
+          <Info label="Участники клиента" value={passport.participants} />
+          <Info label="Согласования" value={passport.approvals} />
+        </div>
+      </div>
+
+      <div className="office-card approval-guard-card">
+        <h3>Исполнители и выплаты</h3>
+        <div className="approval-guard-list">
+          <div>
+            <span>Этапы без исполнителя</span>
+            <b className={signals.missingExecutorSections.length ? "bad" : "good"}>{signals.missingExecutorSections.length}</b>
+          </div>
+          <div>
+            <span>Ждут согласования оплаты</span>
+            <b className={signals.pendingApprovals.length ? "bad" : "good"}>{signals.pendingApprovals.length}</b>
+          </div>
+          <div>
+            <span>Просроченные задачи</span>
+            <b className={signals.overdueTasks.length ? "bad" : "good"}>{signals.overdueTasks.length}</b>
+          </div>
+          {canSeeMoney ? (
+            <>
+              <div>
+                <span>К выплате исполнителям</span>
+                <b>{money(signals.payableToExecutors)}</b>
+              </div>
+              <div>
+                <span>Остаток оплаты клиента</span>
+                <b>{money(economy.receivable)}</b>
+              </div>
+            </>
+          ) : (
+            <div>
+              <span>Финансовые суммы</span>
+              <b>скрыты ролью</b>
+            </div>
+          )}
+        </div>
+        <p className="section-hint">Оплата исполнителю должна проходить только после проверки работы, согласования клиента при необходимости и подтверждения РП/управляющего.</p>
+      </div>
+    </section>
+  );
+}
+
+function ProjectDetails({ project, role, onUpdateProject, onTaskStatusChange, onProjectMessage, onAddClientParticipant, session, onUpdateSection, onAddSection, onDeleteSection, onDistributeSectionBudget, onOpenTask, executors, users }) {
   const canSeeMoney = roleCan(role, "viewFinance");
   const canSeeProductionBudget = roleCan(role, "viewProductionBudget") || canSeeMoney;
   const canSeeClient = roleCan(role, "viewClient") || roleCan(role, "manageProjects") || canSeeMoney;
@@ -3203,6 +3413,7 @@ function ProjectDetails({ project, role, onUpdateProject, onTaskStatusChange, on
         </div>
       </section>
 
+      <ProjectCommandCenter project={project} economy={economy} canSeeMoney={canSeeMoney} />
       <BitrixBridgeCard project={project} />
       <ClientParticipantsCard project={project} onAddParticipant={onAddClientParticipant} />
       <ClientApprovalsCard project={project} />
@@ -3298,7 +3509,7 @@ function ProjectDetails({ project, role, onUpdateProject, onTaskStatusChange, on
                   <em className={cn("status", statusClass(task.status))}>{task.status}</em>
                 )}
                 <span>{task.due}</span>
-                <button type="button" onClick={() => showAction("Открой раздел «Задачи»: там доступна карточка задачи с этапом, файлами и комментариями")}>Открыть</button>
+                <button type="button" onClick={() => onOpenTask?.(task.id)}>Открыть</button>
               </div>
             ))}
           </div>
@@ -3866,6 +4077,20 @@ function ExecutorsModule({ role, executors, setExecutors, allTasks = [] }) {
           <StatCard key={item.label} item={item} />
         ))}
       </div>
+
+      {executors.length === 0 ? (
+        <section className="office-card executor-empty-source">
+          <div>
+            <span className="muted-chip">База исполнителей пустая</span>
+            <h3>Сначала нужно завести исполнителей или включить режим исполнителя у пользователя</h3>
+            <p className="section-hint">Пока в базе нет исполнителей, проектные этапы нельзя нормально распределять по людям. Админ или владелец может добавить внешнего исполнителя здесь, либо в админке отметить существующего пользователя как исполнителя с нужными специализациями, рейтингом и уровнем допуска.</p>
+          </div>
+          <div className="quick-action-grid">
+            <button type="button" className="primary" onClick={() => showAction("Заполни форму внизу раздела: ФИО, специализации, ранг, контакты и модель оплаты")}>Добавить исполнителя</button>
+            <button type="button" className="secondary" onClick={() => showAction("Админка: у пользователя нужно включить executorEnabled и указать executorSections, executorRank, executorRating")}>Сделать пользователя исполнителем</button>
+          </div>
+        </section>
+      ) : null}
 
       <div className="executors-layout">
         <section className="office-card">
@@ -5519,7 +5744,7 @@ function ProjectsModule({
   );
 }
 
-function ProjectDetailModule({ project, role, session, onBack, onDeleteProject, onUpdateProject, onTaskStatusChange, onProjectMessage, onAddClientParticipant, taskForm, setTaskForm, onCreateTask, executors, users, onUpdateSection, onAddSection, onDeleteSection, onDistributeSectionBudget }) {
+function ProjectDetailModule({ project, role, session, onBack, onDeleteProject, onUpdateProject, onTaskStatusChange, onProjectMessage, onAddClientParticipant, taskForm, setTaskForm, onCreateTask, onOpenTask, executors, users, onUpdateSection, onAddSection, onDeleteSection, onDistributeSectionBudget }) {
   if (!project) {
     return (
       <>
@@ -5560,6 +5785,7 @@ function ProjectDetailModule({ project, role, session, onBack, onDeleteProject, 
         onAddSection={onAddSection}
         onDeleteSection={onDeleteSection}
         onDistributeSectionBudget={onDistributeSectionBudget}
+        onOpenTask={onOpenTask}
         executors={executors}
       />
 
@@ -5607,11 +5833,19 @@ function ProjectDetailModule({ project, role, session, onBack, onDeleteProject, 
   );
 }
 
-function TasksModule({ allTasks, onTaskStatusChange, executors, onGoSection }) {
+function TasksModule({ allTasks, onTaskStatusChange, executors, onGoSection, initialSelectedTaskId }) {
   const [statusFilter, setStatusFilter] = useState("Все");
   const [sectionFilter, setSectionFilter] = useState("Все");
   const [query, setQuery] = useState("");
-  const [selectedTaskId, setSelectedTaskId] = useState(allTasks[0]?.id || "");
+  const [selectedTaskId, setSelectedTaskId] = useState(initialSelectedTaskId || allTasks[0]?.id || "");
+
+  useEffect(() => {
+    if (!initialSelectedTaskId) return;
+    setStatusFilter("Все");
+    setSectionFilter("Все");
+    setQuery("");
+    setSelectedTaskId(initialSelectedTaskId);
+  }, [initialSelectedTaskId]);
 
   const filteredTasks = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
@@ -6745,6 +6979,8 @@ function DashboardModule({ visibleProjects, selectedProject, setSelectedId, role
     { title: "На проверке", value: reviewTasks.length, hint: reviewTasks[0]?.name || "Проверок нет", tone: reviewTasks.length ? "blue" : "green", section: "tasks" },
   ];
 
+  const problemCards = portfolioProblemCards(visibleProjects);
+
   function openDashboardProject(project) {
     if (!project) {
       showAction("Нет проекта для открытия по этому показателю");
@@ -6786,6 +7022,25 @@ function DashboardModule({ visibleProjects, selectedProject, setSelectedId, role
           <Info label="Область видимости" value={scopeText} />
           <Info label="Доступных проектов" value={visibleProjects.length} />
           <Info label="Доступных задач" value={visibleTasks.length} />
+        </div>
+      </section>
+
+      <section className="office-card owner-problem-center">
+        <div className="section-row">
+          <div>
+            <span className="muted-chip">Центр проблем</span>
+            <h3>Что требует управленческого внимания</h3>
+            <p className="section-hint">Панель должна сразу показывать: где горит, где нет исполнителя, где ждёт согласование, где клиент должен деньги и где надо платить исполнителям.</p>
+          </div>
+        </div>
+        <div className="owner-problem-grid">
+          {problemCards.map((item) => (
+            <button key={item.title} type="button" onClick={() => openDashboardFocus(item)}>
+              <span className={cn("risk-chip", item.tone)}>{item.title}</span>
+              <b>{item.value}</b>
+              <p>{item.hint}</p>
+            </button>
+          ))}
         </div>
       </section>
 
@@ -7023,6 +7278,7 @@ function SmetaOfficePrototype() {
   const [partners, setPartnersState] = useState(() => readStoredValue("smeta.partners", partnerSeed).map(normalizePartnerRecord));
   const [selectedId, setSelectedId] = useState(() => readStoredValue("smeta.selectedProjectId", ""));
   const [activeSection, setActiveSection] = useState("dashboard");
+  const [selectedTaskId, setSelectedTaskId] = useState("");
   const [projectForm, setProjectForm] = useState(defaultProjectForm);
   const [taskForm, setTaskForm] = useState({ name: "", sectionName: "", description: "", owner: "", executorId: "", due: "", status: "Новая", yandexLink: "" });
   const [actionNotice, setActionNotice] = useState("");
@@ -7268,6 +7524,15 @@ function SmetaOfficePrototype() {
     setActiveSection("projects");
   }
 
+  function openTaskFromProject(taskId) {
+    if (!taskId) {
+      showAction("Задача не найдена");
+      return;
+    }
+    setSelectedTaskId(taskId);
+    setActiveSection("tasks");
+  }
+
   function createProject() {
     const title = projectForm.title.trim();
     if (!canCreateProjectRole(role)) {
@@ -7437,6 +7702,8 @@ function SmetaOfficePrototype() {
       )
     );
     setTaskForm({ name: "", sectionName: "", description: "", owner: "", executorId: "", due: "", status: "Новая", yandexLink: "" });
+    setSelectedTaskId(createdTask.id);
+    showAction("Задача создана. Её можно открыть в разделе «Задачи».");
   }
 
   function updateProjectSection(projectId, sectionId, patch) {
@@ -7829,6 +8096,7 @@ function SmetaOfficePrototype() {
               taskForm={taskForm}
               setTaskForm={setTaskForm}
               onCreateTask={createTask}
+              onOpenTask={openTaskFromProject}
               executors={executorDirectory}
               users={users}
               onUpdateSection={updateProjectSection}
@@ -7838,7 +8106,7 @@ function SmetaOfficePrototype() {
             />
           ) : null}
 
-          {role !== "executor" && activeSection === "tasks" ? <TasksModule allTasks={visibleTasks} onTaskStatusChange={changeTaskStatus} executors={executorDirectory} onGoSection={setActiveSection} /> : null}
+          {role !== "executor" && activeSection === "tasks" ? <TasksModule allTasks={visibleTasks} onTaskStatusChange={changeTaskStatus} executors={executorDirectory} onGoSection={setActiveSection} initialSelectedTaskId={selectedTaskId} /> : null}
           {role !== "executor" && activeSection === "partners" ? <PartnersModule role={role} session={effectiveAccessUser} partnerItems={partners} visiblePartnerItems={visiblePartners} setPartnerItems={setPartners} /> : null}
           {role !== "executor" && activeSection === "admin" ? <AdminModule users={users} setUsers={setUsers} session={session} executors={executors} /> : null}
           {role !== "executor" && activeSection === "analytics" ? <AnalyticsModule projectItems={visibleProjects} allTasks={visibleTasks} role={role} /> : null}
