@@ -1536,6 +1536,32 @@ h3 { margin: 0; }
 }
 .stage-link:hover,
 .inline-link:hover { text-decoration: underline; }
+.stage-bids-list {
+  grid-column: span 6;
+  display: grid;
+  gap: 8px;
+}
+.stage-bids-list > div {
+  display: grid;
+  grid-template-columns: minmax(140px, 1fr) 120px 130px auto;
+  gap: 8px;
+  align-items: center;
+  border: 1px solid #dbe5ef;
+  border-radius: 12px;
+  background: #fff;
+  padding: 8px;
+}
+.stage-bids-list span,
+.stage-bids-list b,
+.stage-bids-list em {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.stage-bids-list em {
+  color: #64748b;
+  font-size: 12px;
+  font-style: normal;
+}
 .project-open-actions {
   display: flex;
   flex-wrap: wrap;
@@ -1987,6 +2013,15 @@ h3 { margin: 0; }
   gap: 10px;
   margin-top: 14px;
 }
+.partner-card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 12px;
+}
+.partner-edit-form {
+  margin-top: 14px;
+}
 
 .summary-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; }
 .summary-grid > div { border-radius: 18px; padding: 18px; }
@@ -2162,6 +2197,15 @@ h3 { margin: 0; }
   grid-template-columns: 1fr 1fr;
   gap: 10px;
   margin-top: 14px;
+}
+.task-chat-input {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  margin-top: 10px;
+}
+.task-chat-input input {
+  min-width: 0;
 }
 .analytics-list {
   display: grid;

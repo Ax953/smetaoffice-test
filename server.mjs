@@ -1105,7 +1105,12 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (req.method === "POST" && route === "/api/sync-log") {
-      if (!requireAuth(req, res, db)) return;
+      const auth = requireAuth(req, res, db);
+      if (!auth) return;
+      if (authMode === "server" && !canViewFullIntegrationSettings(auth.user)) {
+        sendJson(res, 403, { ok: false, error: "Forbidden" });
+        return;
+      }
       const event = await readJsonBody(req);
       const nextDb = { ...db, syncLog: appendSyncLog(db, event) };
       await writeDb(nextDb);

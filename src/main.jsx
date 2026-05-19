@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+﻿import React, { useEffect, useMemo, useState } from "react";
 import { createRoot } from "react-dom/client";
 import "./styles.css";
 
@@ -48,23 +48,24 @@ const userCan = (user, permission) => roleCan(user?.role, permission);
 const API_BASE = import.meta.env.VITE_API_BASE || (window.location.port === "5173" ? "http://127.0.0.1:8787/api" : "/api");
 const AUTH_TOKEN_KEY = "smeta.authToken";
 
-const demoUsers = [
-  { id: "USR-001", login: "owner", password: "owner", role: "owner", name: "Владелец", status: "active", region: "Все регионы", regions: ["Все регионы"], direction: "Все направления", position: "Основатель / владелец" },
-  { id: "USR-002", login: "admin", password: "admin", role: "admin", name: "Администратор системы", status: "active", region: "Все регионы", regions: ["Все регионы"], direction: "Все направления", position: "Администратор SmetaOffice" },
-  { id: "USR-014", login: "regionadmin", password: "regionadmin", role: "regional_admin", name: "Администратор региона", status: "active", region: "Чеченская Республика", regions: ["Чеченская Республика"], direction: "Все направления", position: "Администратор региона" },
-  { id: "USR-015", login: "diradmin", password: "diradmin", role: "direction_admin", name: "Администратор направления", status: "active", region: "Чеченская Республика", regions: ["Чеченская Республика"], direction: "Бюро архитектуры и дизайна", position: "Администратор направления" },
-  { id: "USR-003", login: "deputy", password: "deputy", role: "deputy", name: "Заместитель", status: "active", region: "Все регионы", regions: ["Все регионы"], direction: "Все направления", position: "Заместитель операционного контура" },
-  { id: "USR-004", login: "director", password: "director", role: "director", name: "Руководитель направления", status: "active", region: "ЧР", regions: ["ЧР", "ДНР", "ЛНР"], direction: "Проектный институт", position: "Руководитель направления" },
-  { id: "USR-005", login: "regional", password: "regional", role: "regional_manager", name: "Региональный менеджер", status: "active", region: "Ростов", regions: ["Ростов"], direction: "Все направления", position: "Управляющий региона" },
-  { id: "USR-006", login: "pm", password: "pm", role: "pm", name: "Руководитель проекта", status: "active", region: "ДНР", regions: ["ДНР"], direction: "Проектный институт", position: "Руководитель проекта" },
-  { id: "USR-007", login: "project", password: "project", role: "project_manager", name: "Менеджер проекта", status: "active", region: "ЧР", regions: ["ЧР"], direction: "Бюро архитектуры и дизайна", position: "Менеджер проекта" },
-  { id: "USR-008", login: "sales", password: "sales", role: "sales_manager", name: "Менеджер продаж", status: "active", region: "ЧР", regions: ["ЧР"], direction: "Единый центр продаж", position: "Менеджер продаж" },
-  { id: "USR-009", login: "headsales", password: "headsales", role: "head_of_sales", name: "Руководитель отдела продаж", status: "active", region: "ЧР", regions: ["ЧР"], direction: "Единый центр продаж", position: "Руководитель отдела продаж" },
-  { id: "USR-010", login: "accountant", password: "accountant", role: "accountant", name: "Бухгалтер", status: "active", region: "Все регионы", regions: ["Все регионы"], direction: "Финансы", position: "Бухгалтер" },
-  { id: "USR-011", login: "finance", password: "finance", role: "finance", name: "Финансист", status: "active", region: "Все регионы", regions: ["Все регионы"], direction: "Финансы", position: "Финансовый контроль" },
-  { id: "USR-012", login: "executor", password: "executor", role: "executor", name: "Исполнитель", status: "active", region: "ЧР", regions: ["ЧР"], direction: "Бюро архитектуры и дизайна", position: "Исполнитель / визуализатор", executorId: "EX-063" },
-  { id: "USR-013", login: "partner", password: "partner", role: "partner", name: "Партнёр", status: "active", region: "Ростов", regions: ["Ростов"], direction: "Строительство и ремонт", position: "Партнёр", executorId: "EX-017" },
-];
+const demoUsers = import.meta.env.DEV ? [
+  { id: "USR-001", login: "owner", role: "owner", name: "Владелец", status: "active", region: "Все регионы", regions: ["Все регионы"], direction: "Все направления", position: "Основатель / владелец" },
+  { id: "USR-002", login: "admin", role: "admin", name: "Администратор системы", status: "active", region: "Все регионы", regions: ["Все регионы"], direction: "Все направления", position: "Администратор SmetaOffice" },
+  { id: "USR-014", login: "regionadmin", role: "regional_admin", name: "Администратор региона", status: "active", region: "Чеченская Республика", regions: ["Чеченская Республика"], direction: "Все направления", position: "Администратор региона" },
+  { id: "USR-015", login: "diradmin", role: "direction_admin", name: "Администратор направления", status: "active", region: "Чеченская Республика", regions: ["Чеченская Республика"], direction: "Бюро архитектуры и дизайна", position: "Администратор направления" },
+  { id: "USR-003", login: "deputy", role: "deputy", name: "Заместитель", status: "active", region: "Все регионы", regions: ["Все регионы"], direction: "Все направления", position: "Заместитель операционного контура" },
+  { id: "USR-004", login: "director", role: "director", name: "Руководитель направления", status: "active", region: "ЧР", regions: ["ЧР", "ДНР", "ЛНР"], direction: "Проектный институт", position: "Руководитель направления" },
+  { id: "USR-005", login: "regional", role: "regional_manager", name: "Региональный менеджер", status: "active", region: "Ростов", regions: ["Ростов"], direction: "Все направления", position: "Управляющий региона" },
+  { id: "USR-006", login: "pm", role: "pm", name: "Руководитель проекта", status: "active", region: "ДНР", regions: ["ДНР"], direction: "Проектный институт", position: "Руководитель проекта" },
+  { id: "USR-007", login: "project", role: "project_manager", name: "Менеджер проекта", status: "active", region: "ЧР", regions: ["ЧР"], direction: "Бюро архитектуры и дизайна", position: "Менеджер проекта" },
+  { id: "USR-008", login: "sales", role: "sales_manager", name: "Менеджер продаж", status: "active", region: "ЧР", regions: ["ЧР"], direction: "Единый центр продаж", position: "Менеджер продаж" },
+  { id: "USR-009", login: "headsales", role: "head_of_sales", name: "Руководитель отдела продаж", status: "active", region: "ЧР", regions: ["ЧР"], direction: "Единый центр продаж", position: "Руководитель отдела продаж" },
+  { id: "USR-010", login: "accountant", role: "accountant", name: "Бухгалтер", status: "active", region: "Все регионы", regions: ["Все регионы"], direction: "Финансы", position: "Бухгалтер" },
+  { id: "USR-011", login: "finance", role: "finance", name: "Финансист", status: "active", region: "Все регионы", regions: ["Все регионы"], direction: "Финансы", position: "Финансовый контроль" },
+  { id: "USR-012", login: "executor", role: "executor", name: "Исполнитель", status: "active", region: "ЧР", regions: ["ЧР"], direction: "Бюро архитектуры и дизайна", position: "Исполнитель / визуализатор", executorId: "EX-063" },
+  { id: "USR-013", login: "partner", role: "partner", name: "Партнёр", status: "active", region: "Ростов", regions: ["Ростов"], direction: "Строительство и ремонт", position: "Партнёр", executorId: "EX-017" },
+] : [];
+const devDemoPasswords = import.meta.env.DEV ? Object.fromEntries(demoUsers.map((user) => [user.login, user.login])) : {};
 
 const baseRegions = [
   { id: "chechnya", name: "Чеченская Республика", city: "Грозный", manager: "Управляющий региона", risk: "green" },
@@ -1591,6 +1592,11 @@ function flattenTasks(projectItems) {
       executorId: section.executorId || "",
       due: section.due,
       status: section.status,
+      description: section.description || "",
+      documents: section.documents || (section.yandexLink ? [section.yandexLink] : []),
+      comments: section.comments || [],
+      chat: section.chat || [],
+      progress: Number(section.progress) || 0,
       yandexLink: section.yandexLink,
       clientBudget: Number(section.clientBudget) || 0,
       executorCost: Number(section.executorCost) || 0,
@@ -3286,7 +3292,7 @@ function ProjectEditPanel({ project, users, canEdit, canEditFinance, onUpdatePro
   );
 }
 
-function ProjectSectionsEditor({ project, sections, executors, canEdit, onUpdateSection, onAddSection, onDeleteSection, onDistributeSectionBudget, onApproveSectionPayment }) {
+function ProjectSectionsEditor({ project, sections, executors, canEdit, onUpdateSection, onAddSection, onDeleteSection, onDistributeSectionBudget, onApproveSectionPayment, onAcceptSectionBid }) {
   const columnLabels = ["Этап / раздел", "Исполнитель", "Срок", "Статус", "%", "Сумма задачи исполнителя, ₽", "Выплачено исполнителю, ₽", "Финстатус", "Действие"];
   return (
     <div className="sections-editor">
@@ -3335,7 +3341,19 @@ function ProjectSectionsEditor({ project, sections, executors, canEdit, onUpdate
             <input disabled={!canEdit} className="stage-editor-wide" value={(section.comments || []).join("; ")} onChange={(event) => onUpdateSection(project.id, sectionId, { comments: event.target.value ? [event.target.value] : [] })} placeholder="Комментарий к этапу" />
             {!isBillableProductionStage(section) ? <span className="stage-note">Без доп. оплаты</span> : null}
             {section.bids?.length ? <span className="stage-note">Отклики: {section.bids.length}</span> : null}
-            {section.yandexLink ? <a className="stage-link" href={section.yandexLink} rel="noreferrer">Открыть</a> : null}
+            {section.yandexLink ? <a className="stage-link" href={section.yandexLink} target="_blank" rel="noreferrer">Открыть</a> : null}
+            {section.bids?.length ? (
+              <div className="stage-bids-list">
+                {section.bids.map((bid) => (
+                  <div key={bid.id || `${sectionId}-${bid.executorId || bid.bidderName}`}>
+                    <span>{bid.bidderName || bid.executorName || bid.executorId || "Исполнитель"}</span>
+                    <b>{money(Number(bid.requestedAmount) || Number(bid.amount) || 0)}</b>
+                    <em>{bid.offeredDue || bid.due || "срок не указан"}</em>
+                    {canEdit ? <button type="button" className="secondary" onClick={() => onAcceptSectionBid?.(project.id, sectionId, bid.id || bid.executorId)}>Назначить</button> : null}
+                  </div>
+                ))}
+              </div>
+            ) : null}
             {isBillableProductionStage(section) ? (
               <div className="stage-approval-actions">
                 <button type="button" className="secondary" disabled={!canEdit || section.clientApproved} onClick={() => onApproveSectionPayment?.(project.id, sectionId, "client")}>
@@ -3439,7 +3457,7 @@ function ProjectCommandCenter({ project, economy, canSeeMoney }) {
   );
 }
 
-function ProjectDetails({ project, role, onUpdateProject, onTaskStatusChange, onProjectMessage, onAddClientParticipant, onCreateApproval, onTransmitClientStatus, onApproveSectionPayment, session, onUpdateSection, onAddSection, onDeleteSection, onDistributeSectionBudget, onOpenTask, executors, users }) {
+function ProjectDetails({ project, role, onUpdateProject, onTaskStatusChange, onProjectMessage, onAddClientParticipant, onCreateApproval, onTransmitClientStatus, onApproveSectionPayment, onAcceptSectionBid, session, onUpdateSection, onAddSection, onDeleteSection, onDistributeSectionBudget, onOpenTask, executors, users }) {
   const canSeeMoney = roleCan(role, "viewFinance");
   const canSeeProductionBudget = roleCan(role, "viewProductionBudget") || canSeeMoney;
   const canSeeClient = roleCan(role, "viewClient") || roleCan(role, "manageProjects") || canSeeMoney;
@@ -3584,6 +3602,7 @@ function ProjectDetails({ project, role, onUpdateProject, onTaskStatusChange, on
           onDeleteSection={onDeleteSection}
           onDistributeSectionBudget={onDistributeSectionBudget}
           onApproveSectionPayment={onApproveSectionPayment}
+          onAcceptSectionBid={onAcceptSectionBid}
         />
       </section>
 
@@ -3601,7 +3620,7 @@ function ProjectDetails({ project, role, onUpdateProject, onTaskStatusChange, on
                   <span>Ответственный: {task.owner}{task.executorId ? ` · ${task.executorId}` : ""}</span>
                 </div>
                 {onTaskStatusChange ? (
-                  <select className="status-select" value={task.status} onChange={(event) => onTaskStatusChange(project.id, task.name, event.target.value)}>
+                  <select className="status-select" value={task.status} onChange={(event) => onTaskStatusChange(project.id, task.id || task.name, event.target.value)}>
                     <option>Новая</option>
                     <option>В работе</option>
                     <option>На проверке</option>
@@ -3659,9 +3678,11 @@ function ProjectDetails({ project, role, onUpdateProject, onTaskStatusChange, on
   );
 }
 
-function PartnerTable({ partnerItems, partnerForm, setPartnerForm, onAddPartner, canManagePartners }) {
+function PartnerTable({ partnerItems, partnerForm, setPartnerForm, onAddPartner, onUpdatePartner, onDeletePartner, canManagePartners }) {
   const [selectedPartnerId, setSelectedPartnerId] = useState(partnerItems[0]?.id || partnerItems[0]?.name || "");
   const selectedPartner = partnerItems.find((partner) => (partner.id || partner.name) === selectedPartnerId) || partnerItems[0] || null;
+  const [editPartner, setEditPartner] = useState(false);
+  const [partnerDraft, setPartnerDraft] = useState(selectedPartner || {});
 
   useEffect(() => {
     if (!partnerItems.length) {
@@ -3672,6 +3693,15 @@ function PartnerTable({ partnerItems, partnerForm, setPartnerForm, onAddPartner,
       setSelectedPartnerId(partnerItems[0].id || partnerItems[0].name);
     }
   }, [partnerItems, selectedPartnerId]);
+
+  useEffect(() => {
+    setEditPartner(false);
+    setPartnerDraft(selectedPartner || {});
+  }, [selectedPartnerId, partnerItems.length]);
+
+  function updatePartnerDraft(patch) {
+    setPartnerDraft((next) => ({ ...(next || {}), ...patch }));
+  }
 
   return (
     <section className="office-card">
@@ -3707,7 +3737,7 @@ function PartnerTable({ partnerItems, partnerForm, setPartnerForm, onAddPartner,
       )}
       <div className="partner-table">
         {partnerItems.map((partner) => (
-          <button key={partner.id || partner.name} type="button" className={selectedPartner?.id === partner.id ? "active" : ""} onClick={() => setSelectedPartnerId(partner.id || partner.name)}>
+          <button key={partner.id || partner.name} type="button" className={(selectedPartner?.id || selectedPartner?.name) === (partner.id || partner.name) ? "active" : ""} onClick={() => setSelectedPartnerId(partner.id || partner.name)}>
             <div>
               <b>{partner.name}</b>
               <span>{partner.category} · {partner.region} · {partner.direction}</span>
@@ -3729,6 +3759,48 @@ function PartnerTable({ partnerItems, partnerForm, setPartnerForm, onAddPartner,
             </div>
             <span className={cn("risk-chip", selectedPartner.overdue ? "yellow" : "green")}>{selectedPartner.status || "Активен"}</span>
           </div>
+          {canManagePartners ? (
+            <div className="partner-card-actions">
+              <button type="button" className="secondary" onClick={() => setEditPartner((value) => !value)}>{editPartner ? "Закрыть редактирование" : "Редактировать карточку"}</button>
+              <button type="button" className="secondary danger" onClick={() => {
+                if (window.confirm(`Удалить партнёра ${selectedPartner.name}?`)) {
+                  onDeletePartner?.(selectedPartner.id || selectedPartner.name);
+                }
+              }}>Удалить партнёра</button>
+            </div>
+          ) : null}
+          {editPartner && canManagePartners ? (
+            <div className="quick-form partner-edit-form">
+              <input value={partnerDraft.name || ""} onChange={(event) => updatePartnerDraft({ name: event.target.value })} placeholder="Название / ФИО" />
+              <select value={partnerDraft.category || partnerCategoryOptions[0]} onChange={(event) => updatePartnerDraft({ category: event.target.value })}>
+                {partnerCategoryOptions.map((category) => <option key={category}>{category}</option>)}
+              </select>
+              <select value={partnerDraft.region || "Чеченская Республика"} onChange={(event) => updatePartnerDraft({ region: event.target.value })}>
+                {regionOptions.filter((region) => region !== "Все регионы").map((region) => <option key={region}>{region}</option>)}
+              </select>
+              <select value={partnerDraft.direction || "Единый центр продаж"} onChange={(event) => updatePartnerDraft({ direction: event.target.value })}>
+                {directionOptions.filter((item) => item !== "Все").map((direction) => <option key={direction}>{direction}</option>)}
+              </select>
+              <input value={partnerDraft.contact || ""} onChange={(event) => updatePartnerDraft({ contact: event.target.value })} placeholder="Контакт" />
+              <select value={partnerDraft.relation || partnerRelationOptions[0]} onChange={(event) => updatePartnerDraft({ relation: event.target.value })}>
+                {partnerRelationOptions.map((relation) => <option key={relation}>{relation}</option>)}
+              </select>
+              <input value={partnerDraft.serviceDescription || ""} onChange={(event) => updatePartnerDraft({ serviceDescription: event.target.value })} placeholder="Что предоставляет" />
+              <input value={partnerDraft.commissionRule || ""} onChange={(event) => updatePartnerDraft({ commissionRule: event.target.value })} placeholder="Комиссия / условия" />
+              <input type="number" value={partnerDraft.rating || 0} onChange={(event) => updatePartnerDraft({ rating: Number(event.target.value) })} placeholder="Рейтинг" />
+              <input type="number" value={partnerDraft.active || 0} onChange={(event) => updatePartnerDraft({ active: Number(event.target.value) })} placeholder="Активные заявки" />
+              <input type="number" value={partnerDraft.overdue || 0} onChange={(event) => updatePartnerDraft({ overdue: Number(event.target.value) })} placeholder="Просрочки" />
+              <input type="number" value={partnerDraft.accrued || 0} onChange={(event) => updatePartnerDraft({ accrued: Number(event.target.value) })} placeholder="Начислено" />
+              <input type="number" value={partnerDraft.paid || 0} onChange={(event) => updatePartnerDraft({ paid: Number(event.target.value) })} placeholder="Выплачено" />
+              <input value={partnerDraft.status || ""} onChange={(event) => updatePartnerDraft({ status: event.target.value })} placeholder="Статус" />
+              <input value={partnerDraft.level || ""} onChange={(event) => updatePartnerDraft({ level: event.target.value })} placeholder="Уровень" />
+              <input className="wide" value={partnerDraft.notes || ""} onChange={(event) => updatePartnerDraft({ notes: event.target.value })} placeholder="Комментарий руководства" />
+              <button type="button" className="primary" onClick={() => {
+                onUpdatePartner?.(selectedPartner.id || selectedPartner.name, partnerDraft);
+                setEditPartner(false);
+              }}>Сохранить партнёра</button>
+            </div>
+          ) : null}
           <div className="partner-detail-grid">
             <Info label="Вид связи" value={selectedPartner.relation || "не указано"} />
             <Info label="Что предоставляет" value={selectedPartner.serviceDescription || selectedPartner.category} />
@@ -5284,7 +5356,8 @@ function LoginScreen({ users, onLogin, onRegister, allowDemoFallback = false, al
       setError("Неверный логин или пароль.");
       return;
     }
-    const user = users.find((item) => item.login === login.trim() && item.password === password);
+    const normalizedLogin = login.trim();
+    const user = devDemoPasswords[normalizedLogin] === password ? users.find((item) => item.login === normalizedLogin) : null;
     if (!user) {
       setError("Неверный логин или пароль.");
       return;
@@ -5377,7 +5450,7 @@ function LoginScreen({ users, onLogin, onRegister, allowDemoFallback = false, al
           ) : null}
         </form>
 
-        {allowDemoFallback ? (
+        {allowDemoFallback && import.meta.env.DEV ? (
           <div className="demo-logins">
             <b>Демо-доступы</b>
             <span>owner / owner</span>
@@ -5915,7 +5988,7 @@ function ProjectsModule({
   );
 }
 
-function ProjectDetailModule({ project, role, session, onBack, onDeleteProject, onUpdateProject, onTaskStatusChange, onProjectMessage, onAddClientParticipant, onCreateApproval, onTransmitClientStatus, onApproveSectionPayment, taskForm, setTaskForm, onCreateTask, onOpenTask, executors, users, onUpdateSection, onAddSection, onDeleteSection, onDistributeSectionBudget }) {
+function ProjectDetailModule({ project, role, session, onBack, onDeleteProject, onUpdateProject, onTaskStatusChange, onProjectMessage, onAddClientParticipant, onCreateApproval, onTransmitClientStatus, onApproveSectionPayment, onAcceptSectionBid, taskForm, setTaskForm, onCreateTask, onOpenTask, executors, users, onUpdateSection, onAddSection, onDeleteSection, onDistributeSectionBudget }) {
   if (!project) {
     return (
       <>
@@ -5955,6 +6028,7 @@ function ProjectDetailModule({ project, role, session, onBack, onDeleteProject, 
         onCreateApproval={onCreateApproval}
         onTransmitClientStatus={onTransmitClientStatus}
         onApproveSectionPayment={onApproveSectionPayment}
+        onAcceptSectionBid={onAcceptSectionBid}
         onUpdateSection={onUpdateSection}
         onAddSection={onAddSection}
         onDeleteSection={onDeleteSection}
@@ -6012,6 +6086,7 @@ function TasksModule({ allTasks, onTaskStatusChange, executors, onGoSection, ini
   const [sectionFilter, setSectionFilter] = useState("Все");
   const [query, setQuery] = useState("");
   const [selectedTaskId, setSelectedTaskId] = useState(initialSelectedTaskId || allTasks[0]?.id || "");
+  const [taskMessage, setTaskMessage] = useState("");
 
   useEffect(() => {
     if (!initialSelectedTaskId) return;
@@ -6020,6 +6095,10 @@ function TasksModule({ allTasks, onTaskStatusChange, executors, onGoSection, ini
     setQuery("");
     setSelectedTaskId(initialSelectedTaskId);
   }, [initialSelectedTaskId]);
+
+  useEffect(() => {
+    setTaskMessage("");
+  }, [selectedTaskId]);
 
   const filteredTasks = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
@@ -6139,7 +6218,7 @@ function TasksModule({ allTasks, onTaskStatusChange, executors, onGoSection, ini
                   <h3>{task.name}</h3>
                   <p>{task.projectTitle}</p>
                 </div>
-                <select className="status-select" value={task.status} onClick={(event) => event.stopPropagation()} onChange={(event) => onTaskStatusChange(task.projectId, task.name, event.target.value)}>
+                <select className="status-select" value={task.status} onClick={(event) => event.stopPropagation()} onChange={(event) => onTaskStatusChange(task.projectId, task.id || task.name, event.target.value)}>
                   <option>Новая</option>
                   <option>В работе</option>
                   <option>На проверке</option>
@@ -6191,14 +6270,41 @@ function TasksModule({ allTasks, onTaskStatusChange, executors, onGoSection, ini
               <div className="task-card-block">
                 <b>Чат / комментарии задачи</b>
                 {(selectedTask.chat || []).length ? (
-                  selectedTask.chat.map((message) => <p key={message.id}>{message.author}: {message.text}</p>)
+                  selectedTask.chat.map((message) => <p key={message.id || `${message.author}-${message.at}`}>{message.author}: {message.text}</p>)
                 ) : (
-                  <p>Сообщений по задаче пока нет. Нажми кнопку ниже, чтобы зафиксировать комментарий.</p>
+                  <p>Сообщений по задаче пока нет. Напиши комментарий ниже, чтобы зафиксировать его в задаче и проектном чате.</p>
                 )}
+                <div className="task-chat-input">
+                  <input
+                    value={taskMessage}
+                    onChange={(event) => setTaskMessage(event.target.value)}
+                    placeholder="Комментарий по задаче"
+                    onKeyDown={(event) => {
+                      if (event.key !== "Enter") return;
+                      const text = taskMessage.trim();
+                      if (!text) return;
+                      onTaskMessage?.(selectedTask, text);
+                      setTaskMessage("");
+                    }}
+                  />
+                  <button
+                    type="button"
+                    className="primary"
+                    disabled={!taskMessage.trim()}
+                    onClick={() => {
+                      const text = taskMessage.trim();
+                      if (!text) return;
+                      onTaskMessage?.(selectedTask, text);
+                      setTaskMessage("");
+                    }}
+                  >
+                    Отправить
+                  </button>
+                </div>
               </div>
               <div className="task-inspector-actions">
                 <button type="button" className="secondary" onClick={() => selectedTask.yandexLink ? window.open(selectedTask.yandexLink, "_blank", "noopener,noreferrer") : showAction("К задаче пока не привязана папка Яндекс.Диска")}>Открыть Яндекс.Диск</button>
-                <button type="button" className="primary" onClick={() => onTaskMessage?.(selectedTask)}>Чат по задаче</button>
+                <button type="button" className="primary" onClick={() => onGoSection?.("projects")}>К проектам</button>
               </div>
             </>
           ) : (
@@ -6261,6 +6367,39 @@ function PartnersModule({ role, session, partnerItems, visiblePartnerItems, setP
     showAction("Партнёр добавлен в базу SmetaOffice");
   }
 
+  function updatePartner(partnerKey, patch) {
+    if (!canManagePartners) {
+      showAction("Редактировать партнёров может только владелец или администратор");
+      return;
+    }
+    updatePartners(
+      partnerItems.map((partner) =>
+        (partner.id || partner.name) === partnerKey
+          ? {
+              ...partner,
+              ...patch,
+              id: partner.id || patch.id || `P-${Date.now()}`,
+              rating: Number(patch.rating ?? partner.rating ?? 0),
+              active: Number(patch.active ?? partner.active ?? 0),
+              overdue: Number(patch.overdue ?? partner.overdue ?? 0),
+              accrued: Number(patch.accrued ?? partner.accrued ?? 0),
+              paid: Number(patch.paid ?? partner.paid ?? 0),
+            }
+          : partner
+      )
+    );
+    showAction("Карточка партнёра обновлена");
+  }
+
+  function deletePartner(partnerKey) {
+    if (!canManagePartners) {
+      showAction("Удалять партнёров может только владелец или администратор");
+      return;
+    }
+    updatePartners(partnerItems.filter((partner) => (partner.id || partner.name) !== partnerKey));
+    showAction("Партнёр удалён из базы");
+  }
+
   return (
     <>
       <SectionIntro section="partners" />
@@ -6269,6 +6408,8 @@ function PartnersModule({ role, session, partnerItems, visiblePartnerItems, setP
         partnerForm={partnerForm}
         setPartnerForm={setPartnerForm}
         onAddPartner={addPartner}
+        onUpdatePartner={updatePartner}
+        onDeletePartner={deletePartner}
         canManagePartners={canManagePartners}
       />
       <section className="summary-grid">
@@ -8089,6 +8230,7 @@ function SmetaOfficePrototype() {
   }, []);
 
   useEffect(() => {
+    if (!session?.id && !readAuthToken()) return;
     let alive = true;
     async function loadServerState() {
       const [serverProjects, serverExecutors, serverUsers, serverPartners, serverSalesLeads, serverAvailableWork] = await Promise.all([
@@ -8687,6 +8829,80 @@ function SmetaOfficePrototype() {
     showAction(approvalType === "client" ? "Согласование клиента зафиксировано" : "Оплата исполнителю согласована");
   }
 
+  function acceptSectionBid(projectId, sectionId, bidId) {
+    if (!roleCan(role, "manageProjects")) {
+      showAction("Назначать исполнителя по отклику может руководитель проекта, управляющий, админ или владелец");
+      return;
+    }
+    let acceptedName = "";
+    const nowIso = new Date().toISOString();
+    const nowText = new Intl.DateTimeFormat("ru-RU", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" }).format(new Date());
+
+    setProjectItems((items) =>
+      items.map((project) => {
+        if (project.id !== projectId) return project;
+        let acceptedBid = null;
+        const nextSections = projectSections(project).map((section) => {
+          if ((section.id || section.name) !== sectionId) return section;
+          acceptedBid = (section.bids || []).find((bid) => (bid.id || bid.executorId || bid.bidderName) === bidId);
+          if (!acceptedBid) return section;
+
+          const executorName = acceptedBid.bidderName || acceptedBid.executorName || acceptedBid.executorId || section.executor || "Исполнитель";
+          const executorCost = Number(acceptedBid.requestedAmount) || Number(acceptedBid.amount) || Number(section.executorCost) || 0;
+          const paid = Number(section.paid) || 0;
+          acceptedName = executorName;
+
+          return {
+            ...section,
+            executorId: acceptedBid.executorId || section.executorId || "",
+            executor: executorName,
+            executorCost,
+            balance: Math.max(executorCost - paid, 0),
+            due: acceptedBid.offeredDue || acceptedBid.due || section.due,
+            financeStatus: executorCost > 0 ? "к выплате" : section.financeStatus || "не рассчитан",
+            paymentStatus: executorCost > 0 ? "к выплате" : section.paymentStatus || "не рассчитан",
+            status: section.status === "Ожидает" ? "Новая" : section.status,
+            bids: (section.bids || []).map((bid) => ({
+              ...bid,
+              status: (bid.id || bid.executorId || bid.bidderName) === bidId ? "accepted" : "declined",
+              reviewedAt: nowIso,
+              reviewedBy: session?.name || role,
+            })),
+            chat: [
+              ...(section.chat || []),
+              {
+                id: `section-chat-${Date.now()}`,
+                author: session?.name || "SmetaOffice",
+                role,
+                text: `Принят отклик исполнителя: ${executorName}.`,
+                at: nowIso,
+              },
+            ],
+          };
+        });
+
+        if (!acceptedBid) return project;
+        const sectionName = nextSections.find((section) => (section.id || section.name) === sectionId)?.name || "этап";
+        return {
+          ...project,
+          sections: nextSections,
+          chat: [
+            ...(project.chat || []),
+            {
+              id: `chat-${Date.now()}`,
+              channel: "internal",
+              author: session?.name || "SmetaOffice",
+              role,
+              text: `По этапу «${sectionName}» назначен исполнитель по отклику: ${acceptedName}.`,
+              at: nowText,
+            },
+          ],
+        };
+      })
+    );
+    showAction("Отклик обработан. Если он найден, исполнитель назначен на этап.");
+  }
+
   function deleteProject(projectId) {
     if (!["owner", "admin"].includes(role)) {
       showAction("Удалять проекты может только владелец или администратор");
@@ -8705,14 +8921,14 @@ function SmetaOfficePrototype() {
     showAction("Проект удалён из реестра");
   }
 
-  function changeTaskStatus(projectId, taskName, status) {
+  function changeTaskStatus(projectId, taskKey, status) {
     setProjectItems((items) =>
       items.map((project) =>
         project.id === projectId
           ? {
               ...project,
-              tasks: project.tasks.map((task) => (task.name === taskName ? { ...task, status } : task)),
-              sections: projectSections(project).map((section) => (section.name === taskName ? { ...section, status } : section)),
+              tasks: (project.tasks || []).map((task) => ((task.id || task.name) === taskKey || task.name === taskKey ? { ...task, status } : task)),
+              sections: projectSections(project).map((section) => ((section.id || section.name) === taskKey || section.name === taskKey ? { ...section, status } : section)),
             }
           : project
       )
@@ -8826,36 +9042,41 @@ function SmetaOfficePrototype() {
     showAction("Статус зафиксирован как отправленный в SmetaGo");
   }
 
-  function addTaskMessage(task) {
+  function addTaskMessage(task, explicitText = "") {
     if (!task?.id) {
       showAction("Задача не выбрана");
       return;
     }
-    const text = window.prompt("Комментарий по задаче");
+    const text = explicitText || window.prompt("Комментарий по задаче");
     if (!text?.trim()) return;
+    const trimmed = text.trim();
+    const createdTaskMessage = {
+      id: `task-chat-${Date.now()}`,
+      author: session?.name || "SmetaOffice",
+      role,
+      text: trimmed,
+      at: new Date().toISOString(),
+    };
+
+    function matchesTaskItem(project, item) {
+      return (item.id || `${project.id}-${item.name}`) === task.id || item.name === task.name || (item.id || item.name) === task.id;
+    }
+
+    function appendTaskMessage(item) {
+      return {
+        ...item,
+        chat: [...(item.chat || []), createdTaskMessage],
+        comments: [...(item.comments || []), trimmed],
+      };
+    }
+
     setProjectItems((items) =>
       items.map((project) =>
         project.id === task.projectId
           ? {
               ...project,
-              tasks: (project.tasks || []).map((item) =>
-                (item.id || `${project.id}-${item.name}`) === task.id || item.name === task.name
-                  ? {
-                      ...item,
-                      chat: [
-                        ...(item.chat || []),
-                        {
-                          id: `task-chat-${Date.now()}`,
-                          author: session?.name || "SmetaOffice",
-                          role,
-                          text: text.trim(),
-                          at: new Date().toISOString(),
-                        },
-                      ],
-                      comments: [...(item.comments || []), text.trim()],
-                    }
-                  : item
-              ),
+              tasks: (project.tasks || []).map((item) => (matchesTaskItem(project, item) ? appendTaskMessage(item) : item)),
+              sections: projectSections(project).map((section) => (matchesTaskItem(project, section) ? appendTaskMessage(section) : section)),
               chat: [
                 ...(project.chat || []),
                 {
@@ -8863,7 +9084,7 @@ function SmetaOfficePrototype() {
                   channel: "internal",
                   author: session?.name || "SmetaOffice",
                   role,
-                  text: `Комментарий по задаче «${task.name}»: ${text.trim()}`,
+                  text: `Комментарий по задаче «${task.name}»: ${trimmed}`,
                   at: new Intl.DateTimeFormat("ru-RU", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" }).format(new Date()),
                 },
               ],
@@ -9046,6 +9267,7 @@ function SmetaOfficePrototype() {
               onCreateApproval={createApproval}
               onTransmitClientStatus={transmitClientStatus}
               onApproveSectionPayment={approveSectionPayment}
+              onAcceptSectionBid={acceptSectionBid}
               taskForm={taskForm}
               setTaskForm={setTaskForm}
               onCreateTask={createTask}
@@ -9072,4 +9294,5 @@ function SmetaOfficePrototype() {
 }
 
 createRoot(document.getElementById("root")).render(<SmetaOfficePrototype />);
+
 
