@@ -513,7 +513,7 @@ function normalizeUserRecord(user) {
     ...user,
     direction: normalizeDirectionName(user.direction || "Все направления"),
     executorEnabled,
-    executorSections: executorSections.length ? executorSections : guessExecutorSections(user),
+    executorSections,
     executorRank,
     executorStatus: user.executorStatus || (executorEnabled ? "Внутренний исполнитель" : "Не исполнитель"),
     executorRating: clampPercent(user.executorRating || (executorEnabled ? 50 : 0)),
@@ -1949,7 +1949,13 @@ function taskApprovalState(task) {
   const internalApproved = approvalFlag(task.internalApproved ?? task.internalApproval ?? task.managerApproval ?? task.paymentApproved);
   const paymentApproved = approvalFlag(task.paymentApproved) || internalApproved && (!clientRequired || clientApproved);
   if (paymentApproved) return { id: "approved", label: "Согласовано к выплате", clientApproved, internalApproved, paymentApproved };
-  if (task.status !== "Принято") return { id: "work", label: "В работе", clientApproved, internalApproved, paymentApproved };
+  if (task.status !== "Принято") {
+    const status = task.status || "";
+    if (["Новая", "Ожидает"].includes(status)) return { id: "new", label: "Не сдавалось", clientApproved, internalApproved, paymentApproved };
+    if (status === "На проверке") return { id: "review", label: "На проверке", clientApproved, internalApproved, paymentApproved };
+    if (status === "Правки") return { id: "fixes", label: "На правках", clientApproved, internalApproved, paymentApproved };
+    return { id: "work", label: "В работе", clientApproved, internalApproved, paymentApproved };
+  }
   if (clientRequired && !clientApproved) return { id: "client", label: "Ждёт клиента", clientApproved, internalApproved, paymentApproved };
   return { id: "internal", label: "Ждёт РП / управляющего", clientApproved, internalApproved, paymentApproved };
 }
@@ -2685,31 +2691,20 @@ function taskMatchesExecutorSections(task, sections) {
 }
 
 function isAvailableExecutorWork(task, sections = []) {
+  if (!sections.length) return false;
   const assigned = Boolean(task.executorId || task.assigneeId);
-  const closed = ["Принято", "Закрыто"].includes(task.status);
+  const closed = ["Принято", "Закрыто", "Просрочено"].includes(task.status);
   const hasBudget = Number(task.executorCost) > 0;
-  return !assigned && !closed && hasBudget && taskMatchesExecutorSections(task, sections);
+  const recruitmentMode = task.recruitmentStatus || "auto";
+  const manuallyClosed = recruitmentMode === "closed" || task.openForBids === false;
+  const explicitlyOpen = recruitmentMode === "open" || task.openForBids === true;
+  const implicitOpen = recruitmentMode === "auto" && task.openForBids == null;
+  return !assigned && !closed && hasBudget && !manuallyClosed && (explicitlyOpen || implicitOpen) && taskMatchesExecutorSections(task, sections);
 }
 
 function executorGroupForSection(section, groups = executorGroups) {
   if (section === "Все") return { name: "Все исполнители", section: "Все", sections: "Все специализации", source: "База исполнителей SmetaOffice" };
   return groups.find((group) => (group.section || groupToSection(group.name)) === section) || { name: section, section, sections: section, source: "Добавлено вручную" };
-}
-
-function guessExecutorSections(user) {
-  const text = `${user?.position || ""} ${user?.direction || ""} ${user?.role || ""}`.toLowerCase();
-  const sections = [];
-  if (text.includes("архитект")) sections.push("АР");
-  if (text.includes("дизайн")) sections.push("Дизайн");
-  if (text.includes("визуал")) sections.push("3D");
-  if (text.includes("черт")) sections.push("Рабочка");
-  if (text.includes("конструкт") || text.includes("кр")) sections.push("КР");
-  if (text.includes("ов") || text.includes("вентил")) sections.push("ОВиК");
-  if (text.includes("вк") || text.includes("водоснаб")) sections.push("ВК");
-  if (text.includes("эом") || text.includes("электр")) sections.push("ЭОМ");
-  if (text.includes("смет")) sections.push("Сметы");
-  if (text.includes("гип")) sections.push("ГИП");
-  return sections.length ? [...new Set(sections)] : ["Общие работы"];
 }
 
 function userToExecutorProfile(user) {
@@ -3398,7 +3393,7 @@ function ProjectEditPanel({ project, users, canEdit, canEditFinance, onUpdatePro
 
 function ProjectSectionsEditor({ project, sections, executors, canEdit, onUpdateSection, onAddSection, onDeleteSection, onDistributeSectionBudget, onApproveSectionPayment, onAcceptSectionBid }) {
   const [editingSectionId, setEditingSectionId] = useState("");
-  const columnLabels = ["Этап / задача", "Исполнитель", "Срок", "Статус", "Сумма", "Выплачено", "Согласование", "Действие"];
+  const columnLabels = ["Этап / задача", "Исполнитель", "Срок", "Статус", "Сумма", "Выплачено", "Набор / согласование", "Действие"];
   const editingSection = sections.find((section) => (section.id || section.name) === editingSectionId) || null;
   const editingId = editingSection?.id || editingSection?.name || "";
   const dash = (value) => value || "—";
@@ -3434,6 +3429,14 @@ function ProjectSectionsEditor({ project, sections, executors, canEdit, onUpdate
         const executorName = section.executor || section.executorName || (section.executorId ? section.executorId : "");
         const amount = Number(section.executorCost) || 0;
         const paid = Number(section.paid) || 0;
+        const assigned = Boolean(section.executorId || section.assigneeId) || !isExecutorUnassigned(executorName);
+        const recruitmentMode = section.recruitmentStatus || "auto";
+        const manuallyClosed = recruitmentMode === "closed" || section.openForBids === false;
+        const explicitlyOpen = recruitmentMode === "open" || section.openForBids === true;
+        const implicitOpen = recruitmentMode === "auto" && section.openForBids == null;
+        const recruitmentOpen = isBillableProductionStage(section) && !assigned && amount > 0 && !manuallyClosed && (explicitlyOpen || implicitOpen);
+        const recruitmentLabel = assigned ? "Исполнитель назначен" : recruitmentOpen ? "Набор открыт" : "Набор закрыт";
+        const recruitmentTone = assigned ? "green" : recruitmentOpen ? "yellow" : "slate";
         return (
           <div key={sectionId} className={cn("stage-compact-row", editingSectionId === sectionId && "active")}>
             <div>
@@ -3445,7 +3448,10 @@ function ProjectSectionsEditor({ project, sections, executors, canEdit, onUpdate
             <em className={cn("status", statusClass(section.status))}>{section.status || "—"}</em>
             <strong>{amount ? money(amount) : "—"}</strong>
             <span>{paid ? money(paid) : "—"}</span>
-            <span>{approval.label}</span>
+            <span className="recruitment-cell">
+              <small className={cn("recruitment-chip", recruitmentTone)}>{recruitmentLabel}</small>
+              <em>{approval.label}</em>
+            </span>
             <div className="stage-compact-actions">
               <button type="button" className="secondary" onClick={() => canEdit ? setEditingSectionId(editingSectionId === sectionId ? "" : sectionId) : showAction("Редактирование доступно владельцу, админу или роли с правом управления проектом")}>
                 {editingSectionId === sectionId ? "Закрыть" : "Редактировать"}
@@ -3485,6 +3491,21 @@ function ProjectSectionsEditor({ project, sections, executors, canEdit, onUpdate
             <label><span>Срок</span><input disabled={!canEdit} value={editingSection.due || ""} onChange={(event) => updateEditingSection({ due: event.target.value })} placeholder="Срок" /></label>
             <label><span>Статус работы</span><select disabled={!canEdit} value={editingSection.status || "Ожидает"} onChange={(event) => updateEditingSection({ status: event.target.value })}>
               {["Ожидает", "Новая", "В работе", "На проверке", "Правки", "Принято", "Просрочено"].map((status) => <option key={status}>{status}</option>)}
+            </select></label>
+            <label><span>Набор исполнителей</span><select
+              disabled={!canEdit}
+              value={editingSection.recruitmentStatus || (editingSection.openForBids === true ? "open" : editingSection.openForBids === false ? "closed" : "auto")}
+              onChange={(event) => {
+                const value = event.target.value;
+                updateEditingSection({
+                  recruitmentStatus: value,
+                  openForBids: value === "open" ? true : value === "closed" ? false : undefined,
+                });
+              }}
+            >
+              <option value="auto">Авто: открыт без исполнителя и с суммой</option>
+              <option value="open">Открыть набор / принимать отклики</option>
+              <option value="closed">Закрыть набор</option>
             </select></label>
             <label><span>Готовность, %</span><input disabled={!canEdit} type="number" value={editingSection.progress || 0} onChange={(event) => updateEditingSection({ progress: Number(event.target.value) })} placeholder="%" /></label>
             <label><span>Сумма задачи исполнителя, ₽</span><input disabled={!canEdit} type="number" value={editingSection.executorCost || 0} onChange={(event) => updateEditingSection({ executorCost: Number(event.target.value), balance: (Number(event.target.value) || 0) - (Number(editingSection.paid) || 0) })} placeholder="Сумма задачи, ₽" /></label>
@@ -4651,7 +4672,10 @@ function ExecutorPersonalAccount({ allTasks, session, activeSection, availableWo
   const monthTarget = Number(finance.monthTarget) || Number(executorAccount.finance.monthTarget) || 0;
   const moneyProgress = monthTarget > 0 ? Math.min(100, Math.round(((Number(finance.earned) || 0) / monthTarget) * 100)) : 0;
   const dynamicXp = personalTasks.length ? Math.max(0, executorAccount.xp + (Number(finance.xpDelta) || 0)) : executorAccount.xp;
-  const executorScopeSections = parseExecutorSections(session?.executorSections?.length ? session.executorSections : executorAccount.permissions.join(", "));
+  const explicitExecutorSections = parseExecutorSections(session?.executorSections || []);
+  const executorScopeSections = session?.id ? explicitExecutorSections : parseExecutorSections(executorAccount.permissions.join(", "));
+  const hasExecutorProfile = executorScopeSections.length > 0;
+  const visibleExecutorBadges = hasExecutorProfile ? executorScopeSections : ["Специализация не указана"];
   const projectSummaries = Array.from(
     personalTasks.reduce((map, task) => {
       const item = map.get(task.projectId) || {
@@ -4883,7 +4907,8 @@ function ExecutorPersonalAccount({ allTasks, session, activeSection, availableWo
             </div>
           );
         })}
-        {!visibleAvailableWorks.length ? <div className="empty">Пока нет открытых работ по твоему профилю.</div> : null}
+        {!visibleAvailableWorks.length && hasExecutorProfile ? <div className="empty">Пока нет открытых работ по твоему профилю.</div> : null}
+        {!hasExecutorProfile ? <div className="empty">Админ ещё не указал специализацию исполнителя. Доступные работы не подбираются, пока в профиле не заполнены специализации.</div> : null}
       </div>
     );
   }
@@ -4989,7 +5014,7 @@ function ExecutorPersonalAccount({ allTasks, session, activeSection, availableWo
           <span>{session?.position || executorAccount.role} · {session?.region || executorAccount.city}</span>
           <small className="account-payline">Оплата: {executorAccount.paymentTitle}. Деньги считаются из принятых этапов и выплат.</small>
           <div className="executor-chips">
-            {executorAccount.badges.map((badge) => (
+            {visibleExecutorBadges.map((badge) => (
               <span key={badge}>{badge}</span>
             ))}
           </div>
@@ -5034,6 +5059,13 @@ function ExecutorPersonalAccount({ allTasks, session, activeSection, availableWo
           </div>
         </div>
       </section>
+
+      {!hasExecutorProfile ? (
+        <section className="office-card access-warning">
+          <h3>Специализация не назначена</h3>
+          <p className="section-hint">Пока админ или владелец не укажет специализации исполнителя, система не будет показывать ему открытые работы. Это защита от случайной выдачи задач не тому специалисту.</p>
+        </section>
+      ) : null}
 
       <section className="office-card executor-guide-card">
         <div className="section-row">
@@ -5099,7 +5131,7 @@ function ExecutorPersonalAccount({ allTasks, session, activeSection, availableWo
           <section className="panel-card">
             <h3>Что мне доступно</h3>
             <div className="panel-list">
-              {executorAccount.permissions.map((item) => (
+              {visibleExecutorBadges.map((item) => (
                 <button key={item} type="button" onClick={() => showAction(`Раздел личного кабинета: ${item}`)}>
                   <span>{item}</span>
                   <b>✓</b>
@@ -6828,8 +6860,7 @@ function AdminModule({ users, setUsers, session, executors = [] }) {
   function executorCategoryUsage(sectionName) {
     const userLinks = users.filter((user) => {
       const assignedSections = parseExecutorSections(user.executorSections);
-      const effectiveSections = assignedSections.length ? assignedSections : (user.executorEnabled || user.role === "executor" ? guessExecutorSections(user) : []);
-      return effectiveSections.includes(sectionName);
+      return assignedSections.includes(sectionName);
     }).length;
     const executorLinks = executors.filter((executor) => executorHasSection(executor, sectionName)).length;
     return userLinks + executorLinks;

@@ -454,7 +454,14 @@ function mergeSalesLeadsByExternalId(existingLeads = [], incomingLeads = []) {
 
 function isOpenExecutorSlot(item = {}) {
   const executorName = String(item.executorName || item.executor || item.assignee || item.owner || "").trim().toLowerCase();
-  return !item.executorId && !item.assigneeId && (!executorName || executorName === "-" || executorName === "—" || executorName.includes("не назнач"));
+  const unassigned = !item.executorId && !item.assigneeId && (!executorName || executorName === "-" || executorName === "—" || executorName.includes("не назнач"));
+  const hasBudget = Number(item.executorCost) > 0;
+  const recruitmentMode = item.recruitmentStatus || "auto";
+  const manuallyClosed = recruitmentMode === "closed" || item.openForBids === false;
+  const explicitlyOpen = recruitmentMode === "open" || item.openForBids === true;
+  const implicitOpen = recruitmentMode === "auto" && item.openForBids == null;
+  const closedStatuses = new Set(["Принято", "Закрыто", "Просрочено"]);
+  return unassigned && hasBudget && !closedStatuses.has(item.status) && !manuallyClosed && (explicitlyOpen || implicitOpen);
 }
 
 function isPreContractStage(item = {}) {
@@ -468,8 +475,6 @@ function executorSectionList(user = {}, executors = []) {
     ...(Array.isArray(user.executorSections) ? user.executorSections : []),
     ...(Array.isArray(user.sections) ? user.sections : []),
     ...(Array.isArray(linkedExecutor?.sections) ? linkedExecutor.sections : []),
-    user.direction,
-    user.position,
   ];
   return raw
     .flatMap((value) => String(value || "").split(/[;,/]/))
@@ -479,7 +484,7 @@ function executorSectionList(user = {}, executors = []) {
 
 function matchesExecutorProfile(item = {}, user = {}, executors = []) {
   const sections = executorSectionList(user, executors);
-  if (!sections.length) return true;
+  if (!sections.length) return false;
   const text = `${item.name || ""} ${item.sectionName || ""} ${item.kind || ""} ${item.requiredSpecialization || ""}`.toLowerCase();
   return sections.some((section) => text.includes(section) || section.includes(text));
 }

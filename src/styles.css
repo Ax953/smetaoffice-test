@@ -1600,6 +1600,35 @@ h3 { margin: 0; }
   color: #64748b;
   font-size: 12px;
 }
+.recruitment-cell {
+  display: grid;
+  gap: 4px;
+}
+.recruitment-cell em {
+  color: #64748b;
+  font-style: normal;
+  font-size: 12px;
+}
+.recruitment-chip {
+  width: fit-content;
+  border-radius: 999px;
+  padding: 5px 8px;
+  font-size: 11px;
+  font-weight: 900;
+  line-height: 1;
+}
+.recruitment-chip.green {
+  background: #dcfce7;
+  color: #047857;
+}
+.recruitment-chip.yellow {
+  background: #fef3c7;
+  color: #b45309;
+}
+.recruitment-chip.slate {
+  background: #e2e8f0;
+  color: #475569;
+}
 .stage-compact-actions {
   display: flex;
   flex-wrap: wrap;
