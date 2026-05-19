@@ -2713,7 +2713,7 @@ function guessExecutorSections(user) {
 }
 
 function userToExecutorProfile(user) {
-  const sections = parseExecutorSections(user.executorSections).length ? parseExecutorSections(user.executorSections) : guessExecutorSections(user);
+  const sections = parseExecutorSections(user.executorSections);
   const rank = Number(user.executorRank) || (user.role === "executor" ? 2 : 1);
   return {
     id: user.executorId || user.id,
@@ -2721,7 +2721,7 @@ function userToExecutorProfile(user) {
     name: user.name,
     type: user.role === "partner" ? "партнёр" : "пользователь SmetaOffice",
     city: user.city || user.region || "не указан",
-    sections,
+    sections: sections.length ? sections : ["Специализация не указана"],
     rank,
     status: user.executorStatus || (user.role === "executor" ? "Внутренний исполнитель" : "Совмещает должность и выполнение"),
     rating: Number(user.executorRating) || 50,
@@ -3397,81 +3397,150 @@ function ProjectEditPanel({ project, users, canEdit, canEditFinance, onUpdatePro
 }
 
 function ProjectSectionsEditor({ project, sections, executors, canEdit, onUpdateSection, onAddSection, onDeleteSection, onDistributeSectionBudget, onApproveSectionPayment, onAcceptSectionBid }) {
-  const columnLabels = ["Этап / раздел", "Исполнитель", "Срок", "Статус", "%", "Сумма задачи исполнителя, ₽", "Выплачено исполнителю, ₽", "Финстатус", "Действие"];
+  const [editingSectionId, setEditingSectionId] = useState("");
+  const columnLabels = ["Этап / задача", "Исполнитель", "Срок", "Статус", "Сумма", "Выплачено", "Согласование", "Действие"];
+  const editingSection = sections.find((section) => (section.id || section.name) === editingSectionId) || null;
+  const editingId = editingSection?.id || editingSection?.name || "";
+  const dash = (value) => value || "—";
+  const canDeleteSection = canEdit && editingId;
+
+  function updateEditingSection(patch) {
+    if (!editingId) return;
+    onUpdateSection(project.id, editingId, patch);
+  }
+
   return (
     <div className="sections-editor">
       <div className="section-row">
         <div>
-          <h3>Редактируемые этапы проекта</h3>
-          <p className="section-hint">Этап — крупный блок работы. Задачи создаются внутри этапа ниже в карточке проекта.</p>
+          <h3>Этапы / задачи проекта</h3>
+          <p className="section-hint">Этап здесь считается оплачиваемой задачей или разделом проекта: АР, КР, визуализация, обследование, смета. В реестре показываем только суть, редактирование открывается отдельно.</p>
         </div>
         {canEdit ? (
           <div className="section-actions">
             <button type="button" className="secondary" onClick={() => onDistributeSectionBudget(project.id)}>Распределить бюджет исполнителя</button>
-            <button type="button" className="primary" onClick={() => onAddSection(project.id)}>Добавить этап</button>
+            <button type="button" className="primary" onClick={() => onAddSection(project.id)}>Добавить этап / задачу</button>
           </div>
         ) : <span className="muted-chip">Редактирует только владелец / админ</span>}
       </div>
-      <div className="stage-editor-head">
+
+      <div className="stage-compact-head">
         {columnLabels.map((label) => <span key={label}>{label}</span>)}
       </div>
+
       {sections.length ? sections.map((section) => {
         const sectionId = section.id || section.name;
+        const approval = taskApprovalState(section);
+        const executorName = section.executor || section.executorName || (section.executorId ? section.executorId : "");
+        const amount = Number(section.executorCost) || 0;
+        const paid = Number(section.paid) || 0;
         return (
-          <div key={sectionId} className="stage-editor-row">
-            <input disabled={!canEdit} value={section.name} onChange={(event) => onUpdateSection(project.id, sectionId, { name: event.target.value })} placeholder="Название этапа" />
+          <div key={sectionId} className={cn("stage-compact-row", editingSectionId === sectionId && "active")}>
+            <div>
+              <b>{section.name}</b>
+              <span>{isBillableProductionStage(section) ? "оплачиваемая работа" : "преддоговорный/служебный этап"}</span>
+            </div>
+            <span>{dash(executorName && !isExecutorUnassigned(executorName) ? executorName : "")}</span>
+            <span>{dash(section.due)}</span>
+            <em className={cn("status", statusClass(section.status))}>{section.status || "—"}</em>
+            <strong>{amount ? money(amount) : "—"}</strong>
+            <span>{paid ? money(paid) : "—"}</span>
+            <span>{approval.label}</span>
+            <div className="stage-compact-actions">
+              <button type="button" className="secondary" onClick={() => canEdit ? setEditingSectionId(editingSectionId === sectionId ? "" : sectionId) : showAction("Редактирование доступно владельцу, админу или роли с правом управления проектом")}>
+                {editingSectionId === sectionId ? "Закрыть" : "Редактировать"}
+              </button>
+              {section.yandexLink ? <a className="stage-link" href={section.yandexLink} target="_blank" rel="noreferrer">Папка</a> : null}
+            </div>
+          </div>
+        );
+      }) : <div className="empty">Этапы пока не созданы.</div>}
+
+      {editingSection ? (
+        <div className="stage-editor-panel">
+          <div className="section-row">
+            <div>
+              <span className="muted-chip">{project.id} · редактирование</span>
+              <h3>{editingSection.name}</h3>
+              <p className="section-hint">Здесь меняются исполнитель, срок, деньги, согласования, бонусы, удержания и рейтинг. В обычном реестре это скрыто, чтобы карточка проекта не превращалась в таблицу.</p>
+            </div>
+            <button type="button" className="secondary" onClick={() => setEditingSectionId("")}>Закрыть окно</button>
+          </div>
+
+          <div className="stage-editor-form">
+            <label><span>Название этапа / задачи</span><input disabled={!canEdit} value={editingSection.name} onChange={(event) => updateEditingSection({ name: event.target.value })} placeholder="Название этапа" /></label>
+            <label><span>Исполнитель</span>
             <select
               disabled={!canEdit}
-              value={section.executorId || ""}
+              value={editingSection.executorId || ""}
               onChange={(event) => {
                 const executor = executors.find((item) => item.id === event.target.value);
-                onUpdateSection(project.id, sectionId, { executorId: event.target.value, executor: executor ? executor.name : "не назначен" });
+                updateEditingSection({ executorId: event.target.value, executor: executor ? executor.name : "не назначен" });
               }}
             >
               <option value="">Исполнитель не назначен</option>
               {executors.map((executor) => <option key={executor.id} value={executor.id}>{executor.name} · {executor.sections.join(", ")}</option>)}
             </select>
-            <input disabled={!canEdit} value={section.due} onChange={(event) => onUpdateSection(project.id, sectionId, { due: event.target.value })} placeholder="Срок" />
-            <select disabled={!canEdit} value={section.status} onChange={(event) => onUpdateSection(project.id, sectionId, { status: event.target.value })}>
+            </label>
+            <label><span>Срок</span><input disabled={!canEdit} value={editingSection.due || ""} onChange={(event) => updateEditingSection({ due: event.target.value })} placeholder="Срок" /></label>
+            <label><span>Статус работы</span><select disabled={!canEdit} value={editingSection.status || "Ожидает"} onChange={(event) => updateEditingSection({ status: event.target.value })}>
               {["Ожидает", "Новая", "В работе", "На проверке", "Правки", "Принято", "Просрочено"].map((status) => <option key={status}>{status}</option>)}
-            </select>
-            <input disabled={!canEdit} type="number" value={section.progress || 0} onChange={(event) => onUpdateSection(project.id, sectionId, { progress: Number(event.target.value) })} placeholder="%" />
-            <input disabled={!canEdit} type="number" value={section.executorCost || 0} onChange={(event) => onUpdateSection(project.id, sectionId, { executorCost: Number(event.target.value), balance: (Number(event.target.value) || 0) - (Number(section.paid) || 0) })} placeholder="Сумма задачи, ₽" />
-            <input disabled={!canEdit} type="number" value={section.paid || 0} onChange={(event) => onUpdateSection(project.id, sectionId, { paid: Number(event.target.value), balance: (Number(section.executorCost) || 0) - (Number(event.target.value) || 0) })} placeholder="Выплачено, ₽" />
-            <select disabled={!canEdit} value={section.financeStatus || "не рассчитан"} onChange={(event) => onUpdateSection(project.id, sectionId, { financeStatus: event.target.value })}>
+            </select></label>
+            <label><span>Готовность, %</span><input disabled={!canEdit} type="number" value={editingSection.progress || 0} onChange={(event) => updateEditingSection({ progress: Number(event.target.value) })} placeholder="%" /></label>
+            <label><span>Сумма задачи исполнителя, ₽</span><input disabled={!canEdit} type="number" value={editingSection.executorCost || 0} onChange={(event) => updateEditingSection({ executorCost: Number(event.target.value), balance: (Number(event.target.value) || 0) - (Number(editingSection.paid) || 0) })} placeholder="Сумма задачи, ₽" /></label>
+            <label><span>Выплачено исполнителю, ₽</span><input disabled={!canEdit} type="number" value={editingSection.paid || 0} onChange={(event) => updateEditingSection({ paid: Number(event.target.value), balance: (Number(editingSection.executorCost) || 0) - (Number(event.target.value) || 0) })} placeholder="Выплачено, ₽" /></label>
+            <label><span>Финансовый статус</span><select disabled={!canEdit} value={editingSection.financeStatus || "не рассчитан"} onChange={(event) => updateEditingSection({ financeStatus: event.target.value })}>
               {["не рассчитан", "план", "счёт", "к выплате", "частично выплачено", "выплачено", "удержание"].map((status) => <option key={status}>{status}</option>)}
-            </select>
-            <input disabled={!canEdit} className="stage-editor-wide" value={section.yandexLink || ""} onChange={(event) => onUpdateSection(project.id, sectionId, { yandexLink: event.target.value, documents: event.target.value ? [event.target.value] : [] })} placeholder="Ссылка на Яндекс.Диск этапа" />
-            <input disabled={!canEdit} className="stage-editor-wide" value={(section.comments || []).join("; ")} onChange={(event) => onUpdateSection(project.id, sectionId, { comments: event.target.value ? [event.target.value] : [] })} placeholder="Комментарий к этапу" />
-            {!isBillableProductionStage(section) ? <span className="stage-note">Без доп. оплаты</span> : null}
-            {section.bids?.length ? <span className="stage-note">Отклики: {section.bids.length}</span> : null}
-            {section.yandexLink ? <a className="stage-link" href={section.yandexLink} target="_blank" rel="noreferrer">Открыть</a> : null}
-            {section.bids?.length ? (
+            </select></label>
+            <label><span>Премия, ₽</span><input disabled={!canEdit} type="number" value={editingSection.bonusAmount || 0} onChange={(event) => updateEditingSection({ bonusAmount: Number(event.target.value) || 0 })} placeholder="Премия" /></label>
+            <label><span>Причина премии</span><input disabled={!canEdit} value={editingSection.bonusReason || ""} onChange={(event) => updateEditingSection({ bonusReason: event.target.value })} placeholder="Быстрее срока, без правок, клиент доволен" /></label>
+            <label><span>Удержание / штраф, ₽</span><input disabled={!canEdit} type="number" value={editingSection.penaltyAmount || 0} onChange={(event) => updateEditingSection({ penaltyAmount: Number(event.target.value) || 0 })} placeholder="Удержание" /></label>
+            <label><span>Причина удержания</span><input disabled={!canEdit} value={editingSection.penaltyReason || ""} onChange={(event) => updateEditingSection({ penaltyReason: event.target.value })} placeholder="Просрочка, качество, отказ от работы" /></label>
+            <label><span>Влияние на уровень</span><select disabled={!canEdit} value={editingSection.rankImpact || "без изменения"} onChange={(event) => updateEditingSection({ rankImpact: event.target.value })}>
+              {["без изменения", "повысить рейтинг", "понизить рейтинг", "понизить ранг", "заблокировать допуск"].map((status) => <option key={status}>{status}</option>)}
+            </select></label>
+            <label className="wide"><span>Ссылка на Яндекс.Диск этапа</span><input disabled={!canEdit} value={editingSection.yandexLink || ""} onChange={(event) => updateEditingSection({ yandexLink: event.target.value, documents: event.target.value ? [event.target.value] : [] })} placeholder="Ссылка на Яндекс.Диск этапа" /></label>
+            <label className="wide"><span>Комментарий к этапу</span><input disabled={!canEdit} value={(editingSection.comments || []).join("; ")} onChange={(event) => updateEditingSection({ comments: event.target.value ? [event.target.value] : [] })} placeholder="Комментарий к этапу" /></label>
+          </div>
+
+          <div className="stage-editor-meta">
+            {!isBillableProductionStage(editingSection) ? <span className="stage-note">Без дополнительной оплаты: этот блок должен быть готов до договора или является служебным.</span> : null}
+            {editingSection.bids?.length ? <span className="stage-note">Отклики исполнителей: {editingSection.bids.length}</span> : null}
+            {editingSection.yandexLink ? <a className="stage-link" href={editingSection.yandexLink} target="_blank" rel="noreferrer">Открыть папку этапа</a> : <span className="stage-note">Папка этапа не привязана</span>}
+          </div>
+
+          {editingSection.bids?.length ? (
               <div className="stage-bids-list">
-                {section.bids.map((bid) => (
-                  <div key={bid.id || `${sectionId}-${bid.executorId || bid.bidderName}`}>
+                {editingSection.bids.map((bid) => (
+                  <div key={bid.id || `${editingId}-${bid.executorId || bid.bidderName}`}>
                     <span>{bid.bidderName || bid.executorName || bid.executorId || "Исполнитель"}</span>
                     <b>{money(Number(bid.requestedAmount) || Number(bid.amount) || 0)}</b>
                     <em>{bid.offeredDue || bid.due || "срок не указан"}</em>
-                    {canEdit ? <button type="button" className="secondary" onClick={() => onAcceptSectionBid?.(project.id, sectionId, bid.id || bid.executorId)}>Назначить</button> : null}
+                    {canEdit ? <button type="button" className="secondary" onClick={() => onAcceptSectionBid?.(project.id, editingId, bid.id || bid.executorId)}>Назначить</button> : null}
                   </div>
                 ))}
               </div>
             ) : null}
-            {isBillableProductionStage(section) ? (
+
+          {isBillableProductionStage(editingSection) ? (
               <div className="stage-approval-actions">
-                <button type="button" className="secondary" disabled={!canEdit || section.clientApproved} onClick={() => onApproveSectionPayment?.(project.id, sectionId, "client")}>
-                  {section.clientApproved ? "Клиент согласовал" : "Согласовать с клиентом"}
+                <button type="button" className="secondary" disabled={!canEdit || editingSection.clientApproved} onClick={() => onApproveSectionPayment?.(project.id, editingId, "client")}>
+                  {editingSection.clientApproved ? "Клиент согласовал" : "Согласовать с клиентом"}
                 </button>
-                <button type="button" className="secondary" disabled={!canEdit || section.paymentApproved} onClick={() => onApproveSectionPayment?.(project.id, sectionId, "internal")}>
-                  {section.paymentApproved ? "Оплата согласована" : "Согласовать оплату"}
+                <button type="button" className="secondary" disabled={!canEdit || editingSection.paymentApproved} onClick={() => onApproveSectionPayment?.(project.id, editingId, "internal")}>
+                  {editingSection.paymentApproved ? "Оплата согласована" : "Согласовать оплату"}
                 </button>
               </div>
             ) : null}
-            <button type="button" className="secondary danger" disabled={!canEdit} onClick={() => onDeleteSection(project.id, sectionId)}>Удалить</button>
+
+          <div className="stage-editor-danger">
+            <button type="button" className="secondary danger" disabled={!canDeleteSection} onClick={() => {
+              onDeleteSection(project.id, editingId);
+              setEditingSectionId("");
+            }}>Удалить этап / задачу</button>
           </div>
-        );
-      }) : <div className="empty">Этапы пока не созданы.</div>}
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -6281,13 +6350,13 @@ function ProjectDetailModule({ project, role, session, onBack, onDeleteProject, 
       <section className="office-card">
         <div className="section-row">
           <div>
-            <h3>Добавить задачу в этот проект</h3>
-            <p className="section-hint">Так мы фиксируем отдельные работы: раздел 87 постановления, дизайн-этап, обследование, смету, исполнительский кусок или внутреннюю задачу РП.</p>
+            <h3>Добавить подзадачу / чек-лист внутри этапа</h3>
+            <p className="section-hint">Основная оплачиваемая работа создаётся выше как этап / задача проекта. Здесь можно добавить мелкое действие внутри этапа: проверить файл, запросить документ, оставить поручение РП.</p>
           </div>
-          <button type="button" className="primary" onClick={() => onCreateTask(project.id)} disabled={!taskForm.name.trim()}>Добавить задачу</button>
+          <button type="button" className="primary" onClick={() => onCreateTask(project.id)} disabled={!taskForm.name.trim()}>Добавить подзадачу</button>
         </div>
         <div className="quick-form task-create-form">
-          <input value={taskForm.name} onChange={(event) => setTaskForm((next) => ({ ...next, name: event.target.value }))} placeholder="Название задачи / раздела" />
+          <input value={taskForm.name} onChange={(event) => setTaskForm((next) => ({ ...next, name: event.target.value }))} placeholder="Название подзадачи / поручения" />
           <select value={taskForm.sectionName} onChange={(event) => setTaskForm((next) => ({ ...next, sectionName: event.target.value }))}>
             <option value="">Выбрать этап проекта</option>
             {projectSections(project).map((section) => <option key={section.id || section.name} value={section.name}>{section.name}</option>)}
@@ -6681,9 +6750,17 @@ function AdminModule({ users, setUsers, session, executors = [] }) {
     region: "Все регионы",
     direction: "Все направления",
     position: "Не назначена",
+    executorEnabled: true,
+    executorSections: "",
+    executorRank: 2,
+    executorRating: 50,
+    executorStatus: "Внутренний исполнитель",
+    executorQualification: "",
+    executorPaymentModel: "piecework",
   });
   const [adminNotice, setAdminNotice] = useState("");
   const [customExecutorGroups, setCustomExecutorGroups] = useState(() => readStoredValue("smeta.executorSpecializationGroups", []));
+  const [expandedUserId, setExpandedUserId] = useState("");
 
   const isFullUserAdmin = fullUserAdminRoles.includes(session?.role);
   const isScopedUserAdmin = scopedUserAdminRoles.includes(session?.role);
@@ -6708,7 +6785,7 @@ function AdminModule({ users, setUsers, session, executors = [] }) {
     const normalizedDirection = normalizeDirectionName(userDraft.direction || defaultScopedDirection);
     const nextDirection = directionChoices.includes(normalizedDirection) ? normalizedDirection : defaultScopedDirection;
     const executorEnabled = Boolean(userDraft.executorEnabled || nextRole === "executor");
-    const executorSections = executorEnabled ? parseExecutorSections(userDraft.executorSections).length ? parseExecutorSections(userDraft.executorSections) : guessExecutorSections({ ...userDraft, role: nextRole, direction: nextDirection }) : [];
+    const executorSections = executorEnabled ? parseExecutorSections(userDraft.executorSections) : [];
     const executorRank = Number(userDraft.executorRank) || (nextRole === "executor" ? 2 : 1);
     return {
       ...userDraft,
@@ -6798,6 +6875,13 @@ function AdminModule({ users, setUsers, session, executors = [] }) {
       region: defaultScopedRegion,
       direction: defaultScopedDirection,
       position: "Не назначена",
+      executorEnabled: true,
+      executorSections: "",
+      executorRank: 2,
+      executorRating: 50,
+      executorStatus: "Внутренний исполнитель",
+      executorQualification: "",
+      executorPaymentModel: "piecework",
     });
   }
 
@@ -6834,6 +6918,7 @@ function AdminModule({ users, setUsers, session, executors = [] }) {
       executorStatus: scopedForm.executorStatus,
       executorRating: scopedForm.executorRating,
       executorQualification: scopedForm.executorQualification,
+      executorPaymentModel: scopedForm.executorPaymentModel,
       createdAt: new Date().toISOString(),
       createdBy: session?.id || session?.login || "system",
     };
@@ -6884,10 +6969,35 @@ function AdminModule({ users, setUsers, session, executors = [] }) {
           <label><span>Региональный доступ</span><select value={regionChoices.includes(normalizeRegionName(newUserForm.region)) ? normalizeRegionName(newUserForm.region) : defaultScopedRegion} onChange={(event) => setNewUserForm((next) => ({ ...next, region: event.target.value }))}>
             {regionChoices.map((region) => <option key={region} value={region}>{region}</option>)}
           </select></label>
-          <label><span>Направление</span><select value={directionChoices.includes(normalizeDirectionName(newUserForm.direction)) ? normalizeDirectionName(newUserForm.direction) : defaultScopedDirection} onChange={(event) => setNewUserForm((next) => ({ ...next, direction: event.target.value }))}>
+          <label><span>Контур / направление доступа</span><select value={directionChoices.includes(normalizeDirectionName(newUserForm.direction)) ? normalizeDirectionName(newUserForm.direction) : defaultScopedDirection} onChange={(event) => setNewUserForm((next) => ({ ...next, direction: event.target.value }))}>
             {directionChoices.map((direction) => <option key={direction} value={direction}>{direction}</option>)}
           </select></label>
-          <label><span>Должность</span><input list="position-options" value={newUserForm.position} onChange={(event) => setNewUserForm((next) => ({ ...next, position: event.target.value }))} placeholder="Напр.: ассистент руководителя" /></label>
+          <label><span>Должность в компании</span><input list="position-options" value={newUserForm.position} onChange={(event) => setNewUserForm((next) => ({ ...next, position: event.target.value }))} placeholder="Пиши вручную: ассистент, РП, продажник..." /></label>
+          <label className="admin-checkline wide">
+            <input
+              type="checkbox"
+              checked={Boolean(newUserForm.executorEnabled || newUserForm.role === "executor")}
+              onChange={(event) => setNewUserForm((next) => ({ ...next, executorEnabled: event.target.checked }))}
+            />
+            <span>Человек может выполнять работы как исполнитель. Это отдельно от должности и роли.</span>
+          </label>
+          {newUserForm.executorEnabled || newUserForm.role === "executor" ? (
+            <div className="admin-executor-create-panel wide">
+              <div className="quick-form-title">
+                <h3>Специализация исполнителя</h3>
+                <p>Заполняется вручную: АР, КР, дизайн, визуализация, сметы, ПОС, ОДИ и т.д. Если человек продажник или администратор без производственной специализации — оставь пусто.</p>
+              </div>
+              <label className="wide"><span>Специализации через запятую</span><input value={newUserForm.executorSections || ""} onChange={(event) => setNewUserForm((next) => ({ ...next, executorSections: event.target.value }))} placeholder="Напр.: АР, Дизайн, 3D, Сметы" /></label>
+              <label><span>Уровень допуска</span><select value={newUserForm.executorRank || 2} onChange={(event) => setNewUserForm((next) => ({ ...next, executorRank: Number(event.target.value) }))}>
+                {executorRankOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+              </select></label>
+              <label><span>Рейтинг</span><input type="number" min="0" max="100" value={newUserForm.executorRating || 50} onChange={(event) => setNewUserForm((next) => ({ ...next, executorRating: clampPercent(event.target.value) }))} /></label>
+              <label><span>Квалификация</span><input list="executor-qualification-options" value={newUserForm.executorQualification || ""} onChange={(event) => setNewUserForm((next) => ({ ...next, executorQualification: event.target.value }))} placeholder="Напр.: ведущий архитектор" /></label>
+              <label><span>Модель оплаты</span><select value={newUserForm.executorPaymentModel || "piecework"} onChange={(event) => setNewUserForm((next) => ({ ...next, executorPaymentModel: event.target.value }))}>
+                {compensationModeOptions.map((option) => <option key={option.id} value={option.id}>{option.label}</option>)}
+              </select></label>
+            </div>
+          ) : null}
           <button type="submit" className="primary">Создать пользователя</button>
         </form>
         <datalist id="position-options">
@@ -6943,7 +7053,16 @@ function AdminModule({ users, setUsers, session, executors = [] }) {
               </select>
               <input list="position-options" value={user.position || ""} onChange={(event) => updateUser(user.id, { position: event.target.value })} placeholder="Должность" disabled={!canEdit} />
               <div className="user-executor-cell">
-                <label>
+                <div className="user-executor-summary">
+                  <b>{isExecutorEnabled ? "Исполнитель включён" : "Не исполнитель"}</b>
+                  <span>{parseExecutorSections(user.executorSections).length ? parseExecutorSections(user.executorSections).join(", ") : "специализация не указана"}</span>
+                  <button type="button" className="secondary" disabled={!canEdit} onClick={() => setExpandedUserId(expandedUserId === user.id ? "" : user.id)}>
+                    {expandedUserId === user.id ? "Скрыть" : "Специализация"}
+                  </button>
+                </div>
+                {expandedUserId === user.id ? (
+                  <div className="user-executor-popover">
+                    <label>
                   <input
                     type="checkbox"
                     checked={Boolean(user.executorEnabled || user.role === "executor")}
@@ -6955,7 +7074,7 @@ function AdminModule({ users, setUsers, session, executors = [] }) {
                 <input
                   value={parseExecutorSections(user.executorSections).join(", ")}
                   onChange={(event) => updateUser(user.id, { executorEnabled: true, executorSections: parseExecutorSections(event.target.value) })}
-                  placeholder="Специализации: Дизайн, 3D, АР"
+                  placeholder="Специализации вручную: АР, Дизайн, 3D, Сметы"
                   disabled={!canEdit || !isExecutorEnabled}
                 />
                 <div className="executor-admin-grid">
@@ -7039,6 +7158,8 @@ function AdminModule({ users, setUsers, session, executors = [] }) {
                     />
                   </label>
                 </div>
+                  </div>
+                ) : null}
               </div>
             </div>
             );
