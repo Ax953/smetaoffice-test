@@ -2057,6 +2057,35 @@ function formatProjectDate(value) {
   return new Intl.DateTimeFormat("ru-RU", { day: "2-digit", month: "short", year: "numeric" }).format(parsed);
 }
 
+function periodStartDate(period, now = new Date()) {
+  const start = new Date(now);
+  start.setHours(0, 0, 0, 0);
+  if (period === "year") {
+    start.setMonth(0, 1);
+    return start;
+  }
+  if (period === "halfyear") {
+    start.setMonth(start.getMonth() < 6 ? 0 : 6, 1);
+    return start;
+  }
+  if (period === "quarter") {
+    start.setMonth(Math.floor(start.getMonth() / 3) * 3, 1);
+    return start;
+  }
+  start.setDate(1);
+  return start;
+}
+
+function projectDateForAnalytics(project) {
+  return parseDateValue(project.startDate || project.createdAt || project.endDate);
+}
+
+function projectInPeriod(project, period) {
+  const date = projectDateForAnalytics(project);
+  if (!date) return true;
+  return date >= periodStartDate(period);
+}
+
 function daysBetween(start, end) {
   const startDate = parseDateValue(start);
   const endDate = parseDateValue(end);
@@ -3257,7 +3286,7 @@ function ProjectEditPanel({ project, users, canEdit, canEditFinance, onUpdatePro
   );
 }
 
-function ProjectSectionsEditor({ project, sections, executors, canEdit, onUpdateSection, onAddSection, onDeleteSection, onDistributeSectionBudget }) {
+function ProjectSectionsEditor({ project, sections, executors, canEdit, onUpdateSection, onAddSection, onDeleteSection, onDistributeSectionBudget, onApproveSectionPayment }) {
   const columnLabels = ["Этап / раздел", "Исполнитель", "Срок", "Статус", "%", "Сумма задачи исполнителя, ₽", "Выплачено исполнителю, ₽", "Финстатус", "Действие"];
   return (
     <div className="sections-editor">
@@ -3305,7 +3334,18 @@ function ProjectSectionsEditor({ project, sections, executors, canEdit, onUpdate
             <input disabled={!canEdit} className="stage-editor-wide" value={section.yandexLink || ""} onChange={(event) => onUpdateSection(project.id, sectionId, { yandexLink: event.target.value, documents: event.target.value ? [event.target.value] : [] })} placeholder="Ссылка на Яндекс.Диск этапа" />
             <input disabled={!canEdit} className="stage-editor-wide" value={(section.comments || []).join("; ")} onChange={(event) => onUpdateSection(project.id, sectionId, { comments: event.target.value ? [event.target.value] : [] })} placeholder="Комментарий к этапу" />
             {!isBillableProductionStage(section) ? <span className="stage-note">Без доп. оплаты</span> : null}
+            {section.bids?.length ? <span className="stage-note">Отклики: {section.bids.length}</span> : null}
             {section.yandexLink ? <a className="stage-link" href={section.yandexLink} rel="noreferrer">Открыть</a> : null}
+            {isBillableProductionStage(section) ? (
+              <div className="stage-approval-actions">
+                <button type="button" className="secondary" disabled={!canEdit || section.clientApproved} onClick={() => onApproveSectionPayment?.(project.id, sectionId, "client")}>
+                  {section.clientApproved ? "Клиент согласовал" : "Согласовать с клиентом"}
+                </button>
+                <button type="button" className="secondary" disabled={!canEdit || section.paymentApproved} onClick={() => onApproveSectionPayment?.(project.id, sectionId, "internal")}>
+                  {section.paymentApproved ? "Оплата согласована" : "Согласовать оплату"}
+                </button>
+              </div>
+            ) : null}
             <button type="button" className="secondary danger" disabled={!canEdit} onClick={() => onDeleteSection(project.id, sectionId)}>Удалить</button>
           </div>
         );
@@ -3399,11 +3439,11 @@ function ProjectCommandCenter({ project, economy, canSeeMoney }) {
   );
 }
 
-function ProjectDetails({ project, role, onUpdateProject, onTaskStatusChange, onProjectMessage, onAddClientParticipant, onCreateApproval, onTransmitClientStatus, session, onUpdateSection, onAddSection, onDeleteSection, onDistributeSectionBudget, onOpenTask, executors, users }) {
+function ProjectDetails({ project, role, onUpdateProject, onTaskStatusChange, onProjectMessage, onAddClientParticipant, onCreateApproval, onTransmitClientStatus, onApproveSectionPayment, session, onUpdateSection, onAddSection, onDeleteSection, onDistributeSectionBudget, onOpenTask, executors, users }) {
   const canSeeMoney = roleCan(role, "viewFinance");
   const canSeeProductionBudget = roleCan(role, "viewProductionBudget") || canSeeMoney;
   const canSeeClient = roleCan(role, "viewClient") || roleCan(role, "manageProjects") || canSeeMoney;
-  const canAdminProject = ["owner", "admin"].includes(role);
+  const canAdminProject = roleCan(role, "manageProjects");
   const economy = projectEconomy(project);
   const timeline = projectTimeline(project);
   const schedule = projectScheduleControl(project);
@@ -3480,7 +3520,7 @@ function ProjectDetails({ project, role, onUpdateProject, onTaskStatusChange, on
       <BitrixBridgeCard project={project} />
       <ClientParticipantsCard project={project} onAddParticipant={onAddClientParticipant} />
       <ClientApprovalsCard project={project} onCreateApproval={onCreateApproval} />
-      <ProjectEditPanel project={project} users={users} canEdit={canAdminProject} canEditFinance={role === "owner"} onUpdateProject={onUpdateProject} />
+      <ProjectEditPanel project={project} users={users} canEdit={canAdminProject} canEditFinance={roleCan(role, "editFinance")} onUpdateProject={onUpdateProject} />
 
       <section className="office-card economy-card">
         <div className="section-row">
@@ -3543,6 +3583,7 @@ function ProjectDetails({ project, role, onUpdateProject, onTaskStatusChange, on
           onAddSection={onAddSection}
           onDeleteSection={onDeleteSection}
           onDistributeSectionBudget={onDistributeSectionBudget}
+          onApproveSectionPayment={onApproveSectionPayment}
         />
       </section>
 
@@ -4349,7 +4390,7 @@ function ExecutorsModule({ role, executors, setExecutors, allTasks = [] }) {
   );
 }
 
-function ExecutorPersonalAccount({ allTasks, session, activeSection }) {
+function ExecutorPersonalAccount({ allTasks, session, activeSection, availableWorks = [], onApplyForWork }) {
   const executorId = session?.executorId || "EX-001";
   const personalTasks = allTasks.filter((task) => task.executorId === executorId || task.assigneeId === executorId);
   const applicationStorageKey = `smeta.executorApplications.${executorId}`;
@@ -4400,8 +4441,10 @@ function ExecutorPersonalAccount({ allTasks, session, activeSection }) {
             ? taskApprovalState(task).label
             : task.status,
       }));
-  const availableWorks = allTasks.filter((task) => isAvailableExecutorWork(task, executorScopeSections)).slice(0, 8);
-  const visibleAvailableWorks = availableWorks;
+  const localAvailableWorks = allTasks.filter((task) => isAvailableExecutorWork(task, executorScopeSections));
+  const visibleAvailableWorks = Array.from(
+    new Map([...availableWorks, ...localAvailableWorks].map((task) => [task.id || `${task.projectId}-${task.name}`, task])).values()
+  ).slice(0, 12);
   const appliedIds = new Set(applications.map((item) => item.id));
 
   function updateBidDraft(taskId, patch) {
@@ -4424,6 +4467,7 @@ function ExecutorPersonalAccount({ allTasks, session, activeSection }) {
     const next = [application, ...applications.filter((item) => item.id !== task.id)];
     setApplications(next);
     writeStoredValue(applicationStorageKey, next);
+    onApplyForWork?.(task, application);
     showAction(`Отклик отправлен РП по работе: ${task.name}`);
   }
 
@@ -4732,10 +4776,13 @@ function ExecutorPersonalAccount({ allTasks, session, activeSection }) {
   );
 }
 
-function IntegrationsModule() {
+function IntegrationsModule({ setSalesLeads }) {
   const [integrationSettings, setIntegrationSettingsState] = useState(() =>
     readStoredValue("smeta.integrationSettings", { webhookUrl: "", syncMode: "manual", lastCheck: "не запускалась" })
   );
+  const [syncLog, setSyncLog] = useState(() => readStoredValue("smeta.syncLog", []));
+  const [integrationNotice, setIntegrationNotice] = useState("");
+  const [syncing, setSyncing] = useState(false);
 
   useEffect(() => {
     let alive = true;
@@ -4744,6 +4791,11 @@ function IntegrationsModule() {
       if (alive && settings && !settings.error) {
         setIntegrationSettingsState(settings);
         writeStoredValue("smeta.integrationSettings", settings);
+      }
+      const log = await apiGet("/sync-log", []);
+      if (alive && Array.isArray(log)) {
+        setSyncLog(log);
+        writeStoredValue("smeta.syncLog", log);
       }
     }
     loadSettings();
@@ -4759,6 +4811,39 @@ function IntegrationsModule() {
       apiPut("/integration-settings", next);
       return next;
     });
+  }
+
+  async function runBitrixTest() {
+    setSyncing(true);
+    const result = await apiPost("/bitrix/test", {}, { ok: false, error: "Bitrix webhook не настроен или API недоступен" });
+    setSyncing(false);
+    if (result?.integrationSettings) {
+      setIntegrationSettingsState(result.integrationSettings);
+      writeStoredValue("smeta.integrationSettings", result.integrationSettings);
+    }
+    if (Array.isArray(result?.syncLog)) {
+      setSyncLog(result.syncLog);
+      writeStoredValue("smeta.syncLog", result.syncLog);
+    }
+    const message = result?.ok ? "Bitrix24 доступен. Можно запускать ручной импорт тёплых сделок." : `Проверка Bitrix24 не прошла: ${result?.error || "нет ответа"}`;
+    setIntegrationNotice(message);
+    showAction(message);
+  }
+
+  async function importBitrixDeals() {
+    setSyncing(true);
+    const result = await apiPost("/bitrix/import-sales-leads", {}, { ok: false, error: "Импорт не выполнен" });
+    setSyncing(false);
+    if (Array.isArray(result?.leads)) {
+      setSalesLeads?.(result.leads);
+    }
+    if (Array.isArray(result?.syncLog)) {
+      setSyncLog(result.syncLog);
+      writeStoredValue("smeta.syncLog", result.syncLog);
+    }
+    const message = result?.ok ? `Импорт Bitrix24 выполнен. Сделок обновлено: ${result.imported || 0}.` : `Импорт Bitrix24 не выполнен: ${result?.error || "нет ответа"}`;
+    setIntegrationNotice(message);
+    showAction(message);
   }
 
   const webhookUrl = integrationSettings.webhookUrl;
@@ -4842,9 +4927,14 @@ function IntegrationsModule() {
               <h2>Подключение Bitrix24</h2>
               <p>Вставляем входящий вебхук, выбираем режим, запускаем тестовую синхронизацию.</p>
             </div>
-            <button type="button" className="primary" onClick={() => setIntegrationSettings({ lastCheck: isConfigured ? "тест пройден сейчас" : "нужен вебхук" })}>
-              Проверить
-            </button>
+            <div className="section-actions">
+              <button type="button" className="primary" onClick={runBitrixTest} disabled={syncing}>
+                {syncing ? "Проверяем..." : "Проверить"}
+              </button>
+              <button type="button" className="secondary" onClick={importBitrixDeals} disabled={syncing || !isConfigured}>
+                Импортировать тёплые сделки
+              </button>
+            </div>
           </div>
           <div className="integration-form">
             <label>
@@ -4864,6 +4954,7 @@ function IntegrationsModule() {
               <span>{lastCheck}</span>
               <small>Режим: {syncMode === "manual" ? "ручной пилот" : syncMode === "hourly" ? "периодическая синхронизация" : "событийная синхронизация"}</small>
             </div>
+            {integrationNotice ? <div className="integration-result"><b>Результат</b><span>{integrationNotice}</span></div> : null}
           </div>
         </div>
 
@@ -4901,12 +4992,12 @@ function IntegrationsModule() {
       <section className="office-card">
         <h3>Журнал синхронизации</h3>
         <div className="sync-log">
-          {integrationEvents.map((event) => (
-            <div key={`${event.time}-${event.text}`}>
-              <span className={cn("stat-dot mini", event.tone)}>•</span>
-              <b>{event.time}</b>
+          {(syncLog.length ? syncLog : integrationEvents).map((event) => (
+            <div key={event.id || `${event.time}-${event.text}`}>
+              <span className={cn("stat-dot mini", event.status === "error" ? "red" : event.status === "ok" ? "green" : event.tone || "blue")}>•</span>
+              <b>{event.at ? formatProjectDate(event.at) : event.time}</b>
               <em>{event.source}</em>
-              <p>{event.text}</p>
+              <p>{event.message || event.text}</p>
             </div>
           ))}
         </div>
@@ -5824,7 +5915,7 @@ function ProjectsModule({
   );
 }
 
-function ProjectDetailModule({ project, role, session, onBack, onDeleteProject, onUpdateProject, onTaskStatusChange, onProjectMessage, onAddClientParticipant, onCreateApproval, onTransmitClientStatus, taskForm, setTaskForm, onCreateTask, onOpenTask, executors, users, onUpdateSection, onAddSection, onDeleteSection, onDistributeSectionBudget }) {
+function ProjectDetailModule({ project, role, session, onBack, onDeleteProject, onUpdateProject, onTaskStatusChange, onProjectMessage, onAddClientParticipant, onCreateApproval, onTransmitClientStatus, onApproveSectionPayment, taskForm, setTaskForm, onCreateTask, onOpenTask, executors, users, onUpdateSection, onAddSection, onDeleteSection, onDistributeSectionBudget }) {
   if (!project) {
     return (
       <>
@@ -5863,6 +5954,7 @@ function ProjectDetailModule({ project, role, session, onBack, onDeleteProject, 
         onAddClientParticipant={onAddClientParticipant}
         onCreateApproval={onCreateApproval}
         onTransmitClientStatus={onTransmitClientStatus}
+        onApproveSectionPayment={onApproveSectionPayment}
         onUpdateSection={onUpdateSection}
         onAddSection={onAddSection}
         onDeleteSection={onDeleteSection}
@@ -6838,14 +6930,17 @@ function AnalyticsModule({ projectItems, allTasks, role }) {
     halfyear: "Полгода",
     year: "Год",
   };
-  const redProjects = projectItems.filter((project) => effectiveProjectRisk(project) === "red").length;
-  const reviewTasks = allTasks.filter((task) => task.status === "На проверке").length;
-  const overdueTasks = allTasks.filter((task) => task.status === "Просрочено").length;
-  const summary = financeSummary(projectItems);
+  const periodProjects = projectItems.filter((project) => projectInPeriod(project, period));
+  const periodProjectIds = new Set(periodProjects.map((project) => project.id));
+  const periodTasks = allTasks.filter((task) => !task.projectId || periodProjectIds.has(task.projectId));
+  const redProjects = periodProjects.filter((project) => effectiveProjectRisk(project) === "red").length;
+  const reviewTasks = periodTasks.filter((task) => task.status === "На проверке").length;
+  const overdueTasks = periodTasks.filter((task) => task.status === "Просрочено").length;
+  const summary = financeSummary(periodProjects);
   const canSeeFinance = roleCan(role, "viewFinance");
-  const avgProgress = projectItems.length ? Math.round(projectItems.reduce((sum, project) => sum + (Number(project.progress) || 0), 0) / projectItems.length) : 0;
+  const avgProgress = periodProjects.length ? Math.round(periodProjects.reduce((sum, project) => sum + (Number(project.progress) || 0), 0) / periodProjects.length) : 0;
   const directionAnalytics = Array.from(
-    projectItems.reduce((map, project) => {
+    periodProjects.reduce((map, project) => {
       const key = project.direction || "Без направления";
       const item = map.get(key) || { name: key, projects: [], tasks: [] };
       item.projects.push(project);
@@ -6864,8 +6959,28 @@ function AnalyticsModule({ projectItems, allTasks, role }) {
       review: item.tasks.filter((task) => task.status === "На проверке").length,
     };
   });
+  const regionAnalytics = Array.from(
+    periodProjects.reduce((map, project) => {
+      const key = normalizeRegionName(project.region || project.city);
+      const item = map.get(key) || { name: key, projects: [], tasks: [] };
+      item.projects.push(project);
+      item.tasks.push(...flattenTasks([project]));
+      map.set(key, item);
+      return map;
+    }, new Map()).values()
+  ).map((item) => {
+    const economy = financeSummary(item.projects);
+    const progress = item.projects.length ? Math.round(item.projects.reduce((sum, project) => sum + (Number(project.progress) || 0), 0) / item.projects.length) : 0;
+    return {
+      ...item,
+      economy,
+      progress,
+      overdue: item.tasks.filter((task) => task.status === "Просрочено").length,
+      review: item.tasks.filter((task) => task.status === "На проверке").length,
+    };
+  });
   const bottlenecks = ["Новая", "В работе", "На проверке", "Правки", "Просрочено"]
-    .map((status) => ({ status, count: allTasks.filter((task) => task.status === status).length }))
+    .map((status) => ({ status, count: periodTasks.filter((task) => task.status === status).length }))
     .sort((a, b) => b.count - a.count);
 
   return (
@@ -6875,7 +6990,7 @@ function AnalyticsModule({ projectItems, allTasks, role }) {
         <div className="section-row">
           <div>
             <h3>Период аналитики</h3>
-            <p className="section-hint">Сейчас период — управленческий фильтр MVP. Когда занесём даты старта/закрытия и историю завершённых проектов, эти кнопки будут считать месяц, квартал, полгода и год по факту.</p>
+            <p className="section-hint">Период фильтрует проекты по дате старта, дате окончания или созданию карточки. Так видно месяц, квартал, полгода и год без смешивания всей истории.</p>
           </div>
           <span className="muted-chip">Срез: {periodLabels[period]}</span>
         </div>
@@ -6903,7 +7018,7 @@ function AnalyticsModule({ projectItems, allTasks, role }) {
         <h3>Контроль владельца</h3>
         <p className="section-hint">Базовый список нужен для поиска проблемных проектов. Глубже смотрим: где просрочка, какой этап завис, кто отвечает и что стоит денег.</p>
         <div className="analytics-list">
-          {projectItems.map((project) => (
+          {periodProjects.map((project) => (
             <div key={project.id}>
               <b>{project.id}</b>
               <span>{project.title}</span>
@@ -6914,6 +7029,20 @@ function AnalyticsModule({ projectItems, allTasks, role }) {
         </div>
       </section>
       <section className="analytics-grid">
+        <div className="office-card">
+          <h3>Регионы: деньги и риски</h3>
+          <div className="analytics-list">
+            {regionAnalytics.map((item) => (
+              <div key={item.name}>
+                <b>{item.name}</b>
+                <span>{item.projects.length} проектов · прогресс {item.progress}% · просрочки {item.overdue}</span>
+                <em className={cn("risk-chip", item.overdue ? "red" : item.review ? "yellow" : "green")}>{item.overdue ? "красная зона" : item.review ? "на проверке" : "в норме"}</em>
+                <strong>{canSeeFinance ? money(item.economy.contractAmount) : `${item.tasks.length} задач`}</strong>
+              </div>
+            ))}
+            {!regionAnalytics.length ? <div className="empty">В выбранном периоде нет проектов по регионам.</div> : null}
+          </div>
+        </div>
         <div className="office-card">
           <h3>Направления: деньги и риски</h3>
           <div className="analytics-list">
@@ -6935,7 +7064,7 @@ function AnalyticsModule({ projectItems, allTasks, role }) {
             {bottlenecks.map((item) => (
               <div key={item.status}>
                 <span>{item.status}</span>
-                <div className="bar"><i className={cn("bar-fill", item.status === "Просрочено" ? "red" : item.status === "На проверке" ? "yellow" : "green")} style={{ width: `${Math.max(4, allTasks.length ? Math.round((item.count / allTasks.length) * 100) : 0)}%` }} /></div>
+                <div className="bar"><i className={cn("bar-fill", item.status === "Просрочено" ? "red" : item.status === "На проверке" ? "yellow" : "green")} style={{ width: `${Math.max(4, periodTasks.length ? Math.round((item.count / periodTasks.length) * 100) : 0)}%` }} /></div>
                 <b>{item.count}</b>
               </div>
             ))}
@@ -7898,6 +8027,7 @@ function SmetaOfficePrototype() {
   const [actionNotice, setActionNotice] = useState("");
   const [moscowNow, setMoscowNow] = useState(() => new Date());
   const [systemHealth, setSystemHealth] = useState(null);
+  const [availableWorkItems, setAvailableWorkItems] = useState(() => readStoredValue("smeta.availableWork", []));
 
   const currentRole = roles.find((item) => item.id === role) ?? roles[0];
   const executorDirectory = useMemo(() => buildExecutorDirectory(executors, users), [executors, users]);
@@ -7961,12 +8091,13 @@ function SmetaOfficePrototype() {
   useEffect(() => {
     let alive = true;
     async function loadServerState() {
-      const [serverProjects, serverExecutors, serverUsers, serverPartners, serverSalesLeads] = await Promise.all([
+      const [serverProjects, serverExecutors, serverUsers, serverPartners, serverSalesLeads, serverAvailableWork] = await Promise.all([
         apiGet("/projects", null),
         apiGet("/executors", null),
         apiGet("/users", null),
         apiGet("/partners", null),
         apiGet("/sales-leads", null),
+        apiGet("/available-work", []),
       ]);
       if (!alive) return;
       if (Array.isArray(serverProjects)) {
@@ -7992,6 +8123,10 @@ function SmetaOfficePrototype() {
         const nextSalesLeads = mergeSalesLeads(serverSalesLeads);
         setSalesLeadsState(nextSalesLeads);
         writeStoredValue("smeta.salesLeads", nextSalesLeads);
+      }
+      if (Array.isArray(serverAvailableWork)) {
+        setAvailableWorkItems(serverAvailableWork);
+        writeStoredValue("smeta.availableWork", serverAvailableWork);
       }
     }
     loadServerState();
@@ -8060,6 +8195,29 @@ function SmetaOfficePrototype() {
       apiPut("/partners", next);
       return next;
     });
+  }
+
+  async function submitWorkBid(task, application) {
+    const response = await apiPost("/work-bids", {
+      projectId: task.projectId,
+      taskId: task.id,
+      taskName: task.name,
+      application,
+    }, null);
+    if (response?.ok) {
+      if (Array.isArray(response.availableWork)) {
+        setAvailableWorkItems(response.availableWork);
+        writeStoredValue("smeta.availableWork", response.availableWork);
+      }
+      if (Array.isArray(response.projects)) {
+        const nextProjects = mergeDemoProductionProjects(response.projects);
+        setProjectItemsState(nextProjects);
+        writeStoredValue("smeta.projects", nextProjects);
+      }
+      showAction("Отклик сохранён на сервере и виден руководителю проекта");
+      return;
+    }
+    showAction("Отклик сохранён локально. Сервер не принял заявку или недоступен.");
   }
 
   const visibleProjects = useMemo(() => {
@@ -8332,8 +8490,8 @@ function SmetaOfficePrototype() {
   }
 
   function updateProject(projectId, patch) {
-    if (!["owner", "admin"].includes(role)) {
-      showAction("Редактировать проект может только владелец или администратор");
+    if (!roleCan(role, "manageProjects")) {
+      showAction("Редактировать проект может владелец, администратор, управляющий или руководитель проекта в рамках своего доступа");
       return;
     }
     setProjectItems((items) =>
@@ -8364,7 +8522,7 @@ function SmetaOfficePrototype() {
               channel: "internal",
               author: session?.name || "Система",
               role,
-              text: "Данные проекта отредактированы администратором.",
+              text: `Данные проекта отредактированы: ${session?.name || role}.`,
               at: new Intl.DateTimeFormat("ru-RU", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" }).format(new Date()),
             },
           ],
@@ -8402,8 +8560,8 @@ function SmetaOfficePrototype() {
   }
 
   function distributeProjectSectionBudget(projectId) {
-    if (!["owner", "admin"].includes(role)) {
-      showAction("Распределять бюджет исполнителя может только владелец или администратор");
+    if (!roleCan(role, "manageProjects") && !roleCan(role, "editFinance")) {
+      showAction("Распределять бюджет исполнителя может руководитель проекта, управляющий, владелец или финансы");
       return;
     }
 
@@ -8471,6 +8629,62 @@ function SmetaOfficePrototype() {
       })
     );
     showAction("Бюджет исполнителя распределён по оплачиваемым этапам");
+  }
+
+  function approveSectionPayment(projectId, sectionId, approvalType) {
+    if (!roleCan(role, "manageProjects") && !roleCan(role, "editFinance")) {
+      showAction("Согласование оплаты доступно руководителю проекта, управляющему, владельцу или финансам");
+      return;
+    }
+    const nowIso = new Date().toISOString();
+    const nowText = new Intl.DateTimeFormat("ru-RU", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" }).format(new Date());
+    setProjectItems((items) =>
+      items.map((project) => {
+        if (project.id !== projectId) return project;
+        const nextSections = projectSections(project).map((section) => {
+          if ((section.id || section.name) !== sectionId) return section;
+          if (approvalType === "client") {
+            return {
+              ...section,
+              clientApproved: true,
+              clientApprovedAt: nowIso,
+              clientApprovalStatus: "согласовано",
+            };
+          }
+          const executorCost = Number(section.executorCost) || 0;
+          const paid = Number(section.paid) || 0;
+          return {
+            ...section,
+            internalApproved: true,
+            paymentApproved: true,
+            paymentApprovedAt: nowIso,
+            paymentApprovedBy: session?.name || role,
+            financeStatus: paid >= executorCost && executorCost > 0 ? "выплачено" : "к выплате",
+            paymentStatus: paid >= executorCost && executorCost > 0 ? "выплачено" : "к выплате",
+            balance: Math.max(executorCost - paid, 0),
+          };
+        });
+        const sectionName = nextSections.find((section) => (section.id || section.name) === sectionId)?.name || "этап";
+        return {
+          ...project,
+          sections: nextSections,
+          chat: [
+            ...(project.chat || []),
+            {
+              id: `chat-${Date.now()}`,
+              channel: "internal",
+              author: session?.name || "SmetaOffice",
+              role,
+              text: approvalType === "client"
+                ? `Клиентское согласование по этапу «${sectionName}» зафиксировано.`
+                : `Оплата исполнителю по этапу «${sectionName}» согласована. Ответственный за качество результата: ${session?.name || role}.`,
+              at: nowText,
+            },
+          ],
+        };
+      })
+    );
+    showAction(approvalType === "client" ? "Согласование клиента зафиксировано" : "Оплата исполнителю согласована");
   }
 
   function deleteProject(projectId) {
@@ -8755,11 +8969,11 @@ function SmetaOfficePrototype() {
         </header>
 
         <div className="office-content">
-          {role === "executor" ? <ExecutorPersonalAccount allTasks={allTasks} session={effectiveAccessUser} activeSection={activeSection} /> : null}
+          {role === "executor" ? <ExecutorPersonalAccount allTasks={allTasks} session={effectiveAccessUser} activeSection={activeSection} availableWorks={availableWorkItems} onApplyForWork={submitWorkBid} /> : null}
 
           {role !== "executor" && activeSection === "executors" ? <ExecutorsModule role={role} executors={executorDirectory} setExecutors={setExecutors} allTasks={visibleTasks} /> : null}
 
-          {role !== "executor" && activeSection === "integrations" ? <IntegrationsModule /> : null}
+          {role !== "executor" && activeSection === "integrations" ? <IntegrationsModule setSalesLeads={setSalesLeads} /> : null}
 
           {role !== "executor" && activeSection === "sales" ? (
             <SalesLeadsModule
@@ -8831,6 +9045,7 @@ function SmetaOfficePrototype() {
               onAddClientParticipant={addClientParticipant}
               onCreateApproval={createApproval}
               onTransmitClientStatus={transmitClientStatus}
+              onApproveSectionPayment={approveSectionPayment}
               taskForm={taskForm}
               setTaskForm={setTaskForm}
               onCreateTask={createTask}

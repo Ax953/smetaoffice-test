@@ -1512,6 +1512,17 @@ h3 { margin: 0; }
   cursor: not-allowed;
 }
 .stage-editor-wide { grid-column: span 4; }
+.stage-approval-actions {
+  grid-column: span 3;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.stage-approval-actions button {
+  min-height: 34px;
+  padding: 8px 10px;
+  font-size: 12px;
+}
 .stage-note {
   color: #64748b;
   font-size: 12px;
@@ -3470,7 +3481,7 @@ h3 { margin: 0; }
   .owner-risk-list > button, .owner-stage-timeline > button { grid-template-columns: 1fr; }
   .available-work-meta { justify-items: start; text-align: left; }
   .wizard-header, .create-project-summary { flex-direction: column; align-items: stretch; }
-  .stage-editor-wide { grid-column: auto; }
+  .stage-editor-wide, .stage-approval-actions { grid-column: auto; }
   .task-table > div, .partner-table > div, .partner-table > button, .project-account-meta, .mapping-table > div, .sync-log > div, .task-board > div, .analytics-list > div, .sections-table > div:not(.empty), .admin-users-table > div, .finance-table > div, .dashboard-table > div, .dashboard-table > button, .task-status-chart > div, .bitrix-map-table > div, .client-participants-list > div, .approval-list > div { grid-template-columns: 1fr; }
   .finance-table > div { min-width: 0; }
   .analytics-list strong { justify-self: start; text-align: left; }

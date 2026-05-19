@@ -100,7 +100,7 @@ function sendJson(res, status, payload) {
   res.writeHead(status, {
     "Content-Type": "application/json; charset=utf-8",
     "Access-Control-Allow-Origin": "*",
-    "Access-Control-Allow-Methods": "GET,POST,PUT,PATCH,OPTIONS",
+    "Access-Control-Allow-Methods": "GET,POST,PUT,PATCH,DELETE,OPTIONS",
     "Access-Control-Allow-Headers": "Content-Type, Authorization",
   });
   res.end(JSON.stringify(payload));
@@ -374,6 +374,142 @@ function canAccessSalesLead(user, lead) {
 
 function visibleSalesLeadsFor(user, salesLeads = []) {
   return salesLeads.filter((lead) => canAccessSalesLead(user, lead));
+}
+
+function appendSyncLog(db, event) {
+  return [{ id: `sync-${Date.now()}`, ...event, at: new Date().toISOString() }, ...(db.syncLog || [])].slice(0, 250);
+}
+
+function bitrixMethodUrl(webhookUrl, method) {
+  const base = String(webhookUrl || "").trim().replace(/\/+$/, "");
+  if (!base) throw new Error("Bitrix webhook is not configured");
+  return `${base}/${method}.json`;
+}
+
+async function callBitrixRest(settings = {}, method, params = {}) {
+  const response = await fetch(bitrixMethodUrl(settings.webhookUrl, method), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(params),
+  });
+  const body = await response.json().catch(() => ({}));
+  if (!response.ok || body.error) {
+    throw new Error(body.error_description || body.error || `Bitrix request failed: ${response.status}`);
+  }
+  return body.result ?? body;
+}
+
+function mapBitrixDealStage(stageId = "") {
+  const value = String(stageId || "").toLowerCase();
+  if (value.includes("won") || value.includes("advance") || value.includes("аванс") || value.includes("contract")) return "contract_and_advance";
+  if (value.includes("proposal") || value.includes("quote") || value.includes("кп")) return "proposal_sent";
+  if (value.includes("measure") || value.includes("замер")) return "site_visit";
+  if (value.includes("qualified") || value.includes("квали")) return "qualified";
+  return "qualified";
+}
+
+function inferDirectionFromDeal(deal = {}) {
+  const text = `${deal.TITLE || ""} ${deal.UF_CRM_DIRECTION || ""} ${deal.UF_CRM_SERVICE || ""}`.toLowerCase();
+  if (text.includes("проект") || text.includes("87") || text.includes("пд")) return "project_institute";
+  if (text.includes("ремонт") || text.includes("строит")) return "repair";
+  if (text.includes("недвиж") || text.includes("квартир")) return "realty";
+  if (text.includes("изыск") || text.includes("обслед") || text.includes("обмер")) return "surveys";
+  if (text.includes("комплект")) return "completion";
+  return "design";
+}
+
+function normalizeBitrixDealToSalesLead(deal = {}) {
+  const id = String(deal.ID || deal.id || Date.now());
+  const createdAt = deal.DATE_CREATE || deal.CREATED_DATE || new Date().toISOString();
+  const region = normalizeRegionName(deal.UF_CRM_REGION || deal.UF_CRM_OBJECT_REGION || deal.REGION || deal.CITY || "Все регионы");
+  return {
+    id: `B24-${id}`,
+    bitrixDealId: id,
+    clientName: deal.TITLE || `Сделка Bitrix24 #${id}`,
+    source: "Bitrix24",
+    direction: inferDirectionFromDeal(deal),
+    region,
+    city: deal.UF_CRM_CITY || deal.CITY || region,
+    stage: mapBitrixDealStage(deal.STAGE_ID),
+    qualificationStatus: "warm",
+    amount: Number(deal.OPPORTUNITY || deal.AMOUNT || 0) || 0,
+    hunterId: deal.ASSIGNED_BY_ID ? `B24-${deal.ASSIGNED_BY_ID}` : "",
+    farmerId: "",
+    projectId: deal.UF_CRM_SMETAOFFICE_PROJECT_ID || "",
+    createdAt,
+    slaDeadlineAt: new Date(Date.parse(createdAt) + 5 * 60 * 1000).toISOString(),
+    rawStage: deal.STAGE_ID || "",
+    syncStatus: "imported_from_bitrix",
+  };
+}
+
+function mergeSalesLeadsByExternalId(existingLeads = [], incomingLeads = []) {
+  const map = new Map(existingLeads.map((lead) => [lead.bitrixDealId ? `b24:${lead.bitrixDealId}` : lead.id, lead]));
+  incomingLeads.forEach((lead) => {
+    const key = lead.bitrixDealId ? `b24:${lead.bitrixDealId}` : lead.id;
+    map.set(key, { ...(map.get(key) || {}), ...lead, lastBitrixSyncAt: new Date().toISOString() });
+  });
+  return Array.from(map.values());
+}
+
+function isOpenExecutorSlot(item = {}) {
+  const executorName = String(item.executorName || item.executor || item.assignee || item.owner || "").trim().toLowerCase();
+  return !item.executorId && !item.assigneeId && (!executorName || executorName === "-" || executorName === "—" || executorName.includes("не назнач"));
+}
+
+function isPreContractStage(item = {}) {
+  const name = String(item.name || item.sectionName || "").toLowerCase();
+  return ["заяв", "бриф", "замер", "исходн", "техническое задание", "тз"].some((token) => name.includes(token));
+}
+
+function executorSectionList(user = {}, executors = []) {
+  const linkedExecutor = executors.find((executor) => executor.id === user.executorId || executor.userId === user.id || executor.name === user.name);
+  const raw = [
+    ...(Array.isArray(user.executorSections) ? user.executorSections : []),
+    ...(Array.isArray(user.sections) ? user.sections : []),
+    ...(Array.isArray(linkedExecutor?.sections) ? linkedExecutor.sections : []),
+    user.direction,
+    user.position,
+  ];
+  return raw
+    .flatMap((value) => String(value || "").split(/[;,/]/))
+    .map((value) => value.trim().toLowerCase())
+    .filter(Boolean);
+}
+
+function matchesExecutorProfile(item = {}, user = {}, executors = []) {
+  const sections = executorSectionList(user, executors);
+  if (!sections.length) return true;
+  const text = `${item.name || ""} ${item.sectionName || ""} ${item.kind || ""} ${item.requiredSpecialization || ""}`.toLowerCase();
+  return sections.some((section) => text.includes(section) || section.includes(text));
+}
+
+function availableWorkForUser(user, projects = [], executors = []) {
+  if (!user || !["executor", "partner", "owner", "admin", "deputy", "pm", "project_manager", "director", "regional_manager"].includes(user.role)) return [];
+
+  return projects.flatMap((project) => {
+    const rows = [...(project.sections || []), ...(project.tasks || [])];
+    return rows
+      .filter((item) => isOpenExecutorSlot(item))
+      .filter((item) => !isPreContractStage(item))
+      .filter((item) => ["owner", "admin", "deputy", "pm", "project_manager", "director", "regional_manager"].includes(user.role) || matchesExecutorProfile(item, user, executors))
+      .map((item, index) => ({
+        id: item.id || `${project.id}-${item.name || index}`,
+        projectId: project.id,
+        projectTitle: project.title,
+        projectRegion: project.region || project.city,
+        projectDirection: project.direction,
+        name: item.name || item.sectionName || "Работа без названия",
+        section: item.sectionName || item.name || "",
+        due: item.due || project.deadline || "",
+        status: item.status || "Новая",
+        executorCost: Number(item.executorCost) || 0,
+        paymentStatus: item.financeStatus || item.paymentStatus || "не рассчитан",
+        yandexLink: item.yandexLink || "",
+        kind: item.sectionName ? "task" : "section",
+        bids: item.bids || [],
+      }));
+  });
 }
 
 function canAccessExecutor(user, executor) {
@@ -714,6 +850,101 @@ const server = http.createServer(async (req, res) => {
       return;
     }
 
+    if (req.method === "GET" && route === "/api/available-work") {
+      const auth = requireAuth(req, res, db);
+      if (!auth) return;
+      sendJson(res, 200, availableWorkForUser(auth.user, db.projects || [], db.executors || []));
+      return;
+    }
+
+    if (req.method === "POST" && route === "/api/work-bids") {
+      const auth = requireAuth(req, res, db);
+      if (!auth) return;
+      if (authMode === "server" && !["executor", "partner", "owner", "admin", "deputy", "pm", "project_manager", "director", "regional_manager"].includes(auth.user.role)) {
+        sendJson(res, 403, { ok: false, error: "Forbidden" });
+        return;
+      }
+
+      const body = await readJsonBody(req);
+      const projectId = String(body.projectId || "").trim();
+      const taskId = String(body.taskId || body.sectionId || "").trim();
+      const taskName = String(body.taskName || body.name || "").trim();
+      const application = body.application || {};
+      const project = (db.projects || []).find((item) => item.id === projectId);
+      if (!project) {
+        sendJson(res, 404, { ok: false, error: "Project not found" });
+        return;
+      }
+
+      const canBidOutsideAssignedProject = ["executor", "partner"].includes(auth.user.role);
+      if (authMode === "server" && !canBidOutsideAssignedProject && !canAccessProject(auth.user, project)) {
+        sendJson(res, 403, { ok: false, error: "Forbidden" });
+        return;
+      }
+
+      const createdBid = {
+        id: `bid-${Date.now()}`,
+        bidderUserId: auth.user.id,
+        bidderName: auth.user.name,
+        bidderRole: auth.user.role,
+        executorId: auth.user.executorId || "",
+        requestedAmount: Number(application.requestedAmount) || 0,
+        offeredDue: String(application.offeredDue || "").slice(0, 80),
+        comment: String(application.comment || "").slice(0, 700),
+        status: "Отклик отправлен",
+        at: new Date().toISOString(),
+      };
+
+      let changed = false;
+      function attachBid(items = []) {
+        return items.map((item, index) => {
+          const currentId = item.id || `${project.id}-${item.name || index}`;
+          const matches = currentId === taskId || item.id === taskId || item.name === taskName || item.sectionName === taskName;
+          if (!matches) return item;
+          if (authMode === "server" && canBidOutsideAssignedProject && (!isOpenExecutorSlot(item) || isPreContractStage(item) || !matchesExecutorProfile(item, auth.user, db.executors || []))) return item;
+          changed = true;
+          const bids = (item.bids || []).filter((bid) => bid.bidderUserId !== auth.user.id && bid.executorId !== auth.user.executorId);
+          return { ...item, bids: [createdBid, ...bids] };
+        });
+      }
+
+      const nextProjects = (db.projects || []).map((item) =>
+        item.id === projectId
+          ? {
+              ...item,
+              sections: attachBid(item.sections || []),
+              tasks: attachBid(item.tasks || []),
+              chat: [
+                ...(item.chat || []),
+                {
+                  id: `chat-${Date.now()}`,
+                  channel: "internal",
+                  author: auth.user.name || "SmetaOffice",
+                  role: auth.user.role,
+                  text: `Получен отклик на работу "${taskName || taskId}" от ${auth.user.name || auth.user.login}.`,
+                  at: new Date().toISOString(),
+                },
+              ],
+            }
+          : item
+      );
+
+      if (!changed) {
+        sendJson(res, 400, { ok: false, error: "Work item is not available for bid" });
+        return;
+      }
+
+      const nextDb = { ...db, projects: nextProjects };
+      await writeDb(nextDb);
+      sendJson(res, 200, {
+        ok: true,
+        bid: createdBid,
+        availableWork: availableWorkForUser(auth.user, nextDb.projects, nextDb.executors || []),
+        projects: authMode === "server" ? visibleProjectsFor(auth.user, nextDb.projects) : nextDb.projects,
+      });
+      return;
+    }
+
     if (req.method === "PUT" && route === "/api/projects") {
       const auth = requireWriteAccess(req, res, db, route);
       if (!auth) return;
@@ -852,18 +1083,108 @@ const server = http.createServer(async (req, res) => {
     if (req.method === "PUT" && route === "/api/integration-settings") {
       if (!requireWriteAccess(req, res, db, route)) return;
       const integrationSettings = await readJsonBody(req);
-      const nextDb = { ...db, integrationSettings };
+      const nextDb = {
+        ...db,
+        integrationSettings,
+        syncLog: appendSyncLog(db, { source: "SmetaOffice", type: "integration_settings", status: "updated", message: "Настройки интеграции обновлены." }),
+      };
       await writeDb(nextDb);
       sendJson(res, 200, nextDb.integrationSettings);
+      return;
+    }
+
+    if (req.method === "GET" && route === "/api/sync-log") {
+      const auth = requireAuth(req, res, db);
+      if (!auth) return;
+      if (authMode === "server" && !canViewFullIntegrationSettings(auth.user)) {
+        sendJson(res, 403, { ok: false, error: "Forbidden" });
+        return;
+      }
+      sendJson(res, 200, db.syncLog || []);
       return;
     }
 
     if (req.method === "POST" && route === "/api/sync-log") {
       if (!requireAuth(req, res, db)) return;
       const event = await readJsonBody(req);
-      const nextDb = { ...db, syncLog: [{ ...event, at: new Date().toISOString() }, ...(db.syncLog || [])].slice(0, 200) };
+      const nextDb = { ...db, syncLog: appendSyncLog(db, event) };
       await writeDb(nextDb);
       sendJson(res, 200, nextDb.syncLog);
+      return;
+    }
+
+    if (req.method === "POST" && route === "/api/bitrix/test") {
+      const auth = requireWriteAccess(req, res, db, "/api/integration-settings");
+      if (!auth) return;
+      if (!db.integrationSettings?.webhookUrl) {
+        const nextDb = {
+          ...db,
+          syncLog: appendSyncLog(db, { source: "Bitrix24", type: "connection_test", status: "error", message: "Webhook не указан." }),
+        };
+        await writeDb(nextDb);
+        sendJson(res, 400, { ok: false, error: "Bitrix webhook is not configured", syncLog: nextDb.syncLog });
+        return;
+      }
+      try {
+        const profile = await callBitrixRest(db.integrationSettings, "profile", {});
+        const nextSettings = { ...db.integrationSettings, lastCheck: new Date().toISOString(), lastStatus: "ok", lastUser: profile?.NAME || profile?.LOGIN || profile?.ID || "Bitrix24" };
+        const nextDb = {
+          ...db,
+          integrationSettings: nextSettings,
+          syncLog: appendSyncLog(db, { source: "Bitrix24", type: "connection_test", status: "ok", message: "Webhook проверен, доступ к Bitrix24 есть." }),
+        };
+        await writeDb(nextDb);
+        sendJson(res, 200, { ok: true, profile, integrationSettings: nextSettings, syncLog: nextDb.syncLog });
+      } catch (error) {
+        const nextDb = {
+          ...db,
+          integrationSettings: { ...db.integrationSettings, lastCheck: new Date().toISOString(), lastStatus: "error" },
+          syncLog: appendSyncLog(db, { source: "Bitrix24", type: "connection_test", status: "error", message: error.message }),
+        };
+        await writeDb(nextDb);
+        sendJson(res, 502, { ok: false, error: error.message, syncLog: nextDb.syncLog });
+      }
+      return;
+    }
+
+    if (req.method === "POST" && route === "/api/bitrix/import-sales-leads") {
+      const auth = requireWriteAccess(req, res, db, "/api/sales-leads");
+      if (!auth) return;
+      if (!db.integrationSettings?.webhookUrl) {
+        const nextDb = {
+          ...db,
+          syncLog: appendSyncLog(db, { source: "Bitrix24", type: "deal_import", status: "error", message: "Webhook не указан." }),
+        };
+        await writeDb(nextDb);
+        sendJson(res, 400, { ok: false, error: "Bitrix webhook is not configured", syncLog: nextDb.syncLog });
+        return;
+      }
+      const body = await readJsonBody(req);
+      try {
+        const result = await callBitrixRest(db.integrationSettings, "crm.deal.list", {
+          order: { DATE_MODIFY: "DESC" },
+          filter: body.filter || {},
+          select: body.select || ["ID", "TITLE", "STAGE_ID", "OPPORTUNITY", "DATE_CREATE", "ASSIGNED_BY_ID", "SOURCE_ID", "UF_*"],
+          start: body.start || 0,
+        });
+        const deals = Array.isArray(result) ? result : Array.isArray(result?.items) ? result.items : [];
+        const importedLeads = deals.map(normalizeBitrixDealToSalesLead);
+        const nextSalesLeads = mergeSalesLeadsByExternalId(db.salesLeads || [], importedLeads);
+        const nextDb = {
+          ...db,
+          salesLeads: nextSalesLeads,
+          syncLog: appendSyncLog(db, { source: "Bitrix24", type: "deal_import", status: "ok", message: `Импортировано/обновлено сделок: ${importedLeads.length}.` }),
+        };
+        await writeDb(nextDb);
+        sendJson(res, 200, { ok: true, imported: importedLeads.length, leads: authMode === "server" ? visibleSalesLeadsFor(auth.user, nextDb.salesLeads) : nextDb.salesLeads, syncLog: nextDb.syncLog });
+      } catch (error) {
+        const nextDb = {
+          ...db,
+          syncLog: appendSyncLog(db, { source: "Bitrix24", type: "deal_import", status: "error", message: error.message }),
+        };
+        await writeDb(nextDb);
+        sendJson(res, 502, { ok: false, error: error.message, syncLog: nextDb.syncLog });
+      }
       return;
     }
 
