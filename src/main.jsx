@@ -1740,7 +1740,7 @@ function sectionAllowed(role, sectionId) {
   if (role === "partner") return ["dashboard", "sales", ...projectSections, "tasks"].includes(sectionId);
   if (role === "sales_manager" || role === "head_of_sales") return salesSections.includes(sectionId);
   if (role === "pm" || role === "project_manager") return ["dashboard", ...projectSections, "tasks", "executors", "analytics", "client"].includes(sectionId);
-  if (role === "director" || role === "regional_manager") return ["dashboard", ...projectSections, "tasks", "executors", "partners", "analytics", "client"].includes(sectionId);
+  if (role === "director" || role === "regional_manager") return ["dashboard", ...projectSections, "tasks", "executors", "partners", "analytics", "finance", "client"].includes(sectionId);
   return ["dashboard", ...projectSections, "tasks", "analytics", "client"].includes(sectionId);
 }
 
@@ -2404,9 +2404,9 @@ function projectEconomy(project) {
   const operatingCosts = 0;
   const payrollCosts = 0;
   const netProfit = grossProfit - operatingCosts - payrollCosts;
-  const splitBase = Math.max(netProfit, 0);
-  const companyShare = Math.round(splitBase * 0.67);
-  const managerShare = Math.round(splitBase * 0.33);
+  const splitBase = 0;
+  const companyShare = 0;
+  const managerShare = 0;
   const margin = contractAmount ? Math.round((grossProfit / contractAmount) * 100) : 0;
 
   return {
@@ -2490,6 +2490,110 @@ function financeSummary(projectItems) {
       redProjects: 0,
     }
   );
+}
+
+function currentMonthKey(date = new Date()) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+}
+
+function currentQuarterKey(date = new Date()) {
+  return `${date.getFullYear()}-Q${Math.floor(date.getMonth() / 3) + 1}`;
+}
+
+function periodLabel(periodKey = "") {
+  if (/^\d{4}-\d{2}$/.test(periodKey)) {
+    const [year, month] = periodKey.split("-");
+    return new Intl.DateTimeFormat("ru-RU", { month: "long", year: "numeric" }).format(new Date(Number(year), Number(month) - 1, 1));
+  }
+  return periodKey || "Период не указан";
+}
+
+function scopeMatchesFinance(item, target) {
+  const region = normalizeRegionName(item?.region || "Все регионы");
+  const direction = item?.direction || "Все направления";
+  const targetRegion = normalizeRegionName(target?.region || "Все регионы");
+  const targetDirection = target?.direction || "Все направления";
+  const regionMatch = region === "Все регионы" || targetRegion === "Все регионы" || region === targetRegion;
+  const directionMatch = direction === "Все направления" || targetDirection === "Все направления" || direction === targetDirection;
+  return regionMatch && directionMatch;
+}
+
+function projectInFinancialPeriod(project, period) {
+  const key = period?.periodKey || currentMonthKey();
+  const dateValue = project.startDate || project.createdAt || project.endDate || "";
+  if (!dateValue) return true;
+  if (/^\d{4}$/.test(key)) return String(dateValue).startsWith(key);
+  if (/^\d{4}-Q\d$/.test(key)) {
+    const [year, quarterRaw] = key.split("-Q");
+    const month = Number(String(dateValue).slice(5, 7));
+    const quarter = Math.floor((month - 1) / 3) + 1;
+    return String(dateValue).startsWith(year) && quarter === Number(quarterRaw);
+  }
+  return String(dateValue).startsWith(key);
+}
+
+function scopedProjectsForFinancePeriod(projectItems, period) {
+  return projectItems.filter((project) => scopeMatchesFinance(period, project) && projectInFinancialPeriod(project, period));
+}
+
+function expenseInPeriod(expense, period) {
+  if (expense.periodKey) return expense.periodKey === period.periodKey;
+  return String(expense.date || "").startsWith(period.periodKey || currentMonthKey());
+}
+
+function periodExpenseTotal(expenses, period) {
+  return expenses
+    .filter((expense) => scopeMatchesFinance(period, expense) && expenseInPeriod(expense, period))
+    .reduce((sum, expense) => sum + (Number(expense.amount) || 0), 0);
+}
+
+function calculateFinancialPeriodBase(period, projectItems, expenses) {
+  const scopedProjects = scopedProjectsForFinancePeriod(projectItems, period);
+  const summary = financeSummary(scopedProjects);
+  const revenue = Number(period.revenueManual) || summary.paidByClient;
+  const projectCosts = Number(period.projectCostsManual) || summary.realizationCost;
+  const grossProfit = Number(period.grossManual) || revenue - projectCosts;
+  const operationalExpenses = periodExpenseTotal(expenses, period);
+  const netBeforeCarry = grossProfit - operationalExpenses;
+  const planRevenue = Number(period.planRevenue) || 0;
+  const planNetProfit = Number(period.planNetProfit) || 0;
+  return { scopedProjects, summary, revenue, projectCosts, grossProfit, operationalExpenses, netBeforeCarry, planRevenue, planNetProfit };
+}
+
+function calculateFinancialPeriodResults(periods = [], projectItems = [], expenses = []) {
+  const sorted = [...periods].sort((a, b) => `${a.region}|${a.direction}|${a.periodKey}`.localeCompare(`${b.region}|${b.direction}|${b.periodKey}`));
+  const carryByScope = new Map();
+  return sorted.map((period) => {
+    const scopeKey = `${normalizeRegionName(period.region || "Все регионы")}|${period.direction || "Все направления"}`;
+    const carryFromPrevious = carryByScope.get(scopeKey) || 0;
+    const openingLoss = Math.max(carryFromPrevious, Number(period.accumulatedLossOpening) || 0);
+    const base = calculateFinancialPeriodBase(period, projectItems, expenses);
+    const distributionBase = Math.max(base.netBeforeCarry - openingLoss, 0);
+    const closingLoss = base.netBeforeCarry >= openingLoss ? 0 : openingLoss - base.netBeforeCarry;
+    carryByScope.set(scopeKey, closingLoss);
+    const companyShare = Math.round(distributionBase * 0.67);
+    const managerShare = Math.round(distributionBase * 0.33);
+    return {
+      ...period,
+      ...base,
+      openingLoss,
+      closingLoss,
+      distributionBase,
+      companyShare,
+      managerShare,
+      revenuePlanExecution: base.planRevenue ? Math.round((base.revenue / base.planRevenue) * 100) : 0,
+      netPlanExecution: base.planNetProfit ? Math.round((base.netBeforeCarry / base.planNetProfit) * 100) : 0,
+      status: base.netBeforeCarry < 0 ? "минус" : distributionBase > 0 ? "к распределению" : "перекрываем минус",
+    };
+  });
+}
+
+function holdingCashSummary(cashAccounts = [], periodRows = []) {
+  const cashTotal = cashAccounts.reduce((sum, account) => sum + (Number(account.balance) || 0), 0);
+  const payableToManagers = periodRows.reduce((sum, period) => sum + (Number(period.managerShare) || 0), 0);
+  const holdingShare = periodRows.reduce((sum, period) => sum + (Number(period.companyShare) || 0), 0);
+  const carryLoss = periodRows.reduce((sum, period) => sum + (Number(period.closingLoss) || 0), 0);
+  return { cashTotal, payableToManagers, holdingShare, carryLoss };
 }
 
 function isExecutorUnassigned(value) {
@@ -7399,9 +7503,44 @@ function AdminModule({ users, setUsers, session, executors = [] }) {
   );
 }
 
-function FinanceModule({ projectItems, role }) {
+function FinanceModule({ projectItems, role, session, financialPeriods = [], setFinancialPeriods, operationalExpenses = [], setOperationalExpenses, cashAccounts = [], setCashAccounts }) {
   const canSeeFinance = roleCan(role, "viewFinance");
+  const canEditFinance = roleCan(role, "editFinance") || ["owner", "deputy"].includes(role);
   const summary = financeSummary(projectItems);
+  const [selectedPeriodKey, setSelectedPeriodKey] = useState(currentMonthKey());
+  const [periodForm, setPeriodForm] = useState({
+    periodType: "month",
+    periodKey: currentMonthKey(),
+    region: session?.region || "Все регионы",
+    direction: session?.direction || "Все направления",
+    revenueManual: "",
+    projectCostsManual: "",
+    grossManual: "",
+    accumulatedLossOpening: "",
+    planRevenue: "",
+    planNetProfit: "",
+    note: "",
+  });
+  const [expenseForm, setExpenseForm] = useState({
+    date: new Date().toISOString().slice(0, 10),
+    periodKey: currentMonthKey(),
+    region: session?.region || "Все регионы",
+    direction: session?.direction || "Все направления",
+    category: "Аренда",
+    amount: "",
+    paymentStatus: "план",
+    source: "ручной ввод",
+    note: "",
+  });
+  const [cashForm, setCashForm] = useState({
+    name: "Основной счёт",
+    type: "Счёт",
+    scope: "Холдинг",
+    region: "Все регионы",
+    direction: "Все направления",
+    balance: "",
+    note: "",
+  });
   const executorPayouts = executorPayoutRows(projectItems);
   const payoutTotals = executorPayouts.reduce(
     (total, row) => ({
@@ -7414,6 +7553,71 @@ function FinanceModule({ projectItems, role }) {
     }),
     { assigned: 0, earned: 0, paid: 0, payable: 0, pendingApproval: 0, inWork: 0 }
   );
+  const scopedFinancialPeriods = financialPeriods.filter((period) => scopeMatchesFinance(period, session || { region: "Все регионы", direction: "Все направления" }) || ["owner", "deputy", "finance", "accountant"].includes(role));
+  const scopedOperationalExpenses = operationalExpenses.filter((expense) => scopeMatchesFinance(expense, session || { region: "Все регионы", direction: "Все направления" }) || ["owner", "deputy", "finance", "accountant"].includes(role));
+  const scopedCashAccounts = cashAccounts.filter((account) => scopeMatchesFinance(account, session || { region: "Все регионы", direction: "Все направления" }) || ["owner", "deputy", "finance", "accountant"].includes(role));
+  const periodRows = calculateFinancialPeriodResults(scopedFinancialPeriods, projectItems, scopedOperationalExpenses);
+  const selectedPeriod = periodRows.find((period) => period.periodKey === selectedPeriodKey) || periodRows[0] || null;
+  const cashSummary = holdingCashSummary(scopedCashAccounts, periodRows);
+  const periodTotals = periodRows.reduce(
+    (total, period) => ({
+      revenue: total.revenue + period.revenue,
+      grossProfit: total.grossProfit + period.grossProfit,
+      operationalExpenses: total.operationalExpenses + period.operationalExpenses,
+      netBeforeCarry: total.netBeforeCarry + period.netBeforeCarry,
+      distributionBase: total.distributionBase + period.distributionBase,
+      companyShare: total.companyShare + period.companyShare,
+      managerShare: total.managerShare + period.managerShare,
+      closingLoss: total.closingLoss + period.closingLoss,
+    }),
+    { revenue: 0, grossProfit: 0, operationalExpenses: 0, netBeforeCarry: 0, distributionBase: 0, companyShare: 0, managerShare: 0, closingLoss: 0 }
+  );
+
+  function addFinancialPeriod() {
+    if (!canEditFinance) {
+      showAction("Финансовые периоды редактируют владелец, заместитель, бухгалтерия или финансы");
+      return;
+    }
+    const item = {
+      id: `fp-${Date.now()}`,
+      ...periodForm,
+      revenueManual: toMoneyNumber(periodForm.revenueManual),
+      projectCostsManual: toMoneyNumber(periodForm.projectCostsManual),
+      grossManual: toMoneyNumber(periodForm.grossManual),
+      accumulatedLossOpening: toMoneyNumber(periodForm.accumulatedLossOpening),
+      planRevenue: toMoneyNumber(periodForm.planRevenue),
+      planNetProfit: toMoneyNumber(periodForm.planNetProfit),
+      updatedAt: new Date().toISOString(),
+    };
+    setFinancialPeriods?.((items) => [item, ...items.filter((period) => !(period.periodKey === item.periodKey && period.region === item.region && period.direction === item.direction))]);
+    setSelectedPeriodKey(item.periodKey);
+    showAction("Финансовый период сохранён");
+  }
+
+  function addOperationalExpense() {
+    if (!canEditFinance) {
+      showAction("Операционные расходы редактируют владелец, заместитель, бухгалтерия или финансы");
+      return;
+    }
+    const amount = toMoneyNumber(expenseForm.amount);
+    if (!amount) {
+      showAction("Укажи сумму расхода");
+      return;
+    }
+    setOperationalExpenses?.((items) => [{ id: `oe-${Date.now()}`, ...expenseForm, amount, updatedAt: new Date().toISOString() }, ...items]);
+    setExpenseForm((next) => ({ ...next, amount: "", note: "" }));
+    showAction("Операционный расход добавлен");
+  }
+
+  function addCashAccount() {
+    if (!canEditFinance) {
+      showAction("Кассы и счета редактируют владелец, заместитель, бухгалтерия или финансы");
+      return;
+    }
+    setCashAccounts?.((items) => [{ id: `cash-${Date.now()}`, ...cashForm, balance: toMoneyNumber(cashForm.balance), updatedAt: new Date().toISOString() }, ...items]);
+    setCashForm((next) => ({ ...next, balance: "", note: "" }));
+    showAction("Счёт / касса добавлены");
+  }
 
   if (!canSeeFinance) {
     return (
@@ -7433,13 +7637,157 @@ function FinanceModule({ projectItems, role }) {
         <StatCard item={{ label: "Сумма договоров", value: money(summary.contractAmount), tone: "blue" }} />
         <StatCard item={{ label: "Поступления факт", value: money(summary.paidByClient), tone: "green" }} />
         <StatCard item={{ label: "Дебиторка", value: money(summary.receivable), tone: "orange" }} />
-        <StatCard item={{ label: "Выделено РП/реализация", value: money(summary.allocatedProductionBudget), tone: "blue" }} />
+        <StatCard item={{ label: "Деньги на счетах/кассах", value: money(cashSummary.cashTotal), tone: "blue" }} />
+      </section>
+
+      <section className="office-card finance-plain-card">
+        <div className="section-row">
+          <div>
+            <h3>Управленческий результат направления / холдинга</h3>
+            <p className="section-hint">67/33 считается только от чистой прибыли периода после операционных расходов. Минусовые периоды переносятся вперёд и перекрываются будущей прибылью.</p>
+          </div>
+          <span className="muted-chip">Периодов: {periodRows.length}</span>
+        </div>
+        <div className="finance-plain-grid">
+          <div><span>Выручка периодов</span><b>{money(periodTotals.revenue)}</b></div>
+          <div><span>Операционные расходы</span><b>{money(periodTotals.operationalExpenses)}</b></div>
+          <div><span>Чистая прибыль до переноса</span><b>{money(periodTotals.netBeforeCarry)}</b></div>
+          <div><span>Накопленный минус</span><b>{money(periodTotals.closingLoss)}</b></div>
+          <div><span>База распределения</span><b>{money(periodTotals.distributionBase)}</b></div>
+          <div><span>Холдинг 67%</span><b>{money(periodTotals.companyShare)}</b></div>
+          <div><span>Управляющие 33%</span><b>{money(periodTotals.managerShare)}</b></div>
+          <div><span>Доступно сейчас</span><b>{money(cashSummary.cashTotal)}</b></div>
+        </div>
+      </section>
+
+      <section className="finance-grid management-finance-grid">
+        <div className="office-card">
+          <div className="section-row">
+            <div>
+              <h3>Финансовые периоды</h3>
+              <p className="section-hint">Месяц / квартал / год по региону и направлению. Если ручные суммы не указаны, система считает от проектов выбранного периода.</p>
+            </div>
+          </div>
+          {canEditFinance ? (
+            <div className="finance-entry-form period-entry-form">
+              <select value={periodForm.periodType} onChange={(event) => setPeriodForm((next) => ({ ...next, periodType: event.target.value, periodKey: event.target.value === "quarter" ? currentQuarterKey() : event.target.value === "year" ? String(new Date().getFullYear()) : currentMonthKey() }))}>
+                <option value="month">Месяц</option>
+                <option value="quarter">Квартал</option>
+                <option value="year">Год</option>
+              </select>
+              <input value={periodForm.periodKey} onChange={(event) => setPeriodForm((next) => ({ ...next, periodKey: event.target.value }))} placeholder="2026-05 / 2026-Q2 / 2026" />
+              <select value={periodForm.region} onChange={(event) => setPeriodForm((next) => ({ ...next, region: event.target.value }))}>
+                {regionOptions.map((item) => <option key={item}>{item}</option>)}
+              </select>
+              <select value={periodForm.direction} onChange={(event) => setPeriodForm((next) => ({ ...next, direction: event.target.value }))}>
+                <option>Все направления</option>
+                {projectDirectionNames().map((item) => <option key={item}>{item}</option>)}
+              </select>
+              <input type="number" value={periodForm.revenueManual} onChange={(event) => setPeriodForm((next) => ({ ...next, revenueManual: event.target.value }))} placeholder="Выручка вручную, ₽" />
+              <input type="number" value={periodForm.projectCostsManual} onChange={(event) => setPeriodForm((next) => ({ ...next, projectCostsManual: event.target.value }))} placeholder="Себестоимость проектов, ₽" />
+              <input type="number" value={periodForm.accumulatedLossOpening} onChange={(event) => setPeriodForm((next) => ({ ...next, accumulatedLossOpening: event.target.value }))} placeholder="Входящий минус, ₽" />
+              <input type="number" value={periodForm.planRevenue} onChange={(event) => setPeriodForm((next) => ({ ...next, planRevenue: event.target.value }))} placeholder="План выручки, ₽" />
+              <input type="number" value={periodForm.planNetProfit} onChange={(event) => setPeriodForm((next) => ({ ...next, planNetProfit: event.target.value }))} placeholder="План чистой прибыли, ₽" />
+              <input value={periodForm.note} onChange={(event) => setPeriodForm((next) => ({ ...next, note: event.target.value }))} placeholder="Комментарий" />
+              <button type="button" className="primary" onClick={addFinancialPeriod}>Сохранить период</button>
+            </div>
+          ) : null}
+          <div className="finance-period-table">
+            <div className="finance-period-head">
+              <b>Период</b><span>Контур</span><strong>Выручка</strong><strong>Опер. расходы</strong><strong>Чистая</strong><strong>Минус</strong><strong>База</strong><strong>67/33</strong>
+            </div>
+            {periodRows.map((period) => (
+              <button key={period.id} type="button" className={selectedPeriod?.id === period.id ? "active" : ""} onClick={() => setSelectedPeriodKey(period.periodKey)}>
+                <b>{periodLabel(period.periodKey)}</b>
+                <span>{period.region} · {period.direction}</span>
+                <strong>{money(period.revenue)}</strong>
+                <strong>{money(period.operationalExpenses)}</strong>
+                <strong className={period.netBeforeCarry >= 0 ? "good" : "bad"}>{money(period.netBeforeCarry)}</strong>
+                <strong>{money(period.closingLoss)}</strong>
+                <strong>{money(period.distributionBase)}</strong>
+                <strong>{money(period.companyShare)} / {money(period.managerShare)}</strong>
+              </button>
+            ))}
+            {!periodRows.length ? <div className="empty">Финансовые периоды пока не заведены. Добавь месяц направления или холдинга.</div> : null}
+          </div>
+        </div>
+
+        <div className="office-card">
+          <h3>Деталь выбранного периода</h3>
+          {selectedPeriod ? (
+            <div className="finance-flow">
+              <div><span>Выручка</span><b>{money(selectedPeriod.revenue)}</b></div>
+              <div><span>Себестоимость проектов</span><b>{money(selectedPeriod.projectCosts)}</b></div>
+              <div><span>Валовая прибыль</span><b>{money(selectedPeriod.grossProfit)}</b></div>
+              <div><span>Операционные расходы</span><b>{money(selectedPeriod.operationalExpenses)}</b></div>
+              <div><span>Входящий минус</span><b>{money(selectedPeriod.openingLoss)}</b></div>
+              <div><span>Чистая прибыль до переноса</span><b>{money(selectedPeriod.netBeforeCarry)}</b></div>
+              <div className="strong"><span>База распределения</span><b>{money(selectedPeriod.distributionBase)}</b></div>
+              <div><span>Холдинг 67%</span><b>{money(selectedPeriod.companyShare)}</b></div>
+              <div><span>Управляющий 33%</span><b>{money(selectedPeriod.managerShare)}</b></div>
+              <div><span>Минус на следующий период</span><b>{money(selectedPeriod.closingLoss)}</b></div>
+            </div>
+          ) : (
+            <div className="empty">Выбери или создай финансовый период.</div>
+          )}
+        </div>
+      </section>
+
+      <section className="finance-grid management-finance-grid">
+        <div className="office-card">
+          <h3>Операционные расходы</h3>
+          {canEditFinance ? (
+            <div className="finance-entry-form expense-entry-form">
+              <input type="date" value={expenseForm.date} onChange={(event) => setExpenseForm((next) => ({ ...next, date: event.target.value, periodKey: event.target.value.slice(0, 7) }))} />
+              <select value={expenseForm.region} onChange={(event) => setExpenseForm((next) => ({ ...next, region: event.target.value }))}>{regionOptions.map((item) => <option key={item}>{item}</option>)}</select>
+              <select value={expenseForm.direction} onChange={(event) => setExpenseForm((next) => ({ ...next, direction: event.target.value }))}><option>Все направления</option>{projectDirectionNames().map((item) => <option key={item}>{item}</option>)}</select>
+              <select value={expenseForm.category} onChange={(event) => setExpenseForm((next) => ({ ...next, category: event.target.value }))}>{["Аренда", "Зарплаты", "Маркетинг", "Реклама", "IT", "Брендинг", "Юристы", "Налоги / комиссии", "Прочие расходы"].map((item) => <option key={item}>{item}</option>)}</select>
+              <input type="number" value={expenseForm.amount} onChange={(event) => setExpenseForm((next) => ({ ...next, amount: event.target.value }))} placeholder="Сумма, ₽" />
+              <input value={expenseForm.note} onChange={(event) => setExpenseForm((next) => ({ ...next, note: event.target.value }))} placeholder="Комментарий / документ" />
+              <button type="button" className="primary" onClick={addOperationalExpense}>Добавить расход</button>
+            </div>
+          ) : null}
+          <div className="finance-mini-list">
+            {scopedOperationalExpenses.slice(0, 8).map((expense) => (
+              <div key={expense.id}>
+                <b>{expense.category}</b>
+                <span>{expense.date || expense.periodKey} · {expense.region} · {expense.direction}</span>
+                <strong>{money(expense.amount)}</strong>
+              </div>
+            ))}
+            {!scopedOperationalExpenses.length ? <div className="empty">Операционные расходы пока не внесены.</div> : null}
+          </div>
+        </div>
+
+        <div className="office-card">
+          <h3>Кассы и счета</h3>
+          {canEditFinance ? (
+            <div className="finance-entry-form cash-entry-form">
+              <input value={cashForm.name} onChange={(event) => setCashForm((next) => ({ ...next, name: event.target.value }))} placeholder="Название счёта / кассы" />
+              <select value={cashForm.type} onChange={(event) => setCashForm((next) => ({ ...next, type: event.target.value }))}><option>Счёт</option><option>Касса</option><option>Резерв</option></select>
+              <select value={cashForm.region} onChange={(event) => setCashForm((next) => ({ ...next, region: event.target.value }))}>{regionOptions.map((item) => <option key={item}>{item}</option>)}</select>
+              <select value={cashForm.direction} onChange={(event) => setCashForm((next) => ({ ...next, direction: event.target.value }))}><option>Все направления</option>{projectDirectionNames().map((item) => <option key={item}>{item}</option>)}</select>
+              <input type="number" value={cashForm.balance} onChange={(event) => setCashForm((next) => ({ ...next, balance: event.target.value }))} placeholder="Остаток, ₽" />
+              <button type="button" className="primary" onClick={addCashAccount}>Добавить</button>
+            </div>
+          ) : null}
+          <div className="finance-mini-list">
+            {scopedCashAccounts.map((account) => (
+              <div key={account.id}>
+                <b>{account.name}</b>
+                <span>{account.type} · {account.region} · {account.direction}</span>
+                <strong>{money(account.balance)}</strong>
+              </div>
+            ))}
+            {!scopedCashAccounts.length ? <div className="empty">Счета и кассы пока не внесены.</div> : null}
+          </div>
+        </div>
       </section>
 
       <section className="office-card finance-plain-card">
         <div>
           <h3>Финансы: что смотреть первым</h3>
-          <p className="section-hint">Сейчас здесь только проектная экономика: договоры, оплаты клиента, затраты на исполнителей/партнёров и условная валовая часть. Кассу компании, аренды и общую бухгалтерию пока не смешиваем с проектами.</p>
+          <p className="section-hint">Ниже осталась проектная экономика: договоры, оплаты клиента, затраты на исполнителей/партнёров и условная валовая часть. Операционные расходы считаются выше, на уровне периода.</p>
         </div>
         <div className="finance-plain-grid">
           <div><span>Клиенты должны оплатить</span><b>{money(summary.receivable)}</b></div>
@@ -7458,16 +7806,17 @@ function FinanceModule({ projectItems, role }) {
             <div><span>3. Комиссия единого центра продаж</span><b>{money(summary.salesCommissionAmount)}</b></div>
             <div><span>4. Валовая прибыль по оплатам</span><b>{money(summary.grossProfit)}</b></div>
             <div><span>5. Долг перед исполнителями / партнёрами</span><b>{money(summary.payable)}</b></div>
-            <div className="strong"><span>6. База для 67/33</span><b>{money(summary.splitBase)}</b></div>
+            <div className="strong"><span>6. Плановая валовая часть компании</span><b>{money(summary.companyPlannedGross)}</b></div>
           </div>
         </div>
 
         <div className="office-card">
-          <h3>Распределение чистой прибыли</h3>
+          <h3>67/33 считается только по периодам</h3>
           <div className="profit-split">
-            <div><span>Доля компании 67%</span><b>{money(summary.companyShare)}</b></div>
-            <div><span>Доля управляющего / РП 33%</span><b>{money(summary.managerShare)}</b></div>
-            <div><span>Если база ≤ 0</span><b>к выплате 0 ₽</b></div>
+            <div><span>База распределения периодов</span><b>{money(periodTotals.distributionBase)}</b></div>
+            <div><span>Холдинг 67%</span><b>{money(periodTotals.companyShare)}</b></div>
+            <div><span>Управляющие 33%</span><b>{money(periodTotals.managerShare)}</b></div>
+            <div><span>Если чистая прибыль ≤ накопленного минуса</span><b>к выплате 0 ₽</b></div>
           </div>
         </div>
       </section>
@@ -7537,7 +7886,7 @@ function FinanceModule({ projectItems, role }) {
         <div className="section-row">
           <div>
             <h3>Проекты и деньги</h3>
-            <p className="section-hint">Колонки идут по смыслу Excel-отчёта: договор, факт оплат, остаток, бюджет реализации, себестоимость исполнителей, остаток бюджета, валовая прибыль и деление 67/33. Зарплаты и операционные затраты в проект не вносим.</p>
+            <p className="section-hint">Колонки идут по смыслу Excel-отчёта: договор, факт оплат, остаток, бюджет реализации, себестоимость исполнителей, остаток бюджета и валовая часть проекта. 67/33 считается только в финансовых периодах после операционных расходов.</p>
           </div>
         </div>
         <div className="finance-table">
@@ -7552,9 +7901,9 @@ function FinanceModule({ projectItems, role }) {
             <strong>Реализация</strong>
             <strong>Остаток РП</strong>
             <strong>Валовая прибыль</strong>
-            <strong>База 67/33</strong>
-            <strong>Компания 67%</strong>
-            <strong>Упр. 33%</strong>
+            <strong>Плановая валовая часть</strong>
+            <strong>Финансовый статус</strong>
+            <strong>67/33</strong>
           </div>
           {projectItems.map((project) => {
             const economy = projectEconomy(project);
@@ -7570,9 +7919,9 @@ function FinanceModule({ projectItems, role }) {
                 <strong>{money(economy.realizationCost)}</strong>
                 <strong className={economy.pmBudgetLeft >= 0 ? "good" : "bad"}>{money(economy.pmBudgetLeft)}</strong>
                 <strong className={economy.grossProfit >= 0 ? "good" : "bad"}>{money(economy.grossProfit)}</strong>
-                <strong className={economy.splitBase > 0 ? "good" : "bad"}>{money(economy.splitBase)}</strong>
-                <strong>{money(economy.companyShare)}</strong>
-                <strong>{money(economy.managerShare)}</strong>
+                <strong className={economy.companyPlannedGross >= 0 ? "good" : "bad"}>{money(economy.companyPlannedGross)}</strong>
+                <strong>{economy.receivable > 0 ? "есть долг" : "оплачено"}</strong>
+                <strong>только период</strong>
               </div>
             );
           })}
@@ -7831,7 +8180,7 @@ function ClientAppModule({ projectItems }) {
   );
 }
 
-function DashboardModule({ visibleProjects, selectedProject, setSelectedId, role, session, query, setQuery, direction, setDirection, chooseFirstAvailable, currentRole, onProjectMessage, onGoSection, salesLeads = [], partners = [], executors = [], users = [] }) {
+function DashboardModule({ visibleProjects, selectedProject, setSelectedId, role, session, query, setQuery, direction, setDirection, chooseFirstAvailable, currentRole, onProjectMessage, onGoSection, salesLeads = [], partners = [], executors = [], users = [], financialPeriods = [], operationalExpenses = [], cashAccounts = [] }) {
   const summary = financeSummary(visibleProjects);
   const canSeeFinance = roleCan(role, "viewFinance");
   const canSeeProductionBudget = roleCan(role, "viewProductionBudget") || canSeeFinance;
@@ -8024,6 +8373,8 @@ function DashboardModule({ visibleProjects, selectedProject, setSelectedId, role
   const leadStats = salesLeadStats(visibleSalesLeads);
   const payoutRows = executorPayoutRows(visibleProjects);
   const executorPayable = payoutRows.reduce((sum, row) => sum + (Number(row.payable) || 0), 0);
+  const financialPeriodRows = calculateFinancialPeriodResults(financialPeriods, visibleProjects, operationalExpenses);
+  const cashSummary = holdingCashSummary(cashAccounts, financialPeriodRows);
   const executorPendingApproval = payoutRows.reduce((sum, row) => sum + (Number(row.pendingApproval) || 0), 0);
   const missingExecutorSections = visibleProjects.flatMap((project) =>
     projectOperationalSignals(project).missingExecutorSections.map((section) => ({ project, section }))
@@ -8696,6 +9047,8 @@ function DashboardModule({ visibleProjects, selectedProject, setSelectedId, role
               <div><span>Оплачено клиентами</span><b>{money(summary.paidByClient)}</b></div>
               <div><span>Осталось оплатить клиентам</span><b>{money(summary.receivable)}</b></div>
               <div><span>Затраты на проекты</span><b>{money(summary.realizationCost)}</b></div>
+              <div><span>Доступно на счетах / кассах</span><b>{money(cashSummary.cashTotal)}</b></div>
+              <div><span>Накопленный минус периодов</span><b>{money(cashSummary.carryLoss)}</b></div>
               <div className="strong"><span>Условная валовая прибыль</span><b>{money(summary.companyPlannedGross)}</b></div>
             </div>
           </div>
@@ -8857,6 +9210,9 @@ function SmetaOfficePrototype() {
   const [users, setUsersState] = useState(() => sanitizeUsersForClient(readStoredValue("smeta.users", demoUsers)).map(normalizeUserRecord));
   const [salesLeads, setSalesLeadsState] = useState(() => mergeSalesLeads(readStoredValue("smeta.salesLeads", [])));
   const [partners, setPartnersState] = useState(() => readStoredValue("smeta.partners", partnerSeed).map(normalizePartnerRecord));
+  const [financialPeriods, setFinancialPeriodsState] = useState(() => readStoredValue("smeta.financialPeriods", []));
+  const [operationalExpenses, setOperationalExpensesState] = useState(() => readStoredValue("smeta.operationalExpenses", []));
+  const [cashAccounts, setCashAccountsState] = useState(() => readStoredValue("smeta.cashAccounts", []));
   const [selectedId, setSelectedId] = useState(() => readStoredValue("smeta.selectedProjectId", ""));
   const [activeSection, setActiveSection] = useState("dashboard");
   const [selectedTaskId, setSelectedTaskId] = useState("");
@@ -8930,13 +9286,16 @@ function SmetaOfficePrototype() {
     if (!session?.id && !readAuthToken()) return;
     let alive = true;
     async function loadServerState() {
-      const [serverProjects, serverExecutors, serverUsers, serverPartners, serverSalesLeads, serverAvailableWork] = await Promise.all([
+      const [serverProjects, serverExecutors, serverUsers, serverPartners, serverSalesLeads, serverAvailableWork, serverFinancialPeriods, serverOperationalExpenses, serverCashAccounts] = await Promise.all([
         apiGet("/projects", null),
         apiGet("/executors", null),
         apiGet("/users", null),
         apiGet("/partners", null),
         apiGet("/sales-leads", null),
         apiGet("/available-work", []),
+        apiGet("/financial-periods", null),
+        apiGet("/operational-expenses", null),
+        apiGet("/cash-accounts", null),
       ]);
       if (!alive) return;
       if (Array.isArray(serverProjects)) {
@@ -8966,6 +9325,18 @@ function SmetaOfficePrototype() {
       if (Array.isArray(serverAvailableWork)) {
         setAvailableWorkItems(serverAvailableWork);
         writeStoredValue("smeta.availableWork", serverAvailableWork);
+      }
+      if (Array.isArray(serverFinancialPeriods)) {
+        setFinancialPeriodsState(serverFinancialPeriods);
+        writeStoredValue("smeta.financialPeriods", serverFinancialPeriods);
+      }
+      if (Array.isArray(serverOperationalExpenses)) {
+        setOperationalExpensesState(serverOperationalExpenses);
+        writeStoredValue("smeta.operationalExpenses", serverOperationalExpenses);
+      }
+      if (Array.isArray(serverCashAccounts)) {
+        setCashAccountsState(serverCashAccounts);
+        writeStoredValue("smeta.cashAccounts", serverCashAccounts);
       }
     }
     loadServerState();
@@ -9032,6 +9403,33 @@ function SmetaOfficePrototype() {
       const next = (typeof updater === "function" ? updater(current) : updater).map(normalizePartnerRecord);
       writeStoredValue("smeta.partners", next);
       apiPut("/partners", next);
+      return next;
+    });
+  }
+
+  function setFinancialPeriods(updater) {
+    setFinancialPeriodsState((current) => {
+      const next = typeof updater === "function" ? updater(current) : updater;
+      writeStoredValue("smeta.financialPeriods", next);
+      apiPut("/financial-periods", next);
+      return next;
+    });
+  }
+
+  function setOperationalExpenses(updater) {
+    setOperationalExpensesState((current) => {
+      const next = typeof updater === "function" ? updater(current) : updater;
+      writeStoredValue("smeta.operationalExpenses", next);
+      apiPut("/operational-expenses", next);
+      return next;
+    });
+  }
+
+  function setCashAccounts(updater) {
+    setCashAccountsState((current) => {
+      const next = typeof updater === "function" ? updater(current) : updater;
+      writeStoredValue("smeta.cashAccounts", next);
+      apiPut("/cash-accounts", next);
       return next;
     });
   }
@@ -9933,6 +10331,9 @@ function SmetaOfficePrototype() {
               partners={visiblePartners}
               executors={executorDirectory}
               users={users}
+              financialPeriods={financialPeriods}
+              operationalExpenses={operationalExpenses}
+              cashAccounts={cashAccounts}
             />
           ) : null}
 
@@ -9992,7 +10393,19 @@ function SmetaOfficePrototype() {
           {role !== "executor" && activeSection === "partners" ? <PartnersModule role={role} session={effectiveAccessUser} partnerItems={partners} visiblePartnerItems={visiblePartners} setPartnerItems={setPartners} /> : null}
           {role !== "executor" && activeSection === "admin" ? <AdminModule users={users} setUsers={setUsers} session={session} executors={executors} /> : null}
           {role !== "executor" && activeSection === "analytics" ? <AnalyticsModule projectItems={visibleProjects} allTasks={visibleTasks} role={role} /> : null}
-          {role !== "executor" && activeSection === "finance" ? <FinanceModule projectItems={visibleProjects} role={role} /> : null}
+          {role !== "executor" && activeSection === "finance" ? (
+            <FinanceModule
+              projectItems={visibleProjects}
+              role={role}
+              session={effectiveAccessUser}
+              financialPeriods={financialPeriods}
+              setFinancialPeriods={setFinancialPeriods}
+              operationalExpenses={operationalExpenses}
+              setOperationalExpenses={setOperationalExpenses}
+              cashAccounts={cashAccounts}
+              setCashAccounts={setCashAccounts}
+            />
+          ) : null}
           {role !== "executor" && activeSection === "client" ? <ClientAppModule projectItems={visibleProjects} /> : null}
         </div>
       </main>

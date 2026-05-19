@@ -20,6 +20,9 @@ const defaultDb = {
   users: [],
   partners: [],
   salesLeads: [],
+  financialPeriods: [],
+  operationalExpenses: [],
+  cashAccounts: [],
   directories: {
     regions: [],
     directions: [],
@@ -385,6 +388,89 @@ function visibleSalesLeadsFor(user, salesLeads = []) {
   return salesLeads.filter((lead) => canAccessSalesLead(user, lead));
 }
 
+function canViewManagementFinance(user) {
+  return ["owner", "deputy", "finance", "accountant", "director", "regional_manager"].includes(user?.role);
+}
+
+function canEditManagementFinance(user) {
+  return ["owner", "deputy", "finance", "accountant"].includes(user?.role);
+}
+
+function canAccessFinanceItem(user, item = {}) {
+  if (!canViewManagementFinance(user)) return false;
+  if (["owner", "deputy", "finance", "accountant"].includes(user.role)) return true;
+  if (!canAccessRegion(user, item)) return false;
+  if (user.role === "regional_manager") return true;
+  if (user.role === "director") {
+    const itemDirection = normalizeDirectionName(item.direction || ALL_DIRECTIONS);
+    const userDirection = normalizeDirectionName(user.direction || ALL_DIRECTIONS);
+    return itemDirection === ALL_DIRECTIONS || userDirection === ALL_DIRECTIONS || itemDirection === userDirection;
+  }
+  return false;
+}
+
+function visibleFinanceItemsFor(user, items = []) {
+  return items.filter((item) => canAccessFinanceItem(user, item));
+}
+
+function safeText(value, max = 160) {
+  return String(value || "").trim().slice(0, max);
+}
+
+function safeMoney(value) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return 0;
+  return Math.max(-1_000_000_000_000, Math.min(Math.round(number), 1_000_000_000_000));
+}
+
+function normalizeFinancialPeriod(item = {}) {
+  return {
+    id: safeText(item.id, 80) || `fp-${Date.now()}`,
+    periodType: ["month", "quarter", "year"].includes(item.periodType) ? item.periodType : "month",
+    periodKey: safeText(item.periodKey, 20),
+    region: normalizeRegionName(item.region || ALL_REGIONS),
+    direction: normalizeDirectionName(item.direction || ALL_DIRECTIONS),
+    revenueManual: safeMoney(item.revenueManual),
+    projectCostsManual: safeMoney(item.projectCostsManual),
+    grossManual: safeMoney(item.grossManual),
+    accumulatedLossOpening: safeMoney(item.accumulatedLossOpening),
+    planRevenue: safeMoney(item.planRevenue),
+    planNetProfit: safeMoney(item.planNetProfit),
+    note: safeText(item.note, 700),
+    updatedAt: new Date().toISOString(),
+  };
+}
+
+function normalizeOperationalExpense(item = {}) {
+  return {
+    id: safeText(item.id, 80) || `oe-${Date.now()}`,
+    periodKey: safeText(item.periodKey, 20),
+    date: safeText(item.date, 30),
+    region: normalizeRegionName(item.region || ALL_REGIONS),
+    direction: normalizeDirectionName(item.direction || ALL_DIRECTIONS),
+    category: safeText(item.category, 80) || "Прочие расходы",
+    amount: Math.max(0, safeMoney(item.amount)),
+    paymentStatus: safeText(item.paymentStatus, 40) || "план",
+    source: safeText(item.source, 80) || "ручной ввод",
+    note: safeText(item.note, 700),
+    updatedAt: new Date().toISOString(),
+  };
+}
+
+function normalizeCashAccount(item = {}) {
+  return {
+    id: safeText(item.id, 80) || `cash-${Date.now()}`,
+    name: safeText(item.name, 120) || "Счёт / касса",
+    type: safeText(item.type, 60) || "Счёт",
+    scope: safeText(item.scope, 80) || "Холдинг",
+    region: normalizeRegionName(item.region || ALL_REGIONS),
+    direction: normalizeDirectionName(item.direction || ALL_DIRECTIONS),
+    balance: safeMoney(item.balance),
+    updatedAt: item.updatedAt || new Date().toISOString(),
+    note: safeText(item.note, 700),
+  };
+}
+
 function appendSyncLog(db, event) {
   return [{ id: `sync-${Date.now()}`, ...event, at: new Date().toISOString() }, ...(db.syncLog || [])].slice(0, 250);
 }
@@ -723,6 +809,7 @@ function requireAuth(req, res, db) {
 
 function canWriteCollection(user, route) {
   if (!user || user.status === "disabled") return false;
+  if (["/api/financial-periods", "/api/operational-expenses", "/api/cash-accounts"].includes(route)) return canEditManagementFinance(user);
   if (["owner", "admin", "deputy"].includes(user.role)) return true;
   if (route === "/api/projects") return ["director", "regional_manager", "pm", "project_manager"].includes(user.role);
   if (route === "/api/executors") return ["regional_admin", "direction_admin", "director", "regional_manager", "pm"].includes(user.role);
@@ -836,6 +923,9 @@ const server = http.createServer(async (req, res) => {
           users: (db.users || []).length,
           partners: (db.partners || []).length,
           salesLeads: (db.salesLeads || []).length,
+          financialPeriods: (db.financialPeriods || []).length,
+          operationalExpenses: (db.operationalExpenses || []).length,
+          cashAccounts: (db.cashAccounts || []).length,
         },
         integrations: {
           bitrix24: {
@@ -1170,6 +1260,75 @@ const server = http.createServer(async (req, res) => {
       const nextDb = { ...db, salesLeads: nextSalesLeads };
       await writeDb(nextDb);
       sendJson(res, 200, authMode === "server" ? visibleSalesLeadsFor(auth.user, nextDb.salesLeads) : nextDb.salesLeads);
+      return;
+    }
+
+    if (req.method === "GET" && route === "/api/financial-periods") {
+      const auth = requireAuth(req, res, db);
+      if (!auth) return;
+      if (authMode === "server" && !canViewManagementFinance(auth.user)) {
+        sendJson(res, 403, { ok: false, error: "Forbidden" });
+        return;
+      }
+      sendJson(res, 200, authMode === "server" ? visibleFinanceItemsFor(auth.user, db.financialPeriods || []) : db.financialPeriods || []);
+      return;
+    }
+
+    if (req.method === "PUT" && route === "/api/financial-periods") {
+      const auth = requireWriteAccess(req, res, db, route);
+      if (!auth) return;
+      const body = await readJsonBody(req);
+      const incoming = Array.isArray(body) ? body : [];
+      const normalized = incoming.map(normalizeFinancialPeriod);
+      const nextDb = { ...db, financialPeriods: authMode === "server" ? mergeManagedCollection(db.financialPeriods || [], normalized, auth.user, canAccessFinanceItem) : normalized };
+      await writeDb(nextDb);
+      sendJson(res, 200, authMode === "server" ? visibleFinanceItemsFor(auth.user, nextDb.financialPeriods) : nextDb.financialPeriods);
+      return;
+    }
+
+    if (req.method === "GET" && route === "/api/operational-expenses") {
+      const auth = requireAuth(req, res, db);
+      if (!auth) return;
+      if (authMode === "server" && !canViewManagementFinance(auth.user)) {
+        sendJson(res, 403, { ok: false, error: "Forbidden" });
+        return;
+      }
+      sendJson(res, 200, authMode === "server" ? visibleFinanceItemsFor(auth.user, db.operationalExpenses || []) : db.operationalExpenses || []);
+      return;
+    }
+
+    if (req.method === "PUT" && route === "/api/operational-expenses") {
+      const auth = requireWriteAccess(req, res, db, route);
+      if (!auth) return;
+      const body = await readJsonBody(req);
+      const incoming = Array.isArray(body) ? body : [];
+      const normalized = incoming.map(normalizeOperationalExpense);
+      const nextDb = { ...db, operationalExpenses: authMode === "server" ? mergeManagedCollection(db.operationalExpenses || [], normalized, auth.user, canAccessFinanceItem) : normalized };
+      await writeDb(nextDb);
+      sendJson(res, 200, authMode === "server" ? visibleFinanceItemsFor(auth.user, nextDb.operationalExpenses) : nextDb.operationalExpenses);
+      return;
+    }
+
+    if (req.method === "GET" && route === "/api/cash-accounts") {
+      const auth = requireAuth(req, res, db);
+      if (!auth) return;
+      if (authMode === "server" && !canViewManagementFinance(auth.user)) {
+        sendJson(res, 403, { ok: false, error: "Forbidden" });
+        return;
+      }
+      sendJson(res, 200, authMode === "server" ? visibleFinanceItemsFor(auth.user, db.cashAccounts || []) : db.cashAccounts || []);
+      return;
+    }
+
+    if (req.method === "PUT" && route === "/api/cash-accounts") {
+      const auth = requireWriteAccess(req, res, db, route);
+      if (!auth) return;
+      const body = await readJsonBody(req);
+      const incoming = Array.isArray(body) ? body : [];
+      const normalized = incoming.map(normalizeCashAccount);
+      const nextDb = { ...db, cashAccounts: authMode === "server" ? mergeManagedCollection(db.cashAccounts || [], normalized, auth.user, canAccessFinanceItem) : normalized };
+      await writeDb(nextDb);
+      sendJson(res, 200, authMode === "server" ? visibleFinanceItemsFor(auth.user, nextDb.cashAccounts) : nextDb.cashAccounts);
       return;
     }
 
