@@ -1506,7 +1506,7 @@ const integrationEvents = [
 const appScreens = {
   dashboard: {
     title: "Панель управления",
-    eyebrow: "Сводка владельца",
+    eyebrow: "Управленческий срез",
     desc: "Главный экран: где горит, какие проекты просрочены, кто отвечает и что нужно сделать сегодня.",
   },
   sales: {
@@ -7487,6 +7487,29 @@ function DashboardModule({ visibleProjects, selectedProject, setSelectedId, role
     }, new Map()).values()
   ).map((item) => ({ ...item, economy: financeSummary(item.projects) }));
 
+  const projectInstituteProjects = visibleProjects.filter((project) => normalizeDirectionName(project.direction) === "Проектный институт");
+  const projectInstituteEconomy = financeSummary(projectInstituteProjects);
+  const projectInstituteRisk = projectInstituteProjects.some((project) => effectiveProjectRisk(project) === "red")
+    ? "red"
+    : projectInstituteProjects.some((project) => effectiveProjectRisk(project) === "yellow")
+    ? "yellow"
+    : "green";
+  const projectInstituteRow = { name: "Проектный институт", projects: projectInstituteProjects, economy: projectInstituteEconomy, risk: projectInstituteRisk };
+  const centralStructureRows = [
+    {
+      title: "Проектный институт",
+      subtitle: "Проектная документация, обследования, разделы, сметы, экспертиза",
+      tag: canSeeFinance ? money(projectInstituteEconomy.contractAmount) : `${projectInstituteProjects.length} проектов`,
+      tone: projectInstituteRisk,
+      directionItem: projectInstituteRow,
+    },
+    { title: "IT-сфера", subtitle: "SmetaOffice, SmetaGO, интеграции и внутренние продукты", tag: "продукт", tone: "blue", section: "integrations" },
+    { title: "Финансы и аудит", subtitle: "Оплаты, отчёты, обязательства, выплаты исполнителям", tag: "служба", tone: "green", section: "finance" },
+    { title: "Маркетинг бренда", subtitle: "Общее продвижение SmetaGroup, SmetaGO и регионов", tag: "служба", tone: "blue", section: "analytics" },
+    { title: "SmetaGO приложение", subtitle: "Клиентская витрина, статусы, согласования и чат", tag: "клиент", tone: "yellow", section: "client" },
+    { title: "Юридический блок", subtitle: "Договоры, претензии и сопровождение сделок", tag: "служба", tone: "green", section: "finance" },
+  ];
+
   const taskStatusRows = ["Новая", "В работе", "На проверке", "Правки", "Принято", "Просрочено"].map((status) => ({
     status,
     count: visibleTasks.filter((task) => task.status === status).length,
@@ -7791,31 +7814,51 @@ function DashboardModule({ visibleProjects, selectedProject, setSelectedId, role
             <section className="office-card owner-map-card">
               <div className="section-row">
                 <div>
-                  <h3>Регионы и направления</h3>
-                  <p className="section-hint">Владелец сначала видит карту холдинга, потом проваливается в регион, направление и проект.</p>
+                  <h3>Структура холдинга</h3>
+                  <p className="section-hint">Доход и ответственность идут не только через регионы: есть центральные направления вне регионов и региональные отделения.</p>
                 </div>
                 <button type="button" className="secondary" onClick={() => onGoSection?.("analytics")}>Открыть аналитику</button>
               </div>
-              <div className="owner-region-grid">
-                {regionRows.map((item) => (
-                  <button key={item.name} type="button" onClick={() => openRegionProjects(item)}>
-                    <h4>{item.name}</h4>
-                    <div><span>Проекты</span><b>{item.projects.length}</b></div>
-                    {canSeeFinance ? <div><span>Оплачено</span><b>{money(item.economy.paidByClient)}</b></div> : null}
-                    <div><span>Выполнение</span><b>{item.progress}%</b></div>
-                    <em className={cn("risk-chip", item.risk)}>{riskText(item.risk)}</em>
-                  </button>
-                ))}
-                {!regionRows.length ? <div className="empty">По выбранной роли нет региональных проектов.</div> : null}
-              </div>
-              <div className="owner-direction-strip">
-                {directionRows.slice(0, 7).map((item) => (
-                  <button key={item.name} type="button" onClick={() => openDirectionProjects(item)}>
-                    <b>{item.name}</b>
-                    <span>{item.projects.length} проектов{canSeeFinance ? ` · ${money(item.economy.contractAmount)}` : ""}</span>
-                    <i className={cn("bar-fill", item.risk)} style={{ width: `${Math.max(8, summary.contractAmount ? Math.round((item.economy.contractAmount / summary.contractAmount) * 100) : 8)}%` }} />
-                  </button>
-                ))}
+              <div className="owner-holding-map">
+                <div className="owner-holding-block">
+                  <h4>Центральные направления вне регионов</h4>
+                  <div className="owner-holding-scroll">
+                    {centralStructureRows.map((item) => (
+                      <button
+                        key={item.title}
+                        type="button"
+                        className="owner-holding-item"
+                        onClick={() => item.directionItem ? openDirectionProjects(item.directionItem) : onGoSection?.(item.section || "analytics")}
+                      >
+                        <div>
+                          <b>{item.title}</b>
+                          <span>{item.subtitle}</span>
+                        </div>
+                        <em className={cn("risk-chip", item.tone)}>{item.tag}</em>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="owner-holding-block">
+                  <h4>Региональные отделения</h4>
+                  <div className="owner-regional-scroll">
+                    {regionRows.map((item) => (
+                      <button key={item.name} type="button" className="owner-regional-row" onClick={() => openRegionProjects(item)}>
+                        <div className="owner-regional-title">
+                          <h4>{item.name}</h4>
+                          <em className={cn("risk-chip", item.risk)}>{riskText(item.risk)}</em>
+                        </div>
+                        <div className="owner-regional-metrics">
+                          <span><small>Проекты</small><b>{item.projects.length}</b></span>
+                          {canSeeFinance ? <span><small>Оплачено</small><b>{money(item.economy.paidByClient)}</b></span> : <span><small>Задачи</small><b>{visibleTasks.length}</b></span>}
+                          <span><small>Выполнение</small><b>{item.progress}%</b></span>
+                        </div>
+                      </button>
+                    ))}
+                    {!regionRows.length ? <div className="empty">По выбранной роли нет региональных проектов.</div> : null}
+                  </div>
+                </div>
               </div>
             </section>
 

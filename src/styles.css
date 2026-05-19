@@ -3159,6 +3159,126 @@ h3 { margin: 0; }
   height: 4px;
   border-radius: 999px;
 }
+.owner-holding-map {
+  display: grid;
+  grid-template-columns: minmax(0, .95fr) minmax(0, 1.15fr);
+  gap: 14px;
+  margin-top: 16px;
+}
+.owner-holding-block {
+  min-width: 0;
+  max-height: 430px;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  overflow: hidden;
+  border: 1px solid #dbe5ef;
+  border-radius: 18px;
+  background: #f8fafc;
+  padding: 14px;
+}
+.owner-holding-block > h4 {
+  margin: 0 0 12px;
+  color: #0f172a;
+  font-size: 16px;
+}
+.owner-holding-scroll,
+.owner-regional-scroll {
+  min-height: 0;
+  display: grid;
+  align-content: start;
+  gap: 10px;
+  max-height: 352px;
+  overflow-y: auto;
+  padding-right: 8px;
+  scrollbar-width: thin;
+  scrollbar-color: #015884 #dbe8f0;
+}
+.owner-holding-scroll::-webkit-scrollbar,
+.owner-regional-scroll::-webkit-scrollbar { width: 8px; }
+.owner-holding-scroll::-webkit-scrollbar-track,
+.owner-regional-scroll::-webkit-scrollbar-track {
+  background: #dbe8f0;
+  border-radius: 999px;
+}
+.owner-holding-scroll::-webkit-scrollbar-thumb,
+.owner-regional-scroll::-webkit-scrollbar-thumb {
+  background: #015884;
+  border-radius: 999px;
+}
+.owner-holding-item,
+.owner-regional-row {
+  min-width: 0;
+  border: 1px solid #dbe5ef;
+  border-radius: 16px;
+  background: #fff;
+  padding: 13px;
+  text-align: left;
+}
+.owner-holding-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+}
+.owner-holding-item b,
+.owner-holding-item span {
+  display: block;
+}
+.owner-holding-item span {
+  margin-top: 5px;
+  color: #64748b;
+  font-size: 13px;
+  line-height: 1.35;
+}
+.owner-holding-item em {
+  justify-self: end;
+  font-style: normal;
+  white-space: nowrap;
+}
+.owner-regional-row {
+  display: grid;
+  gap: 10px;
+}
+.owner-regional-title {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+.owner-regional-title h4 {
+  margin: 0;
+  color: #0f172a;
+  font-size: 15px;
+}
+.owner-regional-title em {
+  font-style: normal;
+  white-space: nowrap;
+}
+.owner-regional-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+.owner-regional-metrics span {
+  min-width: 0;
+  display: block;
+  border-radius: 12px;
+  background: #f1f5f9;
+  padding: 9px;
+}
+.owner-regional-metrics small,
+.owner-regional-metrics b {
+  display: block;
+}
+.owner-regional-metrics small {
+  color: #64748b;
+  font-size: 11px;
+}
+.owner-regional-metrics b {
+  margin-top: 4px;
+  color: #020617;
+  font-size: 13px;
+}
 .owner-risk-list {
   display: grid;
   gap: 10px;
@@ -3555,7 +3675,7 @@ h3 { margin: 0; }
   .workspace-grid, .projects-layout, .details-grid, .project-chat-layout, .executors-layout, .executor-profile-layout, .account-layout, .integration-grid, .client-app-grid, .task-detail-grid, .bitrix-bridge-grid, .safe-sync-grid { grid-template-columns: 1fr; }
   .projects-list, .drill-card-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .executor-list { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .owner-two-grid, .owner-project-grid, .role-command-grid { grid-template-columns: 1fr; }
+  .owner-two-grid, .owner-project-grid, .role-command-grid, .owner-holding-map { grid-template-columns: 1fr; }
   .owner-kpi-grid, .owner-region-grid, .owner-people-grid, .role-kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
@@ -3596,7 +3716,7 @@ h3 { margin: 0; }
 @media (max-width: 1280px) {
   .project-command-center { grid-template-columns: 1fr; }
   .owner-problem-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-  .owner-two-grid, .owner-project-grid, .role-command-grid { grid-template-columns: 1fr; }
+  .owner-two-grid, .owner-project-grid, .role-command-grid, .owner-holding-map { grid-template-columns: 1fr; }
   .owner-kpi-grid, .owner-region-grid, .owner-people-grid, .role-kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .project-lifecycle-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
@@ -3622,6 +3742,18 @@ h3 { margin: 0; }
   .owner-payment-table > div,
   .owner-payment-table > button {
     grid-template-columns: 1fr;
+  }
+  .owner-holding-item,
+  .owner-regional-title,
+  .owner-regional-metrics {
+    grid-template-columns: 1fr;
+  }
+  .owner-regional-title {
+    flex-direction: column;
+  }
+  .owner-holding-item em,
+  .owner-regional-title em {
+    justify-self: start;
   }
   .command-next-action {
     min-width: 0;
