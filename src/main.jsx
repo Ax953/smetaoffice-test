@@ -4566,12 +4566,14 @@ function ExecutorsModule({ role, executors, setExecutors, allTasks = [] }) {
   );
 }
 
-function ExecutorPersonalAccount({ allTasks, session, activeSection, availableWorks = [], onApplyForWork }) {
+function ExecutorPersonalAccount({ allTasks, session, activeSection, availableWorks = [], onApplyForWork, onTaskStatusChange, onTaskMessage }) {
   const executorId = session?.executorId || "EX-001";
-  const personalTasks = allTasks.filter((task) => task.executorId === executorId || task.assigneeId === executorId);
+  const personalTasks = allTasks.filter((task) => taskAssignedToUser({ ...(session || {}), executorId }, task));
   const applicationStorageKey = `smeta.executorApplications.${executorId}`;
   const [applications, setApplications] = useState(() => readStoredValue(applicationStorageKey, []));
   const [bidDrafts, setBidDrafts] = useState({});
+  const [selectedProjectId, setSelectedProjectId] = useState("");
+  const [taskMessageDrafts, setTaskMessageDrafts] = useState({});
   useEffect(() => {
     setApplications(readStoredValue(applicationStorageKey, []));
   }, [applicationStorageKey]);
@@ -4587,11 +4589,25 @@ function ExecutorPersonalAccount({ allTasks, session, activeSection, availableWo
         id: task.projectId,
         title: task.projectTitle,
         region: task.projectRegion,
+        direction: task.direction,
+        manager: task.projectManager,
         tasks: [],
         progress: 0,
+        assigned: 0,
+        earned: 0,
+        paid: 0,
+        payable: 0,
+        nextDue: task.due || "",
+        risk: "green",
       };
       item.tasks.push(task);
       item.progress = Math.round(item.tasks.reduce((sum, nextTask) => sum + (nextTask.status === "Принято" ? 100 : nextTask.status === "На проверке" ? 80 : nextTask.status === "В работе" ? 55 : 15), 0) / item.tasks.length);
+      item.assigned += Number(task.executorCost) || 0;
+      item.paid += Number(task.paid) || 0;
+      item.earned += taskApprovalState(task).paymentApproved ? Number(task.executorCost) || 0 : 0;
+      item.payable = Math.max(item.earned - item.paid, 0);
+      if (task.status === "Просрочено") item.risk = "red";
+      else if (task.status === "На проверке" && item.risk !== "red") item.risk = "yellow";
       map.set(task.projectId, item);
       return map;
     }, new Map()).values()
@@ -4622,9 +4638,132 @@ function ExecutorPersonalAccount({ allTasks, session, activeSection, availableWo
     new Map([...availableWorks, ...localAvailableWorks].map((task) => [task.id || `${task.projectId}-${task.name}`, task])).values()
   ).slice(0, 12);
   const appliedIds = new Set(applications.map((item) => item.id));
+  const selectedProject = projectSummaries.find((project) => project.id === selectedProjectId) || projectSummaries[0] || null;
+
+  useEffect(() => {
+    if (!projectSummaries.length) {
+      if (selectedProjectId) setSelectedProjectId("");
+      return;
+    }
+    if (!projectSummaries.some((project) => project.id === selectedProjectId)) {
+      setSelectedProjectId(projectSummaries[0].id);
+    }
+  }, [projectSummaries, selectedProjectId]);
 
   function updateBidDraft(taskId, patch) {
     setBidDrafts((current) => ({ ...current, [taskId]: { ...(current[taskId] || {}), ...patch } }));
+  }
+
+  function executorActionLabel(task) {
+    if (["Новая", "Ожидает"].includes(task.status)) return "Начать работу";
+    if (["В работе", "Правки"].includes(task.status)) return "Сдать на проверку";
+    if (task.status === "На проверке") return "Ждёт проверки";
+    if (task.status === "Принято") return taskApprovalState(task).label;
+    return task.status || "Статус не указан";
+  }
+
+  function nextExecutorStatus(task) {
+    if (["Новая", "Ожидает"].includes(task.status)) return "В работе";
+    if (["В работе", "Правки"].includes(task.status)) return "На проверке";
+    return "";
+  }
+
+  function changeMyTaskStatus(task) {
+    const nextStatus = nextExecutorStatus(task);
+    if (!nextStatus) {
+      showAction(executorActionLabel(task));
+      return;
+    }
+    onTaskStatusChange?.(task.projectId, task.id || task.name, nextStatus);
+    showAction(nextStatus === "На проверке" ? "Работа отправлена на проверку РП" : "Работа переведена в статус «В работе»");
+  }
+
+  function sendTaskComment(task) {
+    const taskId = task.id || `${task.projectId}-${task.name}`;
+    const text = (taskMessageDrafts[taskId] || "").trim();
+    if (!text) {
+      showAction("Напиши комментарий перед отправкой");
+      return;
+    }
+    onTaskMessage?.(task, text);
+    setTaskMessageDrafts((current) => ({ ...current, [taskId]: "" }));
+  }
+
+  function openTaskFolder(task) {
+    if (task.yandexLink && String(task.yandexLink).startsWith("http")) {
+      window.open(task.yandexLink, "_blank", "noopener,noreferrer");
+      return;
+    }
+    showAction("Ссылка на Яндекс.Диск для этой работы не привязана");
+  }
+
+  function renderExecutorProjectDetail(project) {
+    if (!project) {
+      return (
+        <section className="office-card executor-project-detail">
+          <div className="empty">Пока нет назначенных проектов.</div>
+        </section>
+      );
+    }
+
+    return (
+      <section className="office-card executor-project-detail">
+        <div className="section-row">
+          <div>
+            <span className="muted-chip">{project.id}</span>
+            <h3>{project.title}</h3>
+            <p className="section-hint">{project.direction || "направление не указано"} · {project.region || "регион не указан"} · РП: {project.manager || "не указан"}</p>
+          </div>
+          <span className={cn("risk-chip", project.risk)}>{riskText(project.risk)}</span>
+        </div>
+
+        <div className="executor-project-kpis">
+          <Info label="Моих работ" value={project.tasks.length} />
+          <Info label="Готовность моего объёма" value={`${project.progress || 0}%`} />
+          <Info label="Начислено по проекту" value={money(project.earned)} />
+          <Info label="К выплате после согласований" value={money(project.payable)} />
+        </div>
+
+        <div className="bar executor-project-progress">
+          <span className={cn("bar-fill", project.risk)} style={{ width: `${Math.max(4, project.progress || 0)}%` }} />
+        </div>
+
+        <div className="executor-stage-table">
+          {project.tasks.map((task) => {
+            const approval = taskApprovalState(task);
+            const taskId = task.id || `${task.projectId}-${task.name}`;
+            const balance = Math.max((Number(task.executorCost) || 0) - (Number(task.paid) || 0), 0);
+            const canMove = Boolean(nextExecutorStatus(task));
+            return (
+              <div key={taskId}>
+                <div className="executor-stage-main">
+                  <span className="muted-chip">{task.kind || "работа"} · {task.section || task.direction}</span>
+                  <h4>{task.name}</h4>
+                  <p>{task.description || "Описание задачи ведётся в карточке проекта и комментариях."}</p>
+                </div>
+                <div className="executor-stage-money">
+                  <em className={cn("status", statusClass(task.status))}>{task.status || "Новая"}</em>
+                  <span>Срок: {task.due || "не указан"}</span>
+                  <b>{money(task.executorCost || 0)}</b>
+                  <small>Выплачено: {money(task.paid || 0)} · остаток {money(balance)}</small>
+                  <strong>{approval.label}</strong>
+                </div>
+                <div className="executor-stage-actions">
+                  <button type="button" className={canMove ? "primary" : "secondary"} onClick={() => changeMyTaskStatus(task)}>{executorActionLabel(task)}</button>
+                  <button type="button" className="secondary" onClick={() => openTaskFolder(task)}>Папка / файлы</button>
+                  <input
+                    value={taskMessageDrafts[taskId] || ""}
+                    onChange={(event) => setTaskMessageDrafts((current) => ({ ...current, [taskId]: event.target.value }))}
+                    placeholder="Комментарий РП по этой работе"
+                  />
+                  <button type="button" className="secondary" onClick={() => sendTaskComment(task)}>Отправить</button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </section>
+    );
   }
 
   function applyForWork(task) {
@@ -4698,7 +4837,7 @@ function ExecutorPersonalAccount({ allTasks, session, activeSection, availableWo
         <section className="office-card">
           <div className="executor-task-list">
             {(projectSummaries.length ? projectSummaries : visibleProjects).map((project) => (
-              <div key={project.id}>
+              <button type="button" key={project.id} className={cn("executor-project-row", selectedProject?.id === project.id && "active")} onClick={() => setSelectedProjectId(project.id)}>
                 <div>
                   <span className="muted-chip">{project.id}</span>
                   <h3>{project.title}</h3>
@@ -4707,17 +4846,18 @@ function ExecutorPersonalAccount({ allTasks, session, activeSection, availableWo
                 <div className="project-account-meta">
                   <em className="status active">Назначен</em>
                   <span>Задач: {project.tasks?.length || 1}</span>
-                  <b>Видимость ограничена</b>
-                  <small>только свои этапы и файлы</small>
+                  <b>{money(project.payable || 0)}</b>
+                  <small>к выплате</small>
                 </div>
                 <div className="bar">
                   <span className="bar-fill green" style={{ width: `${project.progress || 15}%` }} />
                 </div>
-              </div>
+              </button>
             ))}
           </div>
           {!projectSummaries.length ? <p className="section-hint">Пока нет назначенных проектов из рабочей базы.</p> : null}
         </section>
+        {renderExecutorProjectDetail(selectedProject)}
         <section className="office-card">
           <div className="section-row">
             <div>
@@ -9400,7 +9540,17 @@ function SmetaOfficePrototype() {
         </header>
 
         <div className="office-content">
-          {role === "executor" ? <ExecutorPersonalAccount allTasks={allTasks} session={effectiveAccessUser} activeSection={activeSection} availableWorks={availableWorkItems} onApplyForWork={submitWorkBid} /> : null}
+          {role === "executor" ? (
+            <ExecutorPersonalAccount
+              allTasks={allTasks}
+              session={effectiveAccessUser}
+              activeSection={activeSection}
+              availableWorks={availableWorkItems}
+              onApplyForWork={submitWorkBid}
+              onTaskStatusChange={changeTaskStatus}
+              onTaskMessage={addTaskMessage}
+            />
+          ) : null}
 
           {role !== "executor" && activeSection === "executors" ? <ExecutorsModule role={role} executors={executorDirectory} setExecutors={setExecutors} allTasks={visibleTasks} /> : null}
 
