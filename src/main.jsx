@@ -1851,13 +1851,16 @@ async function apiGet(path, fallback) {
 
 async function apiPut(path, value) {
   try {
-    await fetch(`${API_BASE}${path}`, {
+    const response = await fetch(`${API_BASE}${path}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json", ...authHeaders() },
       body: JSON.stringify(value),
     });
+    if (!response.ok) throw new Error(`API ${response.status}`);
+    return await response.json().catch(() => ({ ok: true }));
   } catch {
     // LocalStorage remains the offline fallback.
+    return { ok: false, error: "API недоступен" };
   }
 }
 
@@ -5271,9 +5274,9 @@ function ExecutorPersonalAccount({ allTasks, session, activeSection, availableWo
 }
 
 function IntegrationsModule({ setSalesLeads }) {
-  const [integrationSettings, setIntegrationSettingsState] = useState(() =>
-    readStoredValue("smeta.integrationSettings", { webhookUrl: "", syncMode: "manual", lastCheck: "не запускалась" })
-  );
+  const defaultIntegrationSettings = { webhookUrl: "", syncMode: "manual", lastCheck: "не запускалась", qualifiedStageIds: "", importLimit: 20, writeBackEnabled: false };
+  const [integrationSettings, setIntegrationSettingsState] = useState(defaultIntegrationSettings);
+  const [bitrixStatus, setBitrixStatus] = useState(null);
   const [syncLog, setSyncLog] = useState(() => readStoredValue("smeta.syncLog", []));
   const [integrationNotice, setIntegrationNotice] = useState("");
   const [syncing, setSyncing] = useState(false);
@@ -5281,10 +5284,18 @@ function IntegrationsModule({ setSalesLeads }) {
   useEffect(() => {
     let alive = true;
     async function loadSettings() {
+      try {
+        window.localStorage.removeItem("smeta.integrationSettings");
+      } catch {
+        // Webhook is a secret; keep it on the server, not in localStorage.
+      }
       const settings = await apiGet("/integration-settings", null);
       if (alive && settings && !settings.error) {
-        setIntegrationSettingsState(settings);
-        writeStoredValue("smeta.integrationSettings", settings);
+        setIntegrationSettingsState({ ...defaultIntegrationSettings, ...settings, writeBackEnabled: false });
+      }
+      const status = await apiGet("/bitrix/status", null);
+      if (alive && status && !status.error) {
+        setBitrixStatus(status);
       }
       const log = await apiGet("/sync-log", []);
       if (alive && Array.isArray(log)) {
@@ -5300,11 +5311,30 @@ function IntegrationsModule({ setSalesLeads }) {
 
   function setIntegrationSettings(patch) {
     setIntegrationSettingsState((current) => {
-      const next = { ...current, ...patch };
-      writeStoredValue("smeta.integrationSettings", next);
-      apiPut("/integration-settings", next);
-      return next;
+      return { ...current, ...patch, writeBackEnabled: false };
     });
+  }
+
+  async function refreshBitrixStatus() {
+    const status = await apiGet("/bitrix/status", null);
+    if (status && !status.error) setBitrixStatus(status);
+  }
+
+  async function saveIntegrationSettings() {
+    setSyncing(true);
+    const result = await apiPut("/integration-settings", integrationSettings);
+    setSyncing(false);
+    if (result && !result.error && result.webhookUrl !== undefined) {
+      setIntegrationSettingsState({ ...defaultIntegrationSettings, ...result, writeBackEnabled: false });
+      await refreshBitrixStatus();
+      const message = "Настройки Bitrix24 сохранены. Обратная запись в Bitrix отключена.";
+      setIntegrationNotice(message);
+      showAction(message);
+      return;
+    }
+    const message = `Настройки Bitrix24 не сохранены: ${result?.error || "нет прав или API недоступен"}`;
+    setIntegrationNotice(message);
+    showAction(message);
   }
 
   async function runBitrixTest() {
@@ -5312,13 +5342,13 @@ function IntegrationsModule({ setSalesLeads }) {
     const result = await apiPost("/bitrix/test", {}, { ok: false, error: "Bitrix webhook не настроен или API недоступен" });
     setSyncing(false);
     if (result?.integrationSettings) {
-      setIntegrationSettingsState(result.integrationSettings);
-      writeStoredValue("smeta.integrationSettings", result.integrationSettings);
+      setIntegrationSettingsState({ ...defaultIntegrationSettings, ...result.integrationSettings, writeBackEnabled: false });
     }
     if (Array.isArray(result?.syncLog)) {
       setSyncLog(result.syncLog);
       writeStoredValue("smeta.syncLog", result.syncLog);
     }
+    await refreshBitrixStatus();
     const message = result?.ok ? "Bitrix24 доступен. Можно запускать ручной импорт тёплых сделок." : `Проверка Bitrix24 не прошла: ${result?.error || "нет ответа"}`;
     setIntegrationNotice(message);
     showAction(message);
@@ -5326,7 +5356,7 @@ function IntegrationsModule({ setSalesLeads }) {
 
   async function importBitrixDeals() {
     setSyncing(true);
-    const result = await apiPost("/bitrix/import-sales-leads", {}, { ok: false, error: "Импорт не выполнен" });
+    const result = await apiPost("/bitrix/import-sales-leads", { limit: Number(integrationSettings.importLimit || 20) }, { ok: false, error: "Импорт не выполнен" });
     setSyncing(false);
     if (Array.isArray(result?.leads)) {
       setSalesLeads?.(result.leads);
@@ -5335,16 +5365,19 @@ function IntegrationsModule({ setSalesLeads }) {
       setSyncLog(result.syncLog);
       writeStoredValue("smeta.syncLog", result.syncLog);
     }
+    await refreshBitrixStatus();
     const message = result?.ok ? `Импорт Bitrix24 выполнен. Сделок обновлено: ${result.imported || 0}.` : `Импорт Bitrix24 не выполнен: ${result?.error || "нет ответа"}`;
     setIntegrationNotice(message);
     showAction(message);
   }
 
-  const webhookUrl = integrationSettings.webhookUrl;
-  const syncMode = integrationSettings.syncMode;
-  const lastCheck = integrationSettings.lastCheck;
+  const webhookUrl = integrationSettings.webhookUrl || "";
+  const syncMode = integrationSettings.syncMode || "manual";
+  const lastCheck = bitrixStatus?.lastCheck || integrationSettings.lastCheck || "не запускалась";
+  const qualifiedStageIds = integrationSettings.qualifiedStageIds || "";
 
-  const isConfigured = webhookUrl.trim().length > 12;
+  const isConfigured = Boolean(bitrixStatus?.configured || webhookUrl.trim().length > 12);
+  const importReady = Boolean(bitrixStatus?.importReady);
 
   return (
     <section className="integrations-module">
@@ -5355,16 +5388,16 @@ function IntegrationsModule({ setSalesLeads }) {
           <span>Цель: сделки и задачи не живут отдельно. Bitrix даёт вход, SmetaOffice управляет производством.</span>
         </div>
         <div className={cn("integration-status", isConfigured ? "ready" : "wait")}>
-          <b>{isConfigured ? "Готово к тесту" : "Ждёт вебхук"}</b>
-          <small>{isConfigured ? "можно запускать пилотную синхронизацию" : "нужен входящий вебхук Bitrix24"}</small>
+          <b>{importReady ? "Готово к импорту" : isConfigured ? "Нужны стадии" : "Ждёт вебхук"}</b>
+          <small>{bitrixStatus?.requiredAction || (isConfigured ? "укажи STAGE_ID тёплых сделок" : "нужен входящий вебхук Bitrix24")}</small>
         </div>
       </div>
 
       <section className="stats-grid compact">
-        <StatCard item={{ label: "Срок MVP", value: "3 дня", tone: "red" }} />
-        <StatCard item={{ label: "Потоки", value: "4", tone: "blue" }} />
-        <StatCard item={{ label: "Обязательные поля", value: "12", tone: "orange" }} />
-        <StatCard item={{ label: "Роли доступа", value: "6", tone: "green" }} />
+        <StatCard item={{ label: "Связь Bitrix", value: isConfigured ? "есть" : "нет", tone: isConfigured ? "green" : "red" }} />
+        <StatCard item={{ label: "Тёплые стадии", value: String(bitrixStatus?.qualifiedStageIdsCount || 0), tone: importReady ? "green" : "orange" }} />
+        <StatCard item={{ label: "Лиды в SmetaOffice", value: String(bitrixStatus?.salesLeadsCount ?? 0), tone: "blue" }} />
+        <StatCard item={{ label: "Запись в Bitrix", value: "выкл", tone: "green" }} />
       </section>
 
       <section className="office-card">
@@ -5422,18 +5455,21 @@ function IntegrationsModule({ setSalesLeads }) {
               <p>Вставляем входящий вебхук, выбираем режим, запускаем тестовую синхронизацию.</p>
             </div>
             <div className="section-actions">
+              <button type="button" className="secondary" onClick={saveIntegrationSettings} disabled={syncing}>
+                Сохранить настройки
+              </button>
               <button type="button" className="primary" onClick={runBitrixTest} disabled={syncing}>
                 {syncing ? "Проверяем..." : "Проверить"}
               </button>
-              <button type="button" className="secondary" onClick={importBitrixDeals} disabled={syncing || !isConfigured}>
-                Импортировать тёплые сделки
+              <button type="button" className="secondary" onClick={importBitrixDeals} disabled={syncing || !importReady}>
+                {importReady ? "Импортировать тёплые сделки" : "Нужны webhook и STAGE_ID"}
               </button>
             </div>
           </div>
           <div className="integration-form">
             <label>
               Входящий вебхук Bitrix24
-              <input value={webhookUrl} onChange={(event) => setIntegrationSettings({ webhookUrl: event.target.value })} placeholder="https://...bitrix24.ru/rest/..." />
+              <input type="password" value={webhookUrl} onChange={(event) => setIntegrationSettings({ webhookUrl: event.target.value })} placeholder="https://...bitrix24.ru/rest/..." />
             </label>
             <label>
               Режим синхронизации
@@ -5443,10 +5479,23 @@ function IntegrationsModule({ setSalesLeads }) {
                 <option value="realtime">Реальное время через события</option>
               </select>
             </label>
+            <label>
+              STAGE_ID тёплых сделок
+              <input value={qualifiedStageIds} onChange={(event) => setIntegrationSettings({ qualifiedStageIds: event.target.value })} placeholder="например: C1:PREPAYMENT,C1:WON" />
+            </label>
+            <label>
+              Лимит импорта за запуск
+              <input type="number" min="1" max="50" value={integrationSettings.importLimit || 20} onChange={(event) => setIntegrationSettings({ importLimit: event.target.value })} />
+            </label>
             <div className="integration-result">
               <b>Последняя проверка</b>
               <span>{lastCheck}</span>
               <small>Режим: {syncMode === "manual" ? "ручной пилот" : syncMode === "hourly" ? "периодическая синхронизация" : "событийная синхронизация"}</small>
+            </div>
+            <div className="integration-result">
+              <b>Безопасность</b>
+              <span>Read-only импорт. SmetaOffice не меняет сделки Bitrix24.</span>
+              <small>Импорт всего Bitrix запрещён без списка тёплых стадий.</small>
             </div>
             {integrationNotice ? <div className="integration-result"><b>Результат</b><span>{integrationNotice}</span></div> : null}
           </div>

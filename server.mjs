@@ -29,7 +29,16 @@ const defaultDb = {
     financeTemplates: {},
     updatedAt: "",
   },
-  integrationSettings: { webhookUrl: "", syncMode: "manual", lastCheck: "не запускалась" },
+  integrationSettings: {
+    webhookUrl: "",
+    syncMode: "manual",
+    lastCheck: "не запускалась",
+    lastStatus: "",
+    lastUser: "",
+    qualifiedStageIds: "",
+    importLimit: 20,
+    writeBackEnabled: false,
+  },
   syncLog: [],
   accessRequests: [],
   authSessions: {},
@@ -399,6 +408,66 @@ async function callBitrixRest(settings = {}, method, params = {}) {
   return body.result ?? body;
 }
 
+function parseCsvList(value = "") {
+  return String(value || "")
+    .split(/[\n,;]+/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function bitrixIntegrationStatus(db = {}) {
+  const settings = { ...defaultDb.integrationSettings, ...(db.integrationSettings || {}) };
+  const qualifiedStageIds = parseCsvList(settings.qualifiedStageIds);
+  const configured = Boolean(settings.webhookUrl);
+  return {
+    ok: true,
+    configured,
+    syncMode: settings.syncMode || "manual",
+    lastCheck: settings.lastCheck || "не запускалась",
+    lastStatus: settings.lastStatus || "",
+    lastUser: settings.lastUser || "",
+    safeMode: "read_only",
+    writeBackEnabled: false,
+    qualifiedStageIdsCount: qualifiedStageIds.length,
+    importLimit: Number(settings.importLimit || 20),
+    importReady: configured && qualifiedStageIds.length > 0,
+    salesLeadsCount: (db.salesLeads || []).length,
+    lastLog: (db.syncLog || [])[0] || null,
+    requiredAction: !configured
+      ? "Нужно указать входящий вебхук Bitrix24."
+      : qualifiedStageIds.length === 0
+      ? "Нужно указать STAGE_ID тёплых сделок. Импорт всего Bitrix24 запрещён."
+      : "Можно запускать read-only импорт тёплых сделок.",
+  };
+}
+
+const bitrixDealFields = {
+  serviceType: "UF_CRM_1749425490004",
+  projectManager: "UF_CRM_1749425673",
+  projectStartDate: "UF_CRM_1749425736",
+  projectEndDate: "UF_CRM_1749425753",
+  objectName: "UF_CRM_1749471792",
+  advanceAmount: "UF_CRM_1749472042582",
+  region: "UF_CRM_1760087366074",
+  city: "UF_CRM_1761054834674",
+  objectType: "UF_CRM_1761055201264",
+  area: "UF_CRM_1761055254141",
+  clientBudget: "UF_CRM_1761055274310",
+  surveyType: "UF_CRM_1761055759421",
+  projectStage: "UF_CRM_1761055830269",
+  executionDays: "UF_CRM_1761055856097",
+  documentPackage: "UF_CRM_1761055888873",
+  contractPackage: "UF_CRM_1761225812060",
+};
+
+function bitrixValue(deal = {}, ...keys) {
+  for (const key of keys) {
+    const value = deal[key];
+    if (value !== undefined && value !== null && String(value).trim() !== "") return value;
+  }
+  return "";
+}
+
 function mapBitrixDealStage(stageId = "") {
   const value = String(stageId || "").toLowerCase();
   if (value.includes("won") || value.includes("advance") || value.includes("аванс") || value.includes("contract")) return "contract_and_advance";
@@ -409,7 +478,7 @@ function mapBitrixDealStage(stageId = "") {
 }
 
 function inferDirectionFromDeal(deal = {}) {
-  const text = `${deal.TITLE || ""} ${deal.UF_CRM_DIRECTION || ""} ${deal.UF_CRM_SERVICE || ""}`.toLowerCase();
+  const text = `${deal.TITLE || ""} ${deal.UF_CRM_DIRECTION || ""} ${deal.UF_CRM_SERVICE || ""} ${bitrixValue(deal, bitrixDealFields.serviceType, bitrixDealFields.surveyType, bitrixDealFields.projectStage)}`.toLowerCase();
   if (text.includes("проект") || text.includes("87") || text.includes("пд")) return "project_institute";
   if (text.includes("ремонт") || text.includes("строит")) return "repair";
   if (text.includes("недвиж") || text.includes("квартир")) return "realty";
@@ -421,7 +490,9 @@ function inferDirectionFromDeal(deal = {}) {
 function normalizeBitrixDealToSalesLead(deal = {}) {
   const id = String(deal.ID || deal.id || Date.now());
   const createdAt = deal.DATE_CREATE || deal.CREATED_DATE || new Date().toISOString();
-  const region = normalizeRegionName(deal.UF_CRM_REGION || deal.UF_CRM_OBJECT_REGION || deal.REGION || deal.CITY || "Все регионы");
+  const region = normalizeRegionName(bitrixValue(deal, "UF_CRM_REGION", "UF_CRM_OBJECT_REGION", bitrixDealFields.region, "REGION", "CITY") || "Все регионы");
+  const city = bitrixValue(deal, "UF_CRM_CITY", bitrixDealFields.city, "CITY") || region;
+  const amount = Number(bitrixValue(deal, "OPPORTUNITY", "AMOUNT", bitrixDealFields.clientBudget, bitrixDealFields.advanceAmount) || 0) || 0;
   return {
     id: `B24-${id}`,
     bitrixDealId: id,
@@ -429,17 +500,52 @@ function normalizeBitrixDealToSalesLead(deal = {}) {
     source: "Bitrix24",
     direction: inferDirectionFromDeal(deal),
     region,
-    city: deal.UF_CRM_CITY || deal.CITY || region,
+    city,
     stage: mapBitrixDealStage(deal.STAGE_ID),
     qualificationStatus: "warm",
-    amount: Number(deal.OPPORTUNITY || deal.AMOUNT || 0) || 0,
+    amount,
     hunterId: deal.ASSIGNED_BY_ID ? `B24-${deal.ASSIGNED_BY_ID}` : "",
+    hunterName: deal.ASSIGNED_BY_NAME || "",
     farmerId: "",
     projectId: deal.UF_CRM_SMETAOFFICE_PROJECT_ID || "",
     createdAt,
     slaDeadlineAt: new Date(Date.parse(createdAt) + 5 * 60 * 1000).toISOString(),
     rawStage: deal.STAGE_ID || "",
+    rawCategoryId: deal.CATEGORY_ID || "",
+    objectType: bitrixValue(deal, bitrixDealFields.objectType),
+    area: bitrixValue(deal, bitrixDealFields.area),
+    requestText: bitrixValue(deal, "COMMENTS", bitrixDealFields.objectName, bitrixDealFields.documentPackage) || "Импортировано из Bitrix24",
     syncStatus: "imported_from_bitrix",
+  };
+}
+
+function buildBitrixDealImportParams(settings = {}, body = {}) {
+  const customFilter = body && typeof body.filter === "object" && body.filter && Object.keys(body.filter).length > 0 ? body.filter : null;
+  const qualifiedStageIds = parseCsvList(body.qualifiedStageIds || settings.qualifiedStageIds);
+  if (!customFilter && qualifiedStageIds.length === 0) {
+    throw new Error("Qualified Bitrix stages are not configured; refusing to import all deals.");
+  }
+  const filter = customFilter || { "@STAGE_ID": qualifiedStageIds };
+  const limit = Math.max(1, Math.min(Number(body.limit || settings.importLimit || 20), 50));
+  return {
+    order: { DATE_MODIFY: "DESC" },
+    filter,
+    select: body.select || [
+      "ID",
+      "TITLE",
+      "STAGE_ID",
+      "CATEGORY_ID",
+      "OPPORTUNITY",
+      "DATE_CREATE",
+      "DATE_MODIFY",
+      "ASSIGNED_BY_ID",
+      "ASSIGNED_BY_NAME",
+      "SOURCE_ID",
+      "COMMENTS",
+      "UF_*",
+    ],
+    start: body.start || 0,
+    limit,
   };
 }
 
@@ -622,7 +728,7 @@ function canWriteCollection(user, route) {
   if (route === "/api/executors") return ["regional_admin", "direction_admin", "director", "regional_manager", "pm"].includes(user.role);
   if (route === "/api/partners") return ["regional_admin", "direction_admin", "director", "regional_manager"].includes(user.role);
   if (route === "/api/sales-leads") return ["head_of_sales", "sales_manager"].includes(user.role);
-  if (route === "/api/integration-settings") return user.role === "admin";
+  if (route === "/api/integration-settings") return ["owner", "admin", "deputy"].includes(user.role);
   if (route === "/api/users") return [...fullUserAdminRoles, ...scopedUserAdminRoles].includes(user.role);
   if (route === "/api/directories") return ["owner", "admin"].includes(user.role);
   return false;
@@ -730,6 +836,14 @@ const server = http.createServer(async (req, res) => {
           users: (db.users || []).length,
           partners: (db.partners || []).length,
           salesLeads: (db.salesLeads || []).length,
+        },
+        integrations: {
+          bitrix24: {
+            configured: Boolean(db.integrationSettings?.webhookUrl),
+            lastStatus: db.integrationSettings?.lastStatus || "",
+            lastCheck: db.integrationSettings?.lastCheck || "",
+            importReady: Boolean(db.integrationSettings?.webhookUrl) && parseCsvList(db.integrationSettings?.qualifiedStageIds).length > 0,
+          },
         },
       });
       return;
@@ -1087,7 +1201,16 @@ const server = http.createServer(async (req, res) => {
 
     if (req.method === "PUT" && route === "/api/integration-settings") {
       if (!requireWriteAccess(req, res, db, route)) return;
-      const integrationSettings = await readJsonBody(req);
+      const body = await readJsonBody(req);
+      const integrationSettings = {
+        ...defaultDb.integrationSettings,
+        ...(db.integrationSettings || {}),
+        ...body,
+        webhookUrl: String(body.webhookUrl || "").trim(),
+        qualifiedStageIds: parseCsvList(body.qualifiedStageIds).join(","),
+        importLimit: Math.max(1, Math.min(Number(body.importLimit || db.integrationSettings?.importLimit || 20), 50)),
+        writeBackEnabled: false,
+      };
       const nextDb = {
         ...db,
         integrationSettings,
@@ -1120,6 +1243,17 @@ const server = http.createServer(async (req, res) => {
       const nextDb = { ...db, syncLog: appendSyncLog(db, event) };
       await writeDb(nextDb);
       sendJson(res, 200, nextDb.syncLog);
+      return;
+    }
+
+    if (req.method === "GET" && route === "/api/bitrix/status") {
+      const auth = requireAuth(req, res, db);
+      if (!auth) return;
+      if (authMode === "server" && !canViewFullIntegrationSettings(auth.user)) {
+        sendJson(res, 403, { ok: false, error: "Forbidden" });
+        return;
+      }
+      sendJson(res, 200, bitrixIntegrationStatus(db));
       return;
     }
 
@@ -1160,6 +1294,7 @@ const server = http.createServer(async (req, res) => {
     if (req.method === "POST" && route === "/api/bitrix/import-sales-leads") {
       const auth = requireWriteAccess(req, res, db, "/api/sales-leads");
       if (!auth) return;
+      const body = await readJsonBody(req);
       if (!db.integrationSettings?.webhookUrl) {
         const nextDb = {
           ...db,
@@ -1169,15 +1304,10 @@ const server = http.createServer(async (req, res) => {
         sendJson(res, 400, { ok: false, error: "Bitrix webhook is not configured", syncLog: nextDb.syncLog });
         return;
       }
-      const body = await readJsonBody(req);
       try {
-        const result = await callBitrixRest(db.integrationSettings, "crm.deal.list", {
-          order: { DATE_MODIFY: "DESC" },
-          filter: body.filter || {},
-          select: body.select || ["ID", "TITLE", "STAGE_ID", "OPPORTUNITY", "DATE_CREATE", "ASSIGNED_BY_ID", "SOURCE_ID", "UF_*"],
-          start: body.start || 0,
-        });
-        const deals = Array.isArray(result) ? result : Array.isArray(result?.items) ? result.items : [];
+        const params = buildBitrixDealImportParams(db.integrationSettings, body);
+        const result = await callBitrixRest(db.integrationSettings, "crm.deal.list", params);
+        const deals = (Array.isArray(result) ? result : Array.isArray(result?.items) ? result.items : []).slice(0, params.limit);
         const importedLeads = deals.map(normalizeBitrixDealToSalesLead);
         const nextSalesLeads = mergeSalesLeadsByExternalId(db.salesLeads || [], importedLeads);
         const nextDb = {
