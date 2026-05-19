@@ -2066,6 +2066,10 @@ function formatProjectDate(value) {
 function periodStartDate(period, now = new Date()) {
   const start = new Date(now);
   start.setHours(0, 0, 0, 0);
+  if (period === "fiveYears") {
+    start.setFullYear(start.getFullYear() - 4, 0, 1);
+    return start;
+  }
   if (period === "year") {
     start.setMonth(0, 1);
     return start;
@@ -2086,10 +2090,110 @@ function projectDateForAnalytics(project) {
   return parseDateValue(project.startDate || project.createdAt || project.endDate);
 }
 
+function projectAnalyticsDate(project, fallback = new Date()) {
+  return projectDateForAnalytics(project) || fallback;
+}
+
 function projectInPeriod(project, period) {
-  const date = projectDateForAnalytics(project);
-  if (!date) return true;
+  const date = projectAnalyticsDate(project);
   return date >= periodStartDate(period);
+}
+
+function startOfMonth(date) {
+  const value = new Date(date);
+  value.setHours(0, 0, 0, 0);
+  value.setDate(1);
+  return value;
+}
+
+function endOfMonth(date) {
+  const value = startOfMonth(date);
+  value.setMonth(value.getMonth() + 1);
+  value.setMilliseconds(value.getMilliseconds() - 1);
+  return value;
+}
+
+function addMonths(date, amount) {
+  const value = startOfMonth(date);
+  value.setMonth(value.getMonth() + amount);
+  return value;
+}
+
+function dateRangeLabel(start, options = {}) {
+  return new Intl.DateTimeFormat("ru-RU", { month: "long", year: "numeric", ...options }).format(start);
+}
+
+function projectInDateRange(project, start, end) {
+  const date = projectAnalyticsDate(project);
+  return date >= start && date <= end;
+}
+
+function projectOverlapsDateRange(project, start, end) {
+  const analyticsDate = projectAnalyticsDate(project);
+  const projectStart = parseDateValue(project.startDate) || analyticsDate;
+  const projectEnd = parseDateValue(project.endDate) || analyticsDate;
+  projectStart.setHours(0, 0, 0, 0);
+  projectEnd.setHours(23, 59, 59, 999);
+  return projectStart <= end && projectEnd >= start;
+}
+
+function expectedProjectProgressAt(project, atDate = new Date()) {
+  const start = parseDateValue(project.startDate || project.createdAt);
+  const end = parseDateValue(project.endDate);
+  if (!start || !end) return clampPercent(project.progress);
+  const startTime = start.getTime();
+  const endTime = end.getTime();
+  const atTime = Math.min(Math.max(atDate.getTime(), startTime), endTime);
+  if (endTime <= startTime) return 100;
+  return clampPercent(((atTime - startTime) / (endTime - startTime)) * 100);
+}
+
+function planExecutionSummary(projects, atDate = new Date()) {
+  if (!projects.length) return { actual: 0, expected: 0, execution: 0 };
+  const actual = Math.round(projects.reduce((sum, project) => sum + clampPercent(project.progress), 0) / projects.length);
+  const expected = Math.round(projects.reduce((sum, project) => sum + expectedProjectProgressAt(project, atDate), 0) / projects.length);
+  const execution = expected ? clampPercent((actual / expected) * 100) : actual;
+  return { actual, expected, execution };
+}
+
+function lastFiveYearRows(projectItems, canSeeFinance, now = new Date()) {
+  const currentYear = now.getFullYear();
+  return Array.from({ length: 5 }, (_, index) => currentYear - index).map((year) => {
+    const start = new Date(year, 0, 1);
+    const end = new Date(year, 11, 31, 23, 59, 59, 999);
+    const yearProjects = projectItems.filter((project) => projectInDateRange(project, start, end));
+    const activeProjects = projectItems.filter((project) => projectOverlapsDateRange(project, start, end));
+    const economy = financeSummary(yearProjects);
+    const plan = planExecutionSummary(activeProjects, year === currentYear ? now : end);
+    return {
+      year,
+      projects: yearProjects.length,
+      activeProjects: activeProjects.length,
+      economy,
+      plan,
+      result: canSeeFinance ? economy.companyPlannedGross : plan.actual,
+    };
+  });
+}
+
+function previousMonthRows(projectItems, canSeeFinance, now = new Date()) {
+  return Array.from({ length: 12 }, (_, index) => {
+    const start = addMonths(now, -index);
+    const end = endOfMonth(start);
+    const monthProjects = projectItems.filter((project) => projectInDateRange(project, start, end));
+    const activeProjects = projectItems.filter((project) => projectOverlapsDateRange(project, start, end));
+    const economy = financeSummary(monthProjects);
+    const plan = planExecutionSummary(activeProjects, end > now ? now : end);
+    return {
+      id: `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, "0")}`,
+      label: dateRangeLabel(start),
+      projects: monthProjects.length,
+      activeProjects: activeProjects.length,
+      economy,
+      plan,
+      result: canSeeFinance ? economy.companyPlannedGross : plan.actual,
+    };
+  });
 }
 
 function daysBetween(start, end) {
@@ -5453,10 +5557,7 @@ function LoginScreen({ users, onLogin, onRegister, allowDemoFallback = false, al
         {allowDemoFallback && import.meta.env.DEV ? (
           <div className="demo-logins">
             <b>Демо-доступы</b>
-            <span>owner / owner</span>
-            <span>pm / pm</span>
-            <span>executor / executor</span>
-            <span>finance / finance</span>
+            <span>Локальные тестовые аккаунты доступны только в режиме разработки.</span>
           </div>
         ) : null}
       </section>
@@ -7070,6 +7171,7 @@ function AnalyticsModule({ projectItems, allTasks, role }) {
     quarter: "Квартал",
     halfyear: "Полгода",
     year: "Год",
+    fiveYears: "5 лет",
   };
   const periodProjects = projectItems.filter((project) => projectInPeriod(project, period));
   const periodProjectIds = new Set(periodProjects.map((project) => project.id));
@@ -7080,6 +7182,10 @@ function AnalyticsModule({ projectItems, allTasks, role }) {
   const summary = financeSummary(periodProjects);
   const canSeeFinance = roleCan(role, "viewFinance");
   const avgProgress = periodProjects.length ? Math.round(periodProjects.reduce((sum, project) => sum + (Number(project.progress) || 0), 0) / periodProjects.length) : 0;
+  const periodPlan = planExecutionSummary(periodProjects);
+  const yearRows = lastFiveYearRows(projectItems, canSeeFinance);
+  const monthRows = previousMonthRows(projectItems, canSeeFinance);
+  const planTone = (value) => (value >= 90 ? "green" : value >= 70 ? "yellow" : "red");
   const directionAnalytics = Array.from(
     periodProjects.reduce((map, project) => {
       const key = project.direction || "Без направления";
@@ -7131,7 +7237,7 @@ function AnalyticsModule({ projectItems, allTasks, role }) {
         <div className="section-row">
           <div>
             <h3>Период аналитики</h3>
-            <p className="section-hint">Период фильтрует проекты по дате старта, дате окончания или созданию карточки. Так видно месяц, квартал, полгода и год без смешивания всей истории.</p>
+            <p className="section-hint">Период фильтрует проекты по дате старта, дате окончания или созданию карточки. Добавлен срез за 5 лет, годовые итоги, предыдущие месяцы и выполнение плана по срокам.</p>
           </div>
           <span className="muted-chip">Срез: {periodLabels[period]}</span>
         </div>
@@ -7145,6 +7251,7 @@ function AnalyticsModule({ projectItems, allTasks, role }) {
         <StatCard item={{ label: "Красная зона", value: String(redProjects), tone: "red" }} />
         <StatCard item={{ label: "На проверке", value: String(reviewTasks), tone: "orange" }} />
         <StatCard item={{ label: "Просрочено задач", value: String(overdueTasks), tone: "red" }} />
+        <StatCard item={{ label: "Выполнение плана", value: `${periodPlan.execution}%`, tone: planTone(periodPlan.execution) }} />
         <StatCard item={{ label: canSeeFinance ? "Условная валовая прибыль" : "Средний прогресс", value: canSeeFinance ? money(summary.companyPlannedGross) : `${avgProgress}%`, tone: canSeeFinance ? "green" : "blue" }} />
       </section>
       {canSeeFinance ? (
@@ -7155,6 +7262,66 @@ function AnalyticsModule({ projectItems, allTasks, role }) {
           <StatCard item={{ label: "К выплате", value: money(summary.payable), tone: "red" }} />
         </section>
       ) : null}
+      <section className="analytics-grid year-month-grid">
+        <div className="office-card">
+          <div className="section-row">
+            <div>
+              <h3>Результат года за 5 лет</h3>
+              <p className="section-hint">Годовой результат показывает проекты, которые относятся к году по дате старта/создания, и активные проекты в этом году для план-факта.</p>
+            </div>
+          </div>
+          <div className={cn("analytics-period-table year-table", canSeeFinance ? "with-finance" : "no-finance")}>
+            <div className="analytics-period-head">
+              <b>Год</b>
+              <span>Проекты</span>
+              <span>Активные</span>
+              {canSeeFinance ? <strong>Договоры</strong> : null}
+              {canSeeFinance ? <strong>Оплачено</strong> : null}
+              <strong>{canSeeFinance ? "Валовая часть" : "Факт"}</strong>
+              <em>План</em>
+            </div>
+            {yearRows.map((row) => (
+              <div key={row.year}>
+                <b>{row.year}</b>
+                <span>{row.projects}</span>
+                <span>{row.activeProjects}</span>
+                {canSeeFinance ? <strong>{money(row.economy.contractAmount)}</strong> : null}
+                {canSeeFinance ? <strong>{money(row.economy.paidByClient)}</strong> : null}
+                <strong className={canSeeFinance && row.result >= 0 ? "good" : ""}>{canSeeFinance ? money(row.result) : `${row.result}%`}</strong>
+                <em className={cn("risk-chip", planTone(row.plan.execution))}>{row.plan.execution}%</em>
+              </div>
+            ))}
+          </div>
+        </div>
+        <div className="office-card">
+          <div className="section-row">
+            <div>
+              <h3>Предыдущие месяцы</h3>
+              <p className="section-hint">Месяцы показывают новые/учтённые проекты, активные проекты, деньги месяца и выполнение плана по срокам.</p>
+            </div>
+          </div>
+          <div className={cn("analytics-period-table month-table", canSeeFinance ? "with-finance" : "no-finance")}>
+            <div className="analytics-period-head">
+              <b>Месяц</b>
+              <span>Новые</span>
+              <span>Активные</span>
+              {canSeeFinance ? <strong>Оплачено</strong> : null}
+              <strong>{canSeeFinance ? "Валовая часть" : "Факт"}</strong>
+              <em>План</em>
+            </div>
+            {monthRows.map((row) => (
+              <div key={row.id}>
+                <b>{row.label}</b>
+                <span>{row.projects}</span>
+                <span>{row.activeProjects}</span>
+                {canSeeFinance ? <strong>{money(row.economy.paidByClient)}</strong> : null}
+                <strong className={canSeeFinance && row.result >= 0 ? "good" : ""}>{canSeeFinance ? money(row.result) : `${row.result}%`}</strong>
+                <em className={cn("risk-chip", planTone(row.plan.execution))}>{row.plan.execution}%</em>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
       <section className="office-card">
         <h3>Контроль владельца</h3>
         <p className="section-hint">Базовый список нужен для поиска проблемных проектов. Глубже смотрим: где просрочка, какой этап завис, кто отвечает и что стоит денег.</p>

@@ -2264,6 +2264,68 @@ h3 { margin: 0; }
   grid-template-columns: minmax(0, 1.2fr) minmax(320px, .8fr);
   gap: 18px;
 }
+.analytics-grid.year-month-grid {
+  grid-template-columns: minmax(0, 1.08fr) minmax(0, .92fr);
+}
+.analytics-period-table {
+  overflow: hidden;
+  margin-top: 14px;
+  border: 1px solid #dbe5ef;
+  border-radius: 16px;
+}
+.analytics-period-table > div {
+  display: grid;
+  gap: 10px;
+  align-items: center;
+  padding: 12px 14px;
+  background: #fff;
+}
+.analytics-period-table > div + div {
+  border-top: 1px solid #dbe5ef;
+}
+.analytics-period-table.year-table.with-finance > div {
+  grid-template-columns: 70px 76px 82px minmax(110px, 1fr) minmax(110px, 1fr) minmax(120px, 1fr) 86px;
+}
+.analytics-period-table.year-table.no-finance > div {
+  grid-template-columns: 70px 76px 82px minmax(110px, 1fr) 86px;
+}
+.analytics-period-table.month-table.with-finance > div {
+  grid-template-columns: minmax(130px, 1fr) 70px 82px minmax(110px, 1fr) minmax(120px, 1fr) 86px;
+}
+.analytics-period-table.month-table.no-finance > div {
+  grid-template-columns: minmax(130px, 1fr) 70px 82px minmax(110px, 1fr) 86px;
+}
+.analytics-period-table b,
+.analytics-period-table span,
+.analytics-period-table strong,
+.analytics-period-table em {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.analytics-period-table b {
+  color: #020617;
+}
+.analytics-period-table span {
+  color: #475569;
+  font-size: 13px;
+}
+.analytics-period-table strong {
+  color: #0f172a;
+  text-align: right;
+}
+.analytics-period-table strong.good {
+  color: #047857;
+}
+.analytics-period-table em {
+  justify-self: start;
+  font-style: normal;
+}
+.analytics-period-head {
+  background: #f8fafc !important;
+  color: #475569;
+  font-size: 12px;
+  font-weight: 900;
+}
 .bottleneck-list {
   display: grid;
   gap: 12px;
@@ -3526,9 +3588,9 @@ h3 { margin: 0; }
   .available-work-meta { justify-items: start; text-align: left; }
   .wizard-header, .create-project-summary { flex-direction: column; align-items: stretch; }
   .stage-editor-wide, .stage-approval-actions { grid-column: auto; }
-  .task-table > div, .partner-table > div, .partner-table > button, .project-account-meta, .mapping-table > div, .sync-log > div, .task-board > div, .analytics-list > div, .sections-table > div:not(.empty), .admin-users-table > div, .finance-table > div, .dashboard-table > div, .dashboard-table > button, .task-status-chart > div, .bitrix-map-table > div, .client-participants-list > div, .approval-list > div { grid-template-columns: 1fr; }
+  .task-table > div, .partner-table > div, .partner-table > button, .project-account-meta, .mapping-table > div, .sync-log > div, .task-board > div, .analytics-list > div, .analytics-period-table > div, .sections-table > div:not(.empty), .admin-users-table > div, .finance-table > div, .dashboard-table > div, .dashboard-table > button, .task-status-chart > div, .bitrix-map-table > div, .client-participants-list > div, .approval-list > div { grid-template-columns: 1fr; }
   .finance-table > div { min-width: 0; }
-  .analytics-list strong { justify-self: start; text-align: left; }
+  .analytics-list strong, .analytics-period-table strong { justify-self: start; text-align: left; }
 }
 
 @media (max-width: 1280px) {
