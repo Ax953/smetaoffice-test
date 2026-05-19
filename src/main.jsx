@@ -2750,7 +2750,7 @@ function buildExecutorDirectory(executors = [], users = []) {
     .filter((user) => user.executorEnabled || user.role === "executor" || user.executorId)
     .map(userToExecutorProfile);
   const map = new Map();
-  [...manualExecutors, ...userExecutors].forEach((executor) => {
+  [...userExecutors, ...manualExecutors].forEach((executor) => {
     if (!executor?.id) return;
     const sections = parseExecutorSections(executor.sections);
     map.set(executor.id, {
@@ -4071,8 +4071,9 @@ function ExecutorCard({ executor, active, onClick }) {
   );
 }
 
-function ExecutorDetails({ executor, canSeeContacts, onMessage, assignedTasks = [] }) {
+function ExecutorDetails({ executor, canSeeContacts, canManage, onUpdate, onMessage, assignedTasks = [] }) {
   const [message, setMessage] = useState("");
+  const [editing, setEditing] = useState(false);
   const completed = executor.completedProjects ?? Math.max(0, Math.round((executor.rating || 50) / 4));
   const activeProjects = executor.activeProjects ?? Math.max(0, Math.round((executor.workload || 0) / 22));
   const finance = calculateExecutorFinance(assignedTasks, {
@@ -4093,6 +4094,18 @@ function ExecutorDetails({ executor, canSeeContacts, onMessage, assignedTasks = 
     setMessage("");
   }
 
+  function updateExecutorField(patch) {
+    if (!canManage) {
+      showAction("Редактировать карточку исполнителя может только роль с правом управления исполнителями");
+      return;
+    }
+    onUpdate?.(executor.id, patch);
+  }
+
+  function updateExecutorContacts(patch) {
+    updateExecutorField({ contacts: { ...(executor.contacts || {}), ...patch } });
+  }
+
   return (
     <section className="executor-details">
       <div className="details-head">
@@ -4105,12 +4118,66 @@ function ExecutorDetails({ executor, canSeeContacts, onMessage, assignedTasks = 
           <h2>{executor.name}</h2>
           <p>{executor.city} · {executor.type}</p>
         </div>
-        <div className="score-card">
-          <span>Рейтинг Smeta</span>
-          <b>{executor.rating}</b>
-          <small>допуск к задачам по фактической работе</small>
+        <div className="executor-detail-actions">
+          {canManage ? (
+            <button type="button" className="secondary" onClick={() => setEditing((value) => !value)}>
+              {editing ? "Закрыть редактирование" : "Редактировать карточку"}
+            </button>
+          ) : null}
+          <div className="score-card">
+            <span>Рейтинг Smeta</span>
+            <b>{executor.rating}</b>
+            <small>допуск к задачам по фактической работе</small>
+          </div>
         </div>
       </div>
+
+      {editing && canManage ? (
+        <div className="executor-edit-panel">
+          <label><span>ФИО / название</span><input value={executor.name || ""} onChange={(event) => updateExecutorField({ name: event.target.value })} /></label>
+          <label><span>Тип</span><select value={executor.type || "физлицо"} onChange={(event) => updateExecutorField({ type: event.target.value })}>
+            <option>физлицо</option>
+            <option>ИП</option>
+            <option>компания</option>
+            <option>партнёр</option>
+            <option>внутренняя команда</option>
+          </select></label>
+          <label><span>Город / формат</span><input value={executor.city || ""} onChange={(event) => updateExecutorField({ city: event.target.value })} /></label>
+          <label><span>Специализации</span><input value={parseExecutorSections(executor.sections).join(", ")} onChange={(event) => updateExecutorField({ sections: parseExecutorSections(event.target.value) })} placeholder="АР, Дизайн, 3D" /></label>
+          <label><span>Ранг допуска</span><select value={Number(executor.rank) || 1} onChange={(event) => updateExecutorField({ rank: Number(event.target.value), qualification: rankName(Number(event.target.value)) })}>
+            <option value="1">Ранг 1 — новый</option>
+            <option value="2">Ранг 2 — простые задачи</option>
+            <option value="3">Ранг 3 — стандарт</option>
+            <option value="4">Ранг 4 — сложные задачи</option>
+            <option value="5">Ранг 5 — эксперт</option>
+          </select></label>
+          <label><span>Статус</span><select value={executor.status || "Новый контакт"} onChange={(event) => updateExecutorField({ status: event.target.value })}>
+            <option>Новый контакт</option>
+            <option>На проверке</option>
+            <option>Проверенный</option>
+            <option>Сильный</option>
+            <option>Эксперт</option>
+            <option>Ограничен</option>
+            <option>Заблокирован</option>
+          </select></label>
+          <label><span>Рейтинг</span><input type="number" min="0" max="100" value={Number(executor.rating) || 0} onChange={(event) => updateExecutorField({ rating: clampPercent(Number(event.target.value) || 0) })} /></label>
+          <label><span>Загрузка, %</span><input type="number" min="0" max="100" value={Number(executor.workload) || 0} onChange={(event) => updateExecutorField({ workload: clampPercent(Number(event.target.value) || 0) })} /></label>
+          <label><span>Сдача в срок, %</span><input type="number" min="0" max="100" value={Number(executor.onTime) || 0} onChange={(event) => updateExecutorField({ onTime: clampPercent(Number(event.target.value) || 0) })} /></label>
+          <label><span>Приёмка с первого раза, %</span><input type="number" min="0" max="100" value={Number(executor.firstAccept) || 0} onChange={(event) => updateExecutorField({ firstAccept: clampPercent(Number(event.target.value) || 0) })} /></label>
+          <label><span>Модель оплаты</span><select value={executor.paymentModel || "piecework"} onChange={(event) => updateExecutorField({ paymentModel: event.target.value })}>
+            {compensationModeOptions.map((option) => <option key={option.id} value={option.id}>{option.label}</option>)}
+          </select></label>
+          <label><span>Ставка/час, ₽</span><input type="number" value={Number(executor.hourlyRate) || 0} onChange={(event) => updateExecutorField({ hourlyRate: Number(event.target.value) || 0 })} /></label>
+          <label><span>Оклад, ₽</span><input type="number" value={Number(executor.salaryBase) || 0} onChange={(event) => updateExecutorField({ salaryBase: Number(event.target.value) || 0 })} /></label>
+          <label><span>Процент, %</span><input type="number" value={Number(executor.percentRate) || 0} onChange={(event) => updateExecutorField({ percentRate: Number(event.target.value) || 0 })} /></label>
+          <label><span>Телефон</span><input value={executor.contacts?.phone || ""} onChange={(event) => updateExecutorContacts({ phone: event.target.value })} /></label>
+          <label><span>Почта</span><input value={executor.contacts?.email || ""} onChange={(event) => updateExecutorContacts({ email: event.target.value })} /></label>
+          <label><span>Telegram / WhatsApp</span><input value={executor.contacts?.telegram || ""} onChange={(event) => updateExecutorContacts({ telegram: event.target.value })} /></label>
+          <label className="wide"><span>Правило премий / удержаний</span><input value={executor.premiumRule || ""} onChange={(event) => updateExecutorField({ premiumRule: event.target.value })} /></label>
+          <label className="wide"><span>Комментарий руководства</span><textarea value={executor.note || ""} onChange={(event) => updateExecutorField({ note: event.target.value })} /></label>
+          {executor.userId ? <p className="section-hint wide">Этот исполнитель связан с пользователем. Доступ в личный кабинет и роль меняются в админке пользователей.</p> : null}
+        </div>
+      ) : null}
 
       <div className="info-grid executor-info">
         <Info label="Разделы" value={executor.sections.join(", ")} />
@@ -4416,7 +4483,17 @@ function ExecutorsModule({ role, executors, setExecutors, allTasks = [] }) {
 
   function updateExecutor(executorId, patch) {
     if (!canManageExecutors) return;
-    setExecutors((items) => items.map((item) => (item.id === executorId ? { ...item, ...patch } : item)));
+    setExecutors((items) => {
+      let found = false;
+      const next = items.map((item) => {
+        if (item.id !== executorId) return item;
+        found = true;
+        return { ...item, ...patch };
+      });
+      if (found) return next;
+      const source = executors.find((item) => item.id === executorId);
+      return source ? [{ ...source, ...patch, profileOverride: true }, ...next] : next;
+    });
   }
 
   function addChatMessage(executorId, text) {
@@ -4598,7 +4675,7 @@ function ExecutorsModule({ role, executors, setExecutors, allTasks = [] }) {
             )}
           </div>
           {selectedExecutor ? (
-            <ExecutorDetails executor={selectedExecutor} canSeeContacts={canSeeContacts} onMessage={addChatMessage} assignedTasks={selectedExecutorTasks} />
+            <ExecutorDetails executor={selectedExecutor} canSeeContacts={canSeeContacts} canManage={canManageExecutors} onUpdate={updateExecutor} onMessage={addChatMessage} assignedTasks={selectedExecutorTasks} />
           ) : (
             <div className="empty">Выбери исполнителя.</div>
           )}
@@ -7904,6 +7981,52 @@ function DashboardModule({ visibleProjects, selectedProject, setSelectedId, role
   );
   const clientDebtProjects = visibleProjects.filter((project) => projectEconomy(project).receivable > 0);
   const salesTransferReady = visibleSalesLeads.filter((lead) => ["contract_and_advance", "contract_advance", "deposit"].includes(lead.stage) || lead.projectId);
+  const launchReadinessCards = [
+    {
+      title: "Проекты заведены",
+      value: visibleProjects.length,
+      ready: visibleProjects.length > 0,
+      hint: visibleProjects.length ? "реестр есть, можно вести работу" : "нужно внести действующие проекты",
+      section: "projects",
+    },
+    {
+      title: "База исполнителей",
+      value: executors.length,
+      ready: executors.length > 0,
+      hint: executors.length ? "есть кого назначать на этапы" : "нужно завести исполнителей и специализации",
+      section: "executors",
+    },
+    {
+      title: "Этапы без исполнителя",
+      value: missingExecutorSections.length,
+      ready: missingExecutorSections.length === 0,
+      hint: missingExecutorSections.length ? "нужны назначения или открытый набор" : "оплачиваемые этапы закрыты",
+      section: "projects",
+    },
+    {
+      title: "Партнёры",
+      value: partners.length,
+      ready: partners.length > 0,
+      hint: partners.length ? "карточки партнёров есть" : "нужно завести партнёрскую сеть",
+      section: "partners",
+    },
+    {
+      title: "Bitrix / продажи",
+      value: visibleSalesLeads.length,
+      ready: visibleSalesLeads.length > 0,
+      hint: visibleSalesLeads.length ? "есть лиды для передачи в производство" : "синхронизация ещё не даёт лиды",
+      section: "sales",
+    },
+    {
+      title: "Финансы исполнителей",
+      value: payoutRows.length,
+      ready: payoutRows.length > 0,
+      hint: payoutRows.length ? "ведомость выплат формируется" : "нужны суммы по этапам",
+      section: "finance",
+    },
+  ];
+  const launchReadyCount = launchReadinessCards.filter((item) => item.ready).length;
+  const launchReadyPercent = Math.round((launchReadyCount / launchReadinessCards.length) * 100);
   const partnerTaskRows = visibleTasks.filter((task) => Number(task.executorCost) || Number(task.paid) || task.status).slice(0, 6);
   const rolePrimaryCards = (() => {
     if (["admin", "regional_admin", "direction_admin"].includes(role)) {
@@ -8101,6 +8224,29 @@ function DashboardModule({ visibleProjects, selectedProject, setSelectedId, role
               </button>
             ))}
           </div>
+
+          <section className="office-card launch-readiness-card">
+            <div className="section-row">
+              <div>
+                <h3>Готовность SmetaOffice к рабочему запуску</h3>
+                <p className="section-hint">Это не декоративный блок: он показывает, какие части системы уже можно проверять в работе, а какие ещё мешают запуску.</p>
+              </div>
+              <div className="launch-readiness-score">
+                <b>{launchReadyPercent}%</b>
+                <span>{launchReadyCount} из {launchReadinessCards.length} контуров готовы</span>
+              </div>
+            </div>
+            <div className="launch-readiness-grid">
+              {launchReadinessCards.map((item) => (
+                <button key={item.title} type="button" onClick={() => onGoSection?.(item.section)}>
+                  <span className={cn("risk-chip", item.ready ? "green" : "yellow")}>{item.ready ? "готово" : "доработать"}</span>
+                  <b>{item.title}</b>
+                  <strong>{item.value}</strong>
+                  <small>{item.hint}</small>
+                </button>
+              ))}
+            </div>
+          </section>
 
           <div className="owner-two-grid">
             <section className="office-card owner-map-card">
