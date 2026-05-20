@@ -158,6 +158,76 @@ function normalizeDirectionName(direction) {
   return aliases[value] || value;
 }
 
+const ALL_REGIONS_READABLE = "\u0412\u0441\u0435 \u0440\u0435\u0433\u0438\u043e\u043d\u044b";
+
+function isAllRegionsValue(region) {
+  const normalized = normalizeRegionName(region);
+  return normalized === ALL_REGIONS || normalized === ALL_REGIONS_READABLE;
+}
+
+function normalizePartnerCoverage(value, partner = {}) {
+  const raw = String(value || "").trim().toLowerCase();
+  if (["regional", "federal", "interregional"].includes(raw)) return raw;
+  if (raw.includes("федера") || raw.includes("federal")) return "federal";
+  if (raw.includes("меж") || raw.includes("друг") || raw.includes("inter")) return "interregional";
+  const explicitRegions = Array.isArray(partner.regions) ? partner.regions : [];
+  if (isAllRegionsValue(partner.region) || explicitRegions.some(isAllRegionsValue)) return "federal";
+  const regionCount = new Set(explicitRegions.map(normalizeRegionName).filter((region) => region && !isAllRegionsValue(region))).size;
+  return regionCount > 1 ? "interregional" : "regional";
+}
+
+function parsePartnerRegionsInput(value) {
+  return [...new Set(
+    String(value || "")
+      .split(/[,;\n]/)
+      .map((item) => normalizeRegionName(item))
+      .filter((item) => item && !isAllRegionsValue(item))
+  )];
+}
+
+function partnerServiceRegions(partner = {}) {
+  const coverage = normalizePartnerCoverage(partner.coverage, partner);
+  if (coverage === "federal") return [ALL_REGIONS_READABLE];
+  const explicit = Array.isArray(partner.regions) ? partner.regions : parsePartnerRegionsInput(partner.regionsText);
+  const regions = explicit.length ? explicit : [partner.region].filter(Boolean);
+  return [...new Set(regions.map(normalizeRegionName).filter((region) => region && !isAllRegionsValue(region)))];
+}
+
+function partnerRegionMatches(user, partner) {
+  if (normalizePartnerCoverage(partner.coverage, partner) === "federal") return true;
+  const userRegions = userRegionList(user);
+  if (userRegions.some(isAllRegionsValue)) return true;
+  const regions = partnerServiceRegions(partner);
+  return regions.some((region) => userRegions.includes(region));
+}
+
+function normalizePartnerRecord(partner = {}) {
+  const coverage = normalizePartnerCoverage(partner.coverage, partner);
+  const regions = partnerServiceRegions({ ...partner, coverage });
+  const baseRegion = coverage === "federal" ? ALL_REGIONS_READABLE : normalizeRegionName(partner.region || regions[0] || "");
+  return {
+    ...partner,
+    id: safeText(partner.id, 80) || `partner-${Date.now()}`,
+    name: safeText(partner.name, 160),
+    category: safeText(partner.category, 120),
+    coverage,
+    region: baseRegion,
+    regions,
+    direction: normalizeDirectionName(partner.direction || ALL_DIRECTIONS),
+    contact: safeText(partner.contact, 200),
+    relation: safeText(partner.relation, 160),
+    serviceDescription: safeText(partner.serviceDescription, 500),
+    commissionRule: safeText(partner.commissionRule, 260),
+    status: safeText(partner.status, 80) || "\u041f\u0440\u043e\u0432\u0435\u0440\u043a\u0430",
+    level: safeText(partner.level, 80) || "\u041d\u043e\u0432\u044b\u0439",
+    rating: Math.max(0, Math.min(100, Number(partner.rating) || 0)),
+    active: Math.max(0, Number(partner.active) || 0),
+    overdue: Math.max(0, Number(partner.overdue) || 0),
+    accrued: safeMoney(partner.accrued),
+    paid: safeMoney(partner.paid),
+  };
+}
+
 function userRegionList(user) {
   const list = Array.isArray(user?.regions) && user.regions.length ? user.regions : [user?.region].filter(Boolean);
   return list.length ? list.map(normalizeRegionName) : [ALL_REGIONS];
@@ -335,21 +405,22 @@ function visibleProjectsFor(user, projects = []) {
 
 function canAccessPartner(user, partner) {
   if (!user || !partner) return false;
+  const normalizedPartner = normalizePartnerRecord(partner);
   if (["owner", "admin", "deputy", "finance", "accountant"].includes(user.role)) return true;
-  if (user.role === "partner") return partner.userId === user.id || partner.partnerUserId === user.id || partner.name === user.name;
-  if (!canAccessRegion(user, partner)) return false;
+  if (user.role === "partner") return normalizedPartner.userId === user.id || normalizedPartner.partnerUserId === user.id || normalizedPartner.name === user.name;
+  if (!partnerRegionMatches(user, normalizedPartner)) return false;
   if (user.role === "regional_admin" || user.role === "regional_manager") return true;
   if (user.role === "direction_admin" || user.role === "director" || user.role === "pm" || user.role === "project_manager") {
-    return user.direction === ALL_DIRECTIONS || normalizeDirectionName(partner.direction) === normalizeDirectionName(user.direction);
+    return user.direction === ALL_DIRECTIONS || normalizeDirectionName(normalizedPartner.direction) === normalizeDirectionName(user.direction);
   }
   if (user.role === "head_of_sales" || user.role === "sales_manager") {
-    return normalizeDirectionName(partner.direction) === "Единый центр продаж" || partner.relation === "Партнёр приводит нам клиентов";
+    return normalizeDirectionName(normalizedPartner.direction) === "Единый центр продаж" || normalizedPartner.relation === "Партнёр приводит нам клиентов";
   }
   return false;
 }
 
 function visiblePartnersFor(user, partners = []) {
-  return partners.filter((partner) => canAccessPartner(user, partner));
+  return partners.map(normalizePartnerRecord).filter((partner) => canAccessPartner(user, partner));
 }
 
 const salesLeadDirectionMap = {
@@ -1230,14 +1301,15 @@ const server = http.createServer(async (req, res) => {
     if (req.method === "GET" && route === "/api/partners") {
       const auth = requireAuth(req, res, db);
       if (!auth) return;
-      sendJson(res, 200, authMode === "server" ? visiblePartnersFor(auth.user, db.partners || []) : db.partners || []);
+      const partners = (db.partners || []).map(normalizePartnerRecord);
+      sendJson(res, 200, authMode === "server" ? visiblePartnersFor(auth.user, partners) : partners);
       return;
     }
 
     if (req.method === "PUT" && route === "/api/partners") {
       const auth = requireWriteAccess(req, res, db, route);
       if (!auth) return;
-      const partners = await readJsonBody(req);
+      const partners = (await readJsonBody(req)).map(normalizePartnerRecord);
       const nextPartners = authMode === "server" ? mergeManagedCollection(db.partners || [], partners, auth.user, canAccessPartner) : partners;
       const nextDb = { ...db, partners: nextPartners };
       await writeDb(nextDb);

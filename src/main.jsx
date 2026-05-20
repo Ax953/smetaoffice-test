@@ -463,11 +463,75 @@ const partnerRelationOptions = [
   "Маркетинг / лидогенерация",
 ];
 
+const partnerCoverageOptions = [
+  { id: "regional", label: "Региональный партнёр", hint: "работает в одном базовом регионе" },
+  { id: "federal", label: "Федеральный партнёр", hint: "доступен для всех регионов" },
+  { id: "interregional", label: "Межрегиональный / другой регион", hint: "можно подключать в нескольких выбранных регионах" },
+];
+
+function isAllRegionsValue(region) {
+  return normalizeRegionName(region) === "Все регионы";
+}
+
+function normalizePartnerCoverage(value, partner = {}) {
+  const raw = String(value || "").trim().toLowerCase();
+  if (["regional", "federal", "interregional"].includes(raw)) return raw;
+  if (raw.includes("федера")) return "federal";
+  if (raw.includes("меж") || raw.includes("друг")) return "interregional";
+  const explicitRegions = Array.isArray(partner.regions) ? partner.regions : [];
+  if (isAllRegionsValue(partner.region) || explicitRegions.some(isAllRegionsValue)) return "federal";
+  const regionCount = new Set(explicitRegions.map(normalizeRegionName).filter((region) => region && !isAllRegionsValue(region))).size;
+  return regionCount > 1 ? "interregional" : "regional";
+}
+
+function parsePartnerRegionsInput(value) {
+  return [...new Set(
+    String(value || "")
+      .split(/[,;\n]/)
+      .map((item) => normalizeRegionName(item))
+      .filter((item) => item && !isAllRegionsValue(item))
+  )];
+}
+
+function partnerServiceRegions(partner = {}) {
+  const coverage = normalizePartnerCoverage(partner.coverage, partner);
+  if (coverage === "federal") return ["Все регионы"];
+  const explicit = Array.isArray(partner.regions) ? partner.regions : parsePartnerRegionsInput(partner.regionsText);
+  const regions = explicit.length ? explicit : [partner.region].filter(Boolean);
+  return [...new Set(regions.map(normalizeRegionName).filter((region) => region && !isAllRegionsValue(region)))];
+}
+
+function partnerRegionsLabel(partner = {}) {
+  const coverage = normalizePartnerCoverage(partner.coverage, partner);
+  if (coverage === "federal") return "Все регионы";
+  const regions = partnerServiceRegions(partner);
+  return regions.length ? regions.join(", ") : normalizeRegionName(partner.region || "регион не указан");
+}
+
+function partnerCoverageLabel(partner = {}) {
+  const coverage = normalizePartnerCoverage(partner.coverage, partner);
+  return partnerCoverageOptions.find((item) => item.id === coverage)?.label || "Региональный партнёр";
+}
+
+function partnerCoverageTone(partner = {}) {
+  const coverage = normalizePartnerCoverage(partner.coverage, partner);
+  if (coverage === "federal") return "blue";
+  if (coverage === "interregional") return "yellow";
+  return "green";
+}
+
+function partnerCoverageHint(partner = {}) {
+  const coverage = normalizePartnerCoverage(partner.coverage, partner);
+  if (coverage === "federal") return "виден всем регионам";
+  if (coverage === "interregional") return `работает: ${partnerRegionsLabel(partner)}`;
+  return `регион: ${partnerRegionsLabel(partner)}`;
+}
+
 const partnerSeed = [
-  { id: "P-001", name: "BuildPro Ростов", category: "Строительная компания / ремонт", region: "Ростовская область", direction: "Строительство и ремонт", rating: 91, active: 4, overdue: 0, level: "Проверенный", status: "Активен", accrued: 0, paid: 0, relation: "Партнёр выполняет наши заявки", commissionRule: "Процент по договорённости", serviceDescription: "Ремонт и строительная реализация", contact: "контакт скрыт в демо" },
-  { id: "P-002", name: "CityRealty", category: "Агентство недвижимости / риелтор", region: "Ростовская область", direction: "Единый центр продаж", rating: 78, active: 2, overdue: 1, level: "Надёжный", status: "Активен", accrued: 0, paid: 0, relation: "Партнёр приводит нам клиентов", commissionRule: "Партнёрское вознаграждение за клиента", serviceDescription: "Подбор и сопровождение недвижимости", contact: "контакт скрыт в демо" },
-  { id: "P-003", name: "Геология-Партнёр", category: "Изыскания / геодезия / обследования", region: "ДНР", direction: "Изыскания / обследования / обмеры", rating: 64, active: 1, overdue: 1, level: "Базовый", status: "Проверка", accrued: 0, paid: 0, relation: "Партнёр выполняет наши заявки", commissionRule: "Смета по работам", serviceDescription: "Геология, геодезия, обследования", contact: "контакт скрыт в демо" },
-  { id: "P-004", name: "CleanHome", category: "Бытовой сервис", region: "Чеченская Республика", direction: "Бытовые услуги / сервис", rating: 88, active: 0, overdue: 0, level: "Надёжный", status: "Резерв", accrued: 0, paid: 0, relation: "Мы передаём клиента партнёру", commissionRule: "Комиссия за переданную услугу", serviceDescription: "Клининг и сервис после ремонта", contact: "контакт скрыт в демо" },
+  { id: "P-001", name: "BuildPro Ростов", category: "Строительная компания / ремонт", coverage: "regional", region: "Ростовская область", regions: ["Ростовская область"], direction: "Строительство и ремонт", rating: 91, active: 4, overdue: 0, level: "Проверенный", status: "Активен", accrued: 0, paid: 0, relation: "Партнёр выполняет наши заявки", commissionRule: "Процент по договорённости", serviceDescription: "Ремонт и строительная реализация", contact: "контакт скрыт в демо" },
+  { id: "P-002", name: "CityRealty", category: "Агентство недвижимости / риелтор", coverage: "interregional", region: "Ростовская область", regions: ["Ростовская область", "Чеченская Республика"], direction: "Единый центр продаж", rating: 78, active: 2, overdue: 1, level: "Надёжный", status: "Активен", accrued: 0, paid: 0, relation: "Партнёр приводит нам клиентов", commissionRule: "Партнёрское вознаграждение за клиента", serviceDescription: "Подбор и сопровождение недвижимости", contact: "контакт скрыт в демо" },
+  { id: "P-003", name: "Геология-Партнёр", category: "Изыскания / геодезия / обследования", coverage: "regional", region: "ДНР", regions: ["ДНР"], direction: "Изыскания / обследования / обмеры", rating: 64, active: 1, overdue: 1, level: "Базовый", status: "Проверка", accrued: 0, paid: 0, relation: "Партнёр выполняет наши заявки", commissionRule: "Смета по работам", serviceDescription: "Геология, геодезия, обследования", contact: "контакт скрыт в демо" },
+  { id: "P-004", name: "CleanHome", category: "Бытовой сервис", coverage: "regional", region: "Чеченская Республика", regions: ["Чеченская Республика"], direction: "Бытовые услуги / сервис", rating: 88, active: 0, overdue: 0, level: "Надёжный", status: "Резерв", accrued: 0, paid: 0, relation: "Мы передаём клиента партнёру", commissionRule: "Комиссия за переданную услугу", serviceDescription: "Клининг и сервис после ремонта", contact: "контакт скрыт в демо" },
 ];
 
 const quickStats = [
@@ -528,8 +592,15 @@ function normalizeUserRecord(user) {
 
 function normalizePartnerRecord(partner) {
   if (!partner) return partner;
+  const coverage = normalizePartnerCoverage(partner.coverage, partner);
+  const regions = partnerServiceRegions({ ...partner, coverage });
+  const baseRegion = coverage === "federal" ? "Все регионы" : normalizeRegionName(partner.region || regions[0] || "Чеченская Республика");
   return {
     ...partner,
+    coverage,
+    region: baseRegion,
+    regions,
+    regionsText: coverage === "federal" ? "" : regions.join(", "),
     direction: normalizeDirectionName(partner.direction || "Единый центр продаж"),
   };
 }
@@ -1458,6 +1529,7 @@ const defaultProjectForm = {
   projectManagerId: "",
   salesManagerId: "",
   partnerUserId: "",
+  partnerRegistryId: "",
   contractAmount: "",
   paidByClient: "",
   productionAllocationPercent: 35,
@@ -1709,7 +1781,11 @@ function canAccessPartner(user, partner, viewRole = user?.role) {
   if (role === "partner") return partner.userId === user.id || partner.partnerUserId === user.id || partner.name === user.name;
 
   const userRegions = userRegionList(user);
-  const regionMatch = userRegions.includes("Все регионы") || userRegions.includes(normalizeRegionName(partner.region));
+  const partnerRegions = partnerServiceRegions(partner);
+  const regionMatch =
+    normalizePartnerCoverage(partner.coverage, partner) === "federal" ||
+    userRegions.includes("Все регионы") ||
+    partnerRegions.some((region) => userRegions.includes(region));
   if (!regionMatch) return false;
 
   if (role === "regional_admin") return true;
@@ -3980,25 +4056,30 @@ function ProjectDetails({ project, role, onUpdateProject, onTaskStatusChange, on
 }
 
 function PartnerTable({ partnerItems, partnerForm, setPartnerForm, onAddPartner, onUpdatePartner, onDeletePartner, canManagePartners }) {
-  const [selectedPartnerId, setSelectedPartnerId] = useState(partnerItems[0]?.id || partnerItems[0]?.name || "");
-  const selectedPartner = partnerItems.find((partner) => (partner.id || partner.name) === selectedPartnerId) || partnerItems[0] || null;
+  const [coverageFilter, setCoverageFilter] = useState("all");
+  const visibleByCoverage = useMemo(
+    () => coverageFilter === "all" ? partnerItems : partnerItems.filter((partner) => normalizePartnerCoverage(partner.coverage, partner) === coverageFilter),
+    [partnerItems, coverageFilter]
+  );
+  const [selectedPartnerId, setSelectedPartnerId] = useState(visibleByCoverage[0]?.id || visibleByCoverage[0]?.name || "");
+  const selectedPartner = visibleByCoverage.find((partner) => (partner.id || partner.name) === selectedPartnerId) || visibleByCoverage[0] || null;
   const [editPartner, setEditPartner] = useState(false);
   const [partnerDraft, setPartnerDraft] = useState(selectedPartner || {});
 
   useEffect(() => {
-    if (!partnerItems.length) {
+    if (!visibleByCoverage.length) {
       setSelectedPartnerId("");
       return;
     }
-    if (!partnerItems.some((partner) => (partner.id || partner.name) === selectedPartnerId)) {
-      setSelectedPartnerId(partnerItems[0].id || partnerItems[0].name);
+    if (!visibleByCoverage.some((partner) => (partner.id || partner.name) === selectedPartnerId)) {
+      setSelectedPartnerId(visibleByCoverage[0].id || visibleByCoverage[0].name);
     }
-  }, [partnerItems, selectedPartnerId]);
+  }, [visibleByCoverage, selectedPartnerId]);
 
   useEffect(() => {
     setEditPartner(false);
-    setPartnerDraft(selectedPartner || {});
-  }, [selectedPartnerId, partnerItems.length]);
+    setPartnerDraft(selectedPartner ? { ...selectedPartner, regionsText: partnerRegionsLabel(selectedPartner) === "Все регионы" ? "" : partnerRegionsLabel(selectedPartner) } : {});
+  }, [selectedPartnerId, visibleByCoverage.length]);
 
   function updatePartnerDraft(patch) {
     setPartnerDraft((next) => ({ ...(next || {}), ...patch }));
@@ -4009,46 +4090,58 @@ function PartnerTable({ partnerItems, partnerForm, setPartnerForm, onAddPartner,
       <div className="section-row">
         <div>
           <h3>Партнёры</h3>
-          <p className="section-hint">Партнёры делятся по специализации: недвижимость, изыскания, архитектура, дизайн, строительство, поставщики, сервис и маркетинг.</p>
+          <p className="section-hint">Партнёры делятся по охвату: региональные, федеральные и межрегиональные. Так можно подключать своих партнёров региона и общую сеть компании без смешивания доступа.</p>
         </div>
         <span className="muted-chip">Всего: {partnerItems.length}</span>
       </div>
       {canManagePartners ? (
         <div className="quick-form partner-form">
-          <input value={partnerForm.name} onChange={(event) => setPartnerForm((next) => ({ ...next, name: event.target.value }))} placeholder="Название партнёра / ФИО" />
-          <select value={partnerForm.category} onChange={(event) => setPartnerForm((next) => ({ ...next, category: event.target.value }))}>
+          <label><span>Название</span><input value={partnerForm.name} onChange={(event) => setPartnerForm((next) => ({ ...next, name: event.target.value }))} placeholder="Название партнёра / ФИО" /></label>
+          <label><span>Категория</span><select value={partnerForm.category} onChange={(event) => setPartnerForm((next) => ({ ...next, category: event.target.value }))}>
             {partnerCategoryOptions.map((category) => <option key={category}>{category}</option>)}
-          </select>
-          <select value={partnerForm.region} onChange={(event) => setPartnerForm((next) => ({ ...next, region: event.target.value }))}>
+          </select></label>
+          <label><span>Охват</span><select value={partnerForm.coverage} onChange={(event) => setPartnerForm((next) => ({ ...next, coverage: event.target.value }))}>
+            {partnerCoverageOptions.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}
+          </select></label>
+          <label><span>Базовый регион</span><select value={partnerForm.region} onChange={(event) => setPartnerForm((next) => ({ ...next, region: event.target.value }))} disabled={partnerForm.coverage === "federal"}>
             {regionOptions.filter((region) => region !== "Все регионы").map((region) => <option key={region}>{region}</option>)}
-          </select>
-          <select value={partnerForm.direction} onChange={(event) => setPartnerForm((next) => ({ ...next, direction: event.target.value }))}>
+          </select></label>
+          <label className="wide"><span>Регионы работы</span><input value={partnerForm.regionsText} onChange={(event) => setPartnerForm((next) => ({ ...next, regionsText: event.target.value }))} disabled={partnerForm.coverage !== "interregional"} placeholder="Для межрегионального: Чеченская Республика, Ростовская область" /></label>
+          <label><span>Направление</span><select value={partnerForm.direction} onChange={(event) => setPartnerForm((next) => ({ ...next, direction: event.target.value }))}>
             {directionOptions.filter((item) => item !== "Все").map((direction) => <option key={direction}>{direction}</option>)}
-          </select>
-          <input value={partnerForm.contact} onChange={(event) => setPartnerForm((next) => ({ ...next, contact: event.target.value }))} placeholder="Контакт / телефон / Telegram" />
-          <select value={partnerForm.relation} onChange={(event) => setPartnerForm((next) => ({ ...next, relation: event.target.value }))}>
+          </select></label>
+          <label><span>Контакт</span><input value={partnerForm.contact} onChange={(event) => setPartnerForm((next) => ({ ...next, contact: event.target.value }))} placeholder="Телефон / Telegram / почта" /></label>
+          <label><span>Тип связи</span><select value={partnerForm.relation} onChange={(event) => setPartnerForm((next) => ({ ...next, relation: event.target.value }))}>
             {partnerRelationOptions.map((relation) => <option key={relation}>{relation}</option>)}
-          </select>
-          <input value={partnerForm.serviceDescription} onChange={(event) => setPartnerForm((next) => ({ ...next, serviceDescription: event.target.value }))} placeholder="Что предоставляет: краски, ремонт, лиды, проектирование..." />
-          <input value={partnerForm.commissionRule} onChange={(event) => setPartnerForm((next) => ({ ...next, commissionRule: event.target.value }))} placeholder="Комиссия / условия: 10%, фикс, по договорённости" />
+          </select></label>
+          <label><span>Что предоставляет</span><input value={partnerForm.serviceDescription} onChange={(event) => setPartnerForm((next) => ({ ...next, serviceDescription: event.target.value }))} placeholder="Краски, ремонт, лиды, проектирование..." /></label>
+          <label><span>Комиссия / условия</span><input value={partnerForm.commissionRule} onChange={(event) => setPartnerForm((next) => ({ ...next, commissionRule: event.target.value }))} placeholder="10%, фикс, по договорённости" /></label>
           <button type="button" className="primary" onClick={onAddPartner} disabled={!partnerForm.name.trim()}>Добавить партнёра</button>
         </div>
       ) : (
         <p className="section-hint">Добавлять и редактировать партнёров может владелец или администратор.</p>
       )}
+      <div className="partner-filter-row">
+        {[{ id: "all", label: "Все", count: partnerItems.length }, ...partnerCoverageOptions.map((item) => ({ ...item, count: partnerItems.filter((partner) => normalizePartnerCoverage(partner.coverage, partner) === item.id).length }))].map((item) => (
+          <button key={item.id} type="button" className={coverageFilter === item.id ? "active" : ""} onClick={() => setCoverageFilter(item.id)}>
+            <b>{item.label}</b>
+            <span>{item.count}</span>
+          </button>
+        ))}
+      </div>
       <div className="partner-table">
-        {partnerItems.map((partner) => (
+        {visibleByCoverage.length ? visibleByCoverage.map((partner) => (
           <button key={partner.id || partner.name} type="button" className={(selectedPartner?.id || selectedPartner?.name) === (partner.id || partner.name) ? "active" : ""} onClick={() => setSelectedPartnerId(partner.id || partner.name)}>
             <div>
               <b>{partner.name}</b>
-              <span>{partner.category} · {partner.region} · {partner.direction}</span>
+              <span>{partner.category} · {partnerCoverageHint(partner)} · {partner.direction}</span>
             </div>
-            <em>{partner.level}</em>
+            <em>{partnerCoverageLabel(partner)}</em>
             <span>{partner.status || "Активен"} · рейтинг {partner.rating}</span>
             <span>Активно {partner.active} · к выплате {money(Math.max((Number(partner.accrued) || 0) - (Number(partner.paid) || 0), 0))}</span>
             <strong className={partner.overdue ? "bad" : "good"}>Просрочки {partner.overdue}</strong>
           </button>
-        ))}
+        )) : <div className="empty">В этом фильтре партнёров пока нет.</div>}
       </div>
       {selectedPartner ? (
         <div className="partner-detail-card">
@@ -4056,9 +4149,9 @@ function PartnerTable({ partnerItems, partnerForm, setPartnerForm, onAddPartner,
             <div>
               <span className="muted-chip">{selectedPartner.id || "партнёр"}</span>
               <h3>{selectedPartner.name}</h3>
-              <p className="section-hint">{selectedPartner.category} · {selectedPartner.region} · {selectedPartner.direction}</p>
+              <p className="section-hint">{selectedPartner.category} · {partnerCoverageLabel(selectedPartner)} · {partnerRegionsLabel(selectedPartner)} · {selectedPartner.direction}</p>
             </div>
-            <span className={cn("risk-chip", selectedPartner.overdue ? "yellow" : "green")}>{selectedPartner.status || "Активен"}</span>
+            <span className={cn("risk-chip", partnerCoverageTone(selectedPartner))}>{partnerCoverageLabel(selectedPartner)}</span>
           </div>
           {canManagePartners ? (
             <div className="partner-card-actions">
@@ -4072,30 +4165,34 @@ function PartnerTable({ partnerItems, partnerForm, setPartnerForm, onAddPartner,
           ) : null}
           {editPartner && canManagePartners ? (
             <div className="quick-form partner-edit-form">
-              <input value={partnerDraft.name || ""} onChange={(event) => updatePartnerDraft({ name: event.target.value })} placeholder="Название / ФИО" />
-              <select value={partnerDraft.category || partnerCategoryOptions[0]} onChange={(event) => updatePartnerDraft({ category: event.target.value })}>
+              <label><span>Название</span><input value={partnerDraft.name || ""} onChange={(event) => updatePartnerDraft({ name: event.target.value })} placeholder="Название / ФИО" /></label>
+              <label><span>Категория</span><select value={partnerDraft.category || partnerCategoryOptions[0]} onChange={(event) => updatePartnerDraft({ category: event.target.value })}>
                 {partnerCategoryOptions.map((category) => <option key={category}>{category}</option>)}
-              </select>
-              <select value={partnerDraft.region || "Чеченская Республика"} onChange={(event) => updatePartnerDraft({ region: event.target.value })}>
+              </select></label>
+              <label><span>Охват</span><select value={partnerDraft.coverage || "regional"} onChange={(event) => updatePartnerDraft({ coverage: event.target.value })}>
+                {partnerCoverageOptions.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}
+              </select></label>
+              <label><span>Базовый регион</span><select value={partnerDraft.region || "Чеченская Республика"} onChange={(event) => updatePartnerDraft({ region: event.target.value })} disabled={partnerDraft.coverage === "federal"}>
                 {regionOptions.filter((region) => region !== "Все регионы").map((region) => <option key={region}>{region}</option>)}
-              </select>
-              <select value={partnerDraft.direction || "Единый центр продаж"} onChange={(event) => updatePartnerDraft({ direction: event.target.value })}>
+              </select></label>
+              <label className="wide"><span>Регионы работы</span><input value={partnerDraft.regionsText || ""} onChange={(event) => updatePartnerDraft({ regionsText: event.target.value })} disabled={partnerDraft.coverage !== "interregional"} placeholder="Для межрегионального: Чеченская Республика, Ростовская область" /></label>
+              <label><span>Направление</span><select value={partnerDraft.direction || "Единый центр продаж"} onChange={(event) => updatePartnerDraft({ direction: event.target.value })}>
                 {directionOptions.filter((item) => item !== "Все").map((direction) => <option key={direction}>{direction}</option>)}
-              </select>
-              <input value={partnerDraft.contact || ""} onChange={(event) => updatePartnerDraft({ contact: event.target.value })} placeholder="Контакт" />
-              <select value={partnerDraft.relation || partnerRelationOptions[0]} onChange={(event) => updatePartnerDraft({ relation: event.target.value })}>
+              </select></label>
+              <label><span>Контакт</span><input value={partnerDraft.contact || ""} onChange={(event) => updatePartnerDraft({ contact: event.target.value })} placeholder="Контакт" /></label>
+              <label><span>Тип связи</span><select value={partnerDraft.relation || partnerRelationOptions[0]} onChange={(event) => updatePartnerDraft({ relation: event.target.value })}>
                 {partnerRelationOptions.map((relation) => <option key={relation}>{relation}</option>)}
-              </select>
-              <input value={partnerDraft.serviceDescription || ""} onChange={(event) => updatePartnerDraft({ serviceDescription: event.target.value })} placeholder="Что предоставляет" />
-              <input value={partnerDraft.commissionRule || ""} onChange={(event) => updatePartnerDraft({ commissionRule: event.target.value })} placeholder="Комиссия / условия" />
-              <input type="number" value={partnerDraft.rating || 0} onChange={(event) => updatePartnerDraft({ rating: Number(event.target.value) })} placeholder="Рейтинг" />
-              <input type="number" value={partnerDraft.active || 0} onChange={(event) => updatePartnerDraft({ active: Number(event.target.value) })} placeholder="Активные заявки" />
-              <input type="number" value={partnerDraft.overdue || 0} onChange={(event) => updatePartnerDraft({ overdue: Number(event.target.value) })} placeholder="Просрочки" />
-              <input type="number" value={partnerDraft.accrued || 0} onChange={(event) => updatePartnerDraft({ accrued: Number(event.target.value) })} placeholder="Начислено" />
-              <input type="number" value={partnerDraft.paid || 0} onChange={(event) => updatePartnerDraft({ paid: Number(event.target.value) })} placeholder="Выплачено" />
-              <input value={partnerDraft.status || ""} onChange={(event) => updatePartnerDraft({ status: event.target.value })} placeholder="Статус" />
-              <input value={partnerDraft.level || ""} onChange={(event) => updatePartnerDraft({ level: event.target.value })} placeholder="Уровень" />
-              <input className="wide" value={partnerDraft.notes || ""} onChange={(event) => updatePartnerDraft({ notes: event.target.value })} placeholder="Комментарий руководства" />
+              </select></label>
+              <label><span>Что предоставляет</span><input value={partnerDraft.serviceDescription || ""} onChange={(event) => updatePartnerDraft({ serviceDescription: event.target.value })} placeholder="Что предоставляет" /></label>
+              <label><span>Комиссия / условия</span><input value={partnerDraft.commissionRule || ""} onChange={(event) => updatePartnerDraft({ commissionRule: event.target.value })} placeholder="Комиссия / условия" /></label>
+              <label><span>Рейтинг</span><input type="number" value={partnerDraft.rating || 0} onChange={(event) => updatePartnerDraft({ rating: Number(event.target.value) })} placeholder="Рейтинг" /></label>
+              <label><span>Активные заявки</span><input type="number" value={partnerDraft.active || 0} onChange={(event) => updatePartnerDraft({ active: Number(event.target.value) })} placeholder="Активные заявки" /></label>
+              <label><span>Просрочки</span><input type="number" value={partnerDraft.overdue || 0} onChange={(event) => updatePartnerDraft({ overdue: Number(event.target.value) })} placeholder="Просрочки" /></label>
+              <label><span>Начислено</span><input type="number" value={partnerDraft.accrued || 0} onChange={(event) => updatePartnerDraft({ accrued: Number(event.target.value) })} placeholder="Начислено" /></label>
+              <label><span>Выплачено</span><input type="number" value={partnerDraft.paid || 0} onChange={(event) => updatePartnerDraft({ paid: Number(event.target.value) })} placeholder="Выплачено" /></label>
+              <label><span>Статус</span><input value={partnerDraft.status || ""} onChange={(event) => updatePartnerDraft({ status: event.target.value })} placeholder="Статус" /></label>
+              <label><span>Уровень</span><input value={partnerDraft.level || ""} onChange={(event) => updatePartnerDraft({ level: event.target.value })} placeholder="Уровень" /></label>
+              <label className="wide"><span>Комментарий руководства</span><input value={partnerDraft.notes || ""} onChange={(event) => updatePartnerDraft({ notes: event.target.value })} placeholder="Комментарий руководства" /></label>
               <button type="button" className="primary" onClick={() => {
                 onUpdatePartner?.(selectedPartner.id || selectedPartner.name, partnerDraft);
                 setEditPartner(false);
@@ -4103,6 +4200,8 @@ function PartnerTable({ partnerItems, partnerForm, setPartnerForm, onAddPartner,
             </div>
           ) : null}
           <div className="partner-detail-grid">
+            <Info label="Охват" value={partnerCoverageLabel(selectedPartner)} />
+            <Info label="Регионы работы" value={partnerRegionsLabel(selectedPartner)} />
             <Info label="Вид связи" value={selectedPartner.relation || "не указано"} />
             <Info label="Что предоставляет" value={selectedPartner.serviceDescription || selectedPartner.category} />
             <Info label="Комиссия / условия" value={selectedPartner.commissionRule || "не указано"} />
@@ -6036,7 +6135,7 @@ function LoginScreen({ users, onLogin, onRegister, allowDemoFallback = false, al
   );
 }
 
-function ProjectCreationWizard({ projectForm, setProjectForm, users, onCreateProject, errors, canCreateProject }) {
+function ProjectCreationWizard({ projectForm, setProjectForm, users, partners = [], onCreateProject, errors, canCreateProject }) {
   const step = Number(projectForm.wizardStep) || 1;
   const selectedDirection = directionConfig(projectForm.direction);
   const projectTypes = projectTypesForDirection(projectForm.direction);
@@ -6045,7 +6144,7 @@ function ProjectCreationWizard({ projectForm, setProjectForm, users, onCreatePro
   const projectLeads = roleUserOptions(users, ["pm", "project_manager", "director", "regional_manager", "deputy", "owner"]);
   const projectManagers = roleUserOptions(users, ["project_manager", "pm", "director", "regional_manager"]);
   const salesManagers = roleUserOptions(users, ["sales_manager", "head_of_sales", "owner", "director"]);
-  const partners = roleUserOptions(users, ["partner"]);
+  const partnerUsers = roleUserOptions(users, ["partner"]);
   const contractAmount = Number(projectForm.contractAmount) || 0;
   const productionPercent = Number(projectForm.productionAllocationPercent) || 0;
   const calculatedProductionBudget = Math.round(contractAmount * (productionPercent / 100));
@@ -6134,7 +6233,8 @@ function ProjectCreationWizard({ projectForm, setProjectForm, users, onCreatePro
           <label><span>Руководитель проекта</span><select className={!projectForm.pmUserId ? "invalid" : ""} value={projectForm.pmUserId} onChange={(event) => update({ pmUserId: event.target.value })}><option value="">Выбрать пользователя</option>{projectLeads.map((user) => <option key={user.id} value={user.id}>{user.name} · {user.position}</option>)}</select></label>
           <label><span>Менеджер проекта</span><select value={projectForm.projectManagerId} onChange={(event) => update({ projectManagerId: event.target.value })}><option value="">Отсутствует / позже</option>{projectManagers.map((user) => <option key={user.id} value={user.id}>{user.name} · {user.position}</option>)}</select></label>
           <label><span>Менеджер продаж</span><select value={projectForm.salesManagerId} onChange={(event) => update({ salesManagerId: event.target.value })}><option value="">Нет / не из продаж</option>{salesManagers.map((user) => <option key={user.id} value={user.id}>{user.name} · {user.position}</option>)}</select></label>
-          <label><span>Партнёр</span><select value={projectForm.partnerUserId} onChange={(event) => update({ partnerUserId: event.target.value })}><option value="">Нет партнёра</option>{partners.map((user) => <option key={user.id} value={user.id}>{user.name} · {user.position}</option>)}</select></label>
+          <label><span>Партнёр из базы</span><select value={projectForm.partnerRegistryId || ""} onChange={(event) => update({ partnerRegistryId: event.target.value })}><option value="">Не выбран</option>{partners.map((partner) => <option key={partner.id || partner.name} value={partner.id || partner.name}>{partner.name} · {partnerCoverageLabel(partner)} · {partnerRegionsLabel(partner)}</option>)}</select></label>
+          <label><span>Личный кабинет партнёра</span><select value={projectForm.partnerUserId} onChange={(event) => update({ partnerUserId: event.target.value })}><option value="">Нет аккаунта партнёра</option>{partnerUsers.map((user) => <option key={user.id} value={user.id}>{user.name} · {user.position}</option>)}</select></label>
           <label><span>ID сделки Bitrix24</span><input value={projectForm.bitrixDealId} onChange={(event) => update({ bitrixDealId: event.target.value })} placeholder="если проект из сделки" /></label>
           <label className="wide"><span>Комментарий</span><input value={projectForm.sourceComment} onChange={(event) => update({ sourceComment: event.target.value })} placeholder="Скидка, особые условия, кто продал, почему внесён вручную" /></label>
         </div>
@@ -6183,6 +6283,7 @@ function ProjectsModule({
   onTaskStatusChange,
   executors,
   users,
+  partners,
   projectFormErrors,
 }) {
   const [selectedArea, setSelectedArea] = useState(null);
@@ -6374,6 +6475,7 @@ function ProjectsModule({
             projectForm={projectForm}
             setProjectForm={setProjectForm}
             users={users}
+            partners={partners}
             onCreateProject={onCreateProject}
             errors={projectFormErrors}
             canCreateProject={canCreateProject}
@@ -6892,7 +6994,9 @@ function PartnersModule({ role, session, partnerItems, visiblePartnerItems, setP
   const [partnerForm, setPartnerForm] = useState({
     name: "",
     category: partnerCategoryOptions[0],
+    coverage: "regional",
     region: "Чеченская Республика",
+    regionsText: "",
     direction: "Единый центр продаж",
     contact: "",
     relation: partnerRelationOptions[0],
@@ -6916,11 +7020,23 @@ function PartnersModule({ role, session, partnerItems, visiblePartnerItems, setP
       showAction("Укажи название партнёра или ФИО");
       return;
     }
+    const coverage = normalizePartnerCoverage(partnerForm.coverage, partnerForm);
+    const regions = coverage === "federal"
+      ? ["Все регионы"]
+      : coverage === "interregional"
+      ? parsePartnerRegionsInput(partnerForm.regionsText)
+      : [normalizeRegionName(partnerForm.region)];
+    if (coverage === "interregional" && regions.length < 2) {
+      showAction("Для межрегионального партнёра укажи минимум два региона работы");
+      return;
+    }
     const created = {
       id: `P-${Date.now()}`,
       name,
       category: partnerForm.category,
-      region: partnerForm.region,
+      coverage,
+      region: coverage === "federal" ? "Все регионы" : normalizeRegionName(partnerForm.region),
+      regions,
       direction: partnerForm.direction,
       contact: partnerForm.contact.trim(),
       relation: partnerForm.relation,
@@ -6935,7 +7051,7 @@ function PartnersModule({ role, session, partnerItems, visiblePartnerItems, setP
       paid: 0,
     };
     updatePartners([created, ...partnerItems]);
-    setPartnerForm({ name: "", category: partnerCategoryOptions[0], region: "Чеченская Республика", direction: "Единый центр продаж", contact: "", relation: partnerRelationOptions[0], serviceDescription: "", commissionRule: "" });
+    setPartnerForm({ name: "", category: partnerCategoryOptions[0], coverage: "regional", region: "Чеченская Республика", regionsText: "", direction: "Единый центр продаж", contact: "", relation: partnerRelationOptions[0], serviceDescription: "", commissionRule: "" });
     showAction("Партнёр добавлен в базу SmetaOffice");
   }
 
@@ -6947,7 +7063,7 @@ function PartnersModule({ role, session, partnerItems, visiblePartnerItems, setP
     updatePartners(
       partnerItems.map((partner) =>
         (partner.id || partner.name) === partnerKey
-          ? {
+          ? normalizePartnerRecord({
               ...partner,
               ...patch,
               id: partner.id || patch.id || `P-${Date.now()}`,
@@ -6956,7 +7072,7 @@ function PartnersModule({ role, session, partnerItems, visiblePartnerItems, setP
               overdue: Number(patch.overdue ?? partner.overdue ?? 0),
               accrued: Number(patch.accrued ?? partner.accrued ?? 0),
               paid: Number(patch.paid ?? partner.paid ?? 0),
-            }
+            })
           : partner
       )
     );
@@ -9333,7 +9449,7 @@ function SmetaOfficePrototype() {
         writeStoredValue("smeta.users", nextUsers);
       }
       if (Array.isArray(serverPartners)) {
-        const nextPartners = (serverPartners.length ? serverPartners : partnerSeed).map(normalizePartnerRecord);
+        const nextPartners = serverPartners.map(normalizePartnerRecord);
         setPartnersState(nextPartners);
         writeStoredValue("smeta.partners", nextPartners);
       }
@@ -9598,7 +9714,8 @@ function SmetaOfficePrototype() {
     const pmName = userNameById(users, projectForm.pmUserId, "РП не назначен");
     const projectManagerName = userNameById(users, projectForm.projectManagerId, "");
     const salesManagerName = userNameById(users, projectForm.salesManagerId, "");
-    const partnerName = userNameById(users, projectForm.partnerUserId, "—");
+    const registryPartner = partners.find((partner) => (partner.id || partner.name) === projectForm.partnerRegistryId);
+    const partnerName = registryPartner?.name || userNameById(users, projectForm.partnerUserId, "—");
     const created = {
       id: `SG-${String(300 + nextIndex).padStart(3, "0")}`,
       title,
@@ -9623,6 +9740,9 @@ function SmetaOfficePrototype() {
       projectManagerId: projectForm.projectManagerId,
       salesManagerId: projectForm.salesManagerId,
       partnerUserId: projectForm.partnerUserId,
+      partnerRegistryId: projectForm.partnerRegistryId,
+      partnerCoverage: registryPartner ? normalizePartnerCoverage(registryPartner.coverage, registryPartner) : "",
+      partnerRegions: registryPartner ? partnerServiceRegions(registryPartner) : [],
       executor: "—",
       partner: partnerName,
       budget: money(contractAmount),
@@ -10377,6 +10497,7 @@ function SmetaOfficePrototype() {
               onTaskStatusChange={changeTaskStatus}
               executors={executorDirectory}
               users={users}
+              partners={visiblePartners}
               projectFormErrors={validateProjectForm(projectForm)}
             />
           ) : null}
