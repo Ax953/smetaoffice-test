@@ -1889,6 +1889,23 @@ function writeStoredValue(key, value) {
   }
 }
 
+function csvCell(value) {
+  return `"${String(value ?? "").replace(/"/g, '""')}"`;
+}
+
+function downloadCsv(filename, rows) {
+  const csv = `\uFEFF${rows.map((row) => row.map(csvCell).join(";")).join("\n")}`;
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
 function readAuthToken() {
   try {
     return window.localStorage.getItem(AUTH_TOKEN_KEY) || "";
@@ -7139,6 +7156,7 @@ function AdminModule({ users, setUsers, session, executors = [] }) {
   const [adminNotice, setAdminNotice] = useState("");
   const [customExecutorGroups, setCustomExecutorGroups] = useState(() => readStoredValue("smeta.executorSpecializationGroups", []));
   const [expandedUserId, setExpandedUserId] = useState("");
+  const [passwordResetDrafts, setPasswordResetDrafts] = useState({});
 
   const isFullUserAdmin = fullUserAdminRoles.includes(session?.role);
   const isScopedUserAdmin = scopedUserAdminRoles.includes(session?.role);
@@ -7298,6 +7316,8 @@ function AdminModule({ users, setUsers, session, executors = [] }) {
       executorPaymentModel: scopedForm.executorPaymentModel,
       createdAt: new Date().toISOString(),
       createdBy: session?.id || session?.login || "system",
+      passwordChangedAt: new Date().toISOString(),
+      passwordResetBy: session?.login || session?.name || "system",
     };
 
     setUsers((items) => [createdUser, ...items]);
@@ -7317,6 +7337,65 @@ function AdminModule({ users, setUsers, session, executors = [] }) {
         return enforceAdminScope(next);
       })
     );
+  }
+
+  function exportAccessRegistry() {
+    const rows = [
+      [
+        "ФИО / название",
+        "Логин",
+        "Роль",
+        "Статус",
+        "Регион",
+        "Направление",
+        "Должность",
+        "Исполнитель",
+        "Специализации",
+        "Пароль",
+        "Создан",
+        "Пароль выдан/сменён",
+        "Последний вход",
+        "Кто создал / сбросил",
+      ],
+      ...visibleUsers.map((user) => [
+        user.name,
+        user.login,
+        roles.find((roleItem) => roleItem.id === user.role)?.name || user.role,
+        user.status,
+        user.region,
+        user.direction,
+        user.position,
+        user.executorEnabled || user.role === "executor" ? "да" : "нет",
+        parseExecutorSections(user.executorSections).join(", "),
+        user.hasPassword ? "есть, хранится хешем; при утере сбросить" : "нет",
+        user.createdAt ? formatDateTime(user.createdAt) : "",
+        user.passwordChangedAt ? formatDateTime(user.passwordChangedAt) : "",
+        user.lastLoginAt ? formatDateTime(user.lastLoginAt) : "",
+        user.passwordResetBy || user.createdBy || "",
+      ]),
+    ];
+    downloadCsv(`smetaoffice-access-registry-${new Date().toISOString().slice(0, 10)}.csv`, rows);
+    setAdminNotice("Реестр доступов выгружен. Пароли не выгружаются: в системе они хранятся только в защищённом виде.");
+  }
+
+  function resetUserPassword(user) {
+    if (!canEditUserInAdmin(user)) {
+      setAdminNotice("Недостаточно прав для сброса пароля этого пользователя.");
+      return;
+    }
+    const nextPassword = String(passwordResetDrafts[user.id] || "").trim();
+    if (nextPassword.length < 8) {
+      setAdminNotice("Временный пароль должен быть не короче 8 символов.");
+      return;
+    }
+    updateUser(user.id, {
+      password: nextPassword,
+      hasPassword: true,
+      passwordChangedAt: new Date().toISOString(),
+      passwordResetBy: session?.login || session?.name || "admin",
+    });
+    setPasswordResetDrafts((items) => ({ ...items, [user.id]: "" }));
+    setAdminNotice(`Пароль для ${user.name} сброшен. Передай новый временный пароль лично и попроси сменить его при первой возможности.`);
   }
 
   return (
@@ -7390,9 +7469,12 @@ function AdminModule({ users, setUsers, session, executors = [] }) {
         <div className="section-row">
           <div>
             <h3>Пользователи и доступы</h3>
-            <p className="section-hint">Здесь назначается реальная роль в холдинге: регион, должность и уровень доступа. Заявки без назначения не входят в систему.</p>
+            <p className="section-hint">Здесь назначается реальная роль в холдинге: регион, должность и уровень доступа. Пароли не показываются в открытом виде: при утере админ сбрасывает временный пароль.</p>
           </div>
-          <span className="muted-chip">Видимых: {visibleUsers.length} · активных: {visibleUsers.filter((user) => user.status === "active").length}</span>
+          <div className="section-actions">
+            <span className="muted-chip">Видимых: {visibleUsers.length} · активных: {visibleUsers.filter((user) => user.status === "active").length}</span>
+            <button type="button" className="secondary" onClick={exportAccessRegistry}>Скачать реестр доступов</button>
+          </div>
         </div>
 
         <div className="admin-users-table">
@@ -7433,12 +7515,28 @@ function AdminModule({ users, setUsers, session, executors = [] }) {
                 <div className="user-executor-summary">
                   <b>{isExecutorEnabled ? "Исполнитель включён" : "Не исполнитель"}</b>
                   <span>{parseExecutorSections(user.executorSections).length ? parseExecutorSections(user.executorSections).join(", ") : "специализация не указана"}</span>
+                  <span>{user.hasPassword ? "пароль выдан" : "пароль не задан"} · {user.lastLoginAt ? `вход: ${formatDateTime(user.lastLoginAt)}` : "входов нет"}</span>
                   <button type="button" className="secondary" disabled={!canEdit} onClick={() => setExpandedUserId(expandedUserId === user.id ? "" : user.id)}>
-                    {expandedUserId === user.id ? "Скрыть" : "Специализация"}
+                    {expandedUserId === user.id ? "Скрыть" : "Доступ и специализация"}
                   </button>
                 </div>
                 {expandedUserId === user.id ? (
                   <div className="user-executor-popover">
+                    <div className="access-reset-card">
+                      <b>Доступ</b>
+                      <p>Старый пароль не отображается. Если человек потерял доступ, выдай новый временный пароль.</p>
+                      <div className="access-reset-row">
+                        <input
+                          type="password"
+                          value={passwordResetDrafts[user.id] || ""}
+                          onChange={(event) => setPasswordResetDrafts((items) => ({ ...items, [user.id]: event.target.value }))}
+                          placeholder="Новый временный пароль"
+                          disabled={!canEdit}
+                        />
+                        <button type="button" className="secondary" onClick={() => resetUserPassword(user)} disabled={!canEdit}>Сбросить пароль</button>
+                      </div>
+                      <span>Создан: {user.createdAt ? formatDateTime(user.createdAt) : "не указано"} · пароль менялся: {user.passwordChangedAt ? formatDateTime(user.passwordChangedAt) : "не указано"}</span>
+                    </div>
                     <label>
                   <input
                     type="checkbox"

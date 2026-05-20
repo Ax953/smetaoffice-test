@@ -911,6 +911,7 @@ function normalizeIncomingUsers(incomingUsers = [], existingUsers = []) {
       delete nextUser.password;
       nextUser.passwordSalt = hashed.salt;
       nextUser.passwordHash = hashed.hash;
+      nextUser.passwordChangedAt = new Date().toISOString();
     } else if (existing?.passwordHash && existing?.passwordSalt) {
       nextUser.passwordHash = existing.passwordHash;
       nextUser.passwordSalt = existing.passwordSalt;
@@ -1023,8 +1024,11 @@ const server = http.createServer(async (req, res) => {
       }
 
       const token = randomBytes(32).toString("hex");
+      const userWithLoginAt = { ...user, lastLoginAt: new Date().toISOString() };
+      const usersWithLoginAt = (db.users || []).map((item) => (item.id === user.id ? userWithLoginAt : item));
       const nextDb = {
         ...db,
+        users: usersWithLoginAt,
         authSessions: {
           ...cleanupSessions(db),
           [token]: {
@@ -1035,7 +1039,7 @@ const server = http.createServer(async (req, res) => {
         },
       };
       await writeDb(nextDb);
-      sendJson(res, 200, { ok: true, token, user: publicUser(user), expiresAt: nextDb.authSessions[token].expiresAt });
+      sendJson(res, 200, { ok: true, token, user: publicUser(userWithLoginAt), expiresAt: nextDb.authSessions[token].expiresAt });
       return;
     }
 
