@@ -780,6 +780,101 @@ function availableWorkForUser(user, projects = [], executors = []) {
   });
 }
 
+function parseExecutorSections(value) {
+  const source = Array.isArray(value) ? value : String(value || "").split(/[;,\n]/);
+  return [...new Set(source.map((item) => String(item || "").trim()).filter(Boolean))];
+}
+
+function userToExecutorProfile(user = {}) {
+  const sections = parseExecutorSections(user.executorSections || user.executorSectionsText);
+  const rank = Number(user.executorRank) || (user.role === "executor" ? 2 : 1);
+  const accrued = Number(user.executorAccrued) || 0;
+  const paid = Number(user.executorPaid) || 0;
+  return {
+    id: user.executorId || user.id,
+    userId: user.id,
+    source: "user",
+    name: user.name || user.login || "User",
+    type: user.role === "partner" ? "partner" : "SmetaOffice user",
+    role: user.role,
+    region: normalizeRegionName(user.region || ""),
+    regions: userRegionList(user),
+    direction: normalizeDirectionName(user.direction || ALL_DIRECTIONS),
+    city: user.city || user.region || "",
+    sections: sections.length ? sections : ["General"],
+    rank,
+    status: user.executorStatus || (user.role === "executor" ? "Executor" : "Role + executor"),
+    rating: Math.max(0, Math.min(100, Number(user.executorRating) || 50)),
+    qualification: user.executorQualification || `Rank ${rank}`,
+    workload: Number(user.executorWorkload) || 0,
+    onTime: Number(user.executorOnTime) || 0,
+    firstAccept: Number(user.executorFirstAccept) || 0,
+    paymentModel: user.executorPaymentModel || "piecework",
+    hourlyRate: Number(user.executorHourlyRate) || 0,
+    salaryBase: Number(user.executorSalaryBase) || 0,
+    percentRate: Number(user.executorPercentRate) || 0,
+    accrued,
+    paid,
+    payable: Math.max(accrued - paid, 0),
+    contacts: {
+      phone: user.phone || user.contacts?.phone || "",
+      email: user.email || user.contacts?.email || "",
+      telegram: user.telegram || user.contacts?.telegram || "",
+    },
+    note: user.executorNote || "",
+  };
+}
+
+function buildExecutorDirectory(executors = [], users = []) {
+  const userExecutors = (users || [])
+    .filter((user) => !["blocked", "disabled"].includes(user?.status))
+    .filter((user) => user.executorEnabled || user.role === "executor" || user.executorId)
+    .map(userToExecutorProfile);
+  const map = new Map();
+  [...userExecutors, ...(executors || [])].forEach((executor) => {
+    if (!executor?.id) return;
+    map.set(executor.id, {
+      ...executor,
+      region: normalizeRegionName(executor.region || executor.city || ""),
+      direction: normalizeDirectionName(executor.direction || ALL_DIRECTIONS),
+      sections: parseExecutorSections(executor.sections).length ? parseExecutorSections(executor.sections) : ["General"],
+    });
+  });
+  return [...map.values()];
+}
+
+function canViewExecutorContacts(user, executor) {
+  if (!user) return false;
+  if (executor && (executor.userId === user.id || executor.id === user.executorId)) return true;
+  return ["owner", "admin", "deputy", "regional_admin", "direction_admin", "director", "regional_manager"].includes(user.role);
+}
+
+function sanitizeExecutorForUser(user, executor) {
+  if (canViewExecutorContacts(user, executor)) return executor;
+  const { contacts, phone, email, telegram, note, ...safeExecutor } = executor;
+  return {
+    ...safeExecutor,
+    contacts: {
+      phone: "hidden",
+      email: "hidden",
+      telegram: "hidden",
+    },
+    note: "",
+  };
+}
+
+function normalizeIncomingExecutors(executors = []) {
+  return (executors || [])
+    .filter((executor) => !(executor?.source === "user" && executor?.userId && !executor?.profileOverride))
+    .map((executor) => {
+      const next = { ...executor };
+      if (next.contacts?.phone === "hidden" || next.contacts?.email === "hidden" || next.contacts?.telegram === "hidden") {
+        delete next.contacts;
+      }
+      return next;
+    });
+}
+
 function canAccessExecutor(user, executor) {
   if (!user || !executor) return false;
   if (["owner", "admin", "deputy", "finance", "accountant"].includes(user.role)) return true;
@@ -795,7 +890,7 @@ function canAccessExecutor(user, executor) {
 }
 
 function visibleExecutorsFor(user, executors = []) {
-  return executors.filter((executor) => canAccessExecutor(user, executor));
+  return executors.filter((executor) => canAccessExecutor(user, executor)).map((executor) => sanitizeExecutorForUser(user, executor));
 }
 
 function itemKey(item) {
@@ -983,6 +1078,7 @@ const server = http.createServer(async (req, res) => {
     const db = await readDb();
 
     if (req.method === "GET" && route === "/api/health") {
+      const executorDirectory = buildExecutorDirectory(db.executors || [], db.users || []);
       sendJson(res, 200, {
         ok: true,
         service: "SmetaOffice API",
@@ -991,7 +1087,7 @@ const server = http.createServer(async (req, res) => {
         updatedAt: new Date().toISOString(),
         counts: {
           projects: (db.projects || []).length,
-          executors: (db.executors || []).length,
+          executors: executorDirectory.length,
           users: (db.users || []).length,
           partners: (db.partners || []).length,
           salesLeads: (db.salesLeads || []).length,
@@ -1110,11 +1206,12 @@ const server = http.createServer(async (req, res) => {
       const auth = requireAuth(req, res, db);
       if (!auth) return;
       const visibleUsers = authMode === "server" ? visibleUsersFor(auth.user, db.users || []) : db.users;
+      const executorDirectory = buildExecutorDirectory(db.executors || [], db.users || []);
       const payload = authMode === "server"
         ? {
             ...db,
             projects: visibleProjectsFor(auth.user, db.projects || []),
-            executors: visibleExecutorsFor(auth.user, db.executors || []),
+            executors: visibleExecutorsFor(auth.user, executorDirectory),
             users: publicUsers(visibleUsers),
             partners: visiblePartnersFor(auth.user, db.partners || []),
             salesLeads: visibleSalesLeadsFor(auth.user, db.salesLeads || []),
@@ -1137,7 +1234,8 @@ const server = http.createServer(async (req, res) => {
     if (req.method === "GET" && route === "/api/available-work") {
       const auth = requireAuth(req, res, db);
       if (!auth) return;
-      sendJson(res, 200, availableWorkForUser(auth.user, db.projects || [], db.executors || []));
+      const executorDirectory = buildExecutorDirectory(db.executors || [], db.users || []);
+      sendJson(res, 200, availableWorkForUser(auth.user, db.projects || [], executorDirectory));
       return;
     }
 
@@ -1185,7 +1283,8 @@ const server = http.createServer(async (req, res) => {
           const currentId = item.id || `${project.id}-${item.name || index}`;
           const matches = currentId === taskId || item.id === taskId || item.name === taskName || item.sectionName === taskName;
           if (!matches) return item;
-          if (authMode === "server" && canBidOutsideAssignedProject && (!isOpenExecutorSlot(item) || isPreContractStage(item) || !matchesExecutorProfile(item, auth.user, db.executors || []))) return item;
+          const executorDirectory = buildExecutorDirectory(db.executors || [], db.users || []);
+          if (authMode === "server" && canBidOutsideAssignedProject && (!isOpenExecutorSlot(item) || isPreContractStage(item) || !matchesExecutorProfile(item, auth.user, executorDirectory))) return item;
           changed = true;
           const bids = (item.bids || []).filter((bid) => bid.bidderUserId !== auth.user.id && bid.executorId !== auth.user.executorId);
           return { ...item, bids: [createdBid, ...bids] };
@@ -1223,7 +1322,7 @@ const server = http.createServer(async (req, res) => {
       sendJson(res, 200, {
         ok: true,
         bid: createdBid,
-        availableWork: availableWorkForUser(auth.user, nextDb.projects, nextDb.executors || []),
+        availableWork: availableWorkForUser(auth.user, nextDb.projects, buildExecutorDirectory(nextDb.executors || [], nextDb.users || [])),
         projects: authMode === "server" ? visibleProjectsFor(auth.user, nextDb.projects) : nextDb.projects,
       });
       return;
@@ -1266,18 +1365,20 @@ const server = http.createServer(async (req, res) => {
     if (req.method === "GET" && route === "/api/executors") {
       const auth = requireAuth(req, res, db);
       if (!auth) return;
-      sendJson(res, 200, authMode === "server" ? visibleExecutorsFor(auth.user, db.executors || []) : db.executors);
+      const executorDirectory = buildExecutorDirectory(db.executors || [], db.users || []);
+      sendJson(res, 200, authMode === "server" ? visibleExecutorsFor(auth.user, executorDirectory) : executorDirectory);
       return;
     }
 
     if (req.method === "PUT" && route === "/api/executors") {
       const auth = requireWriteAccess(req, res, db, route);
       if (!auth) return;
-      const executors = await readJsonBody(req);
+      const executors = normalizeIncomingExecutors(await readJsonBody(req));
       const nextExecutors = authMode === "server" ? mergeManagedCollection(db.executors || [], executors, auth.user, canAccessExecutor) : executors;
       const nextDb = { ...db, executors: nextExecutors };
       await writeDb(nextDb);
-      sendJson(res, 200, authMode === "server" ? visibleExecutorsFor(auth.user, nextDb.executors) : nextDb.executors);
+      const executorDirectory = buildExecutorDirectory(nextDb.executors || [], nextDb.users || []);
+      sendJson(res, 200, authMode === "server" ? visibleExecutorsFor(auth.user, executorDirectory) : executorDirectory);
       return;
     }
 
