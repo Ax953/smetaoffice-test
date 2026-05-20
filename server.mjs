@@ -1243,7 +1243,7 @@ const server = http.createServer(async (req, res) => {
     if (req.method === "DELETE" && route.startsWith("/api/projects/")) {
       const auth = requireAuth(req, res, db);
       if (!auth) return;
-      if (authMode === "server" && !["owner", "admin", "deputy"].includes(auth.user.role)) {
+      if (authMode === "server" && !["owner", "admin"].includes(auth.user.role)) {
         sendJson(res, 403, { ok: false, error: "Forbidden" });
         return;
       }
