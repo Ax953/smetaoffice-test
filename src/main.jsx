@@ -7398,6 +7398,22 @@ function AdminModule({ users, setUsers, session, executors = [] }) {
     setAdminNotice(`Пароль для ${user.name} сброшен. Передай новый временный пароль лично и попроси сменить его при первой возможности.`);
   }
 
+  function deleteUser(user) {
+    if (!isFullUserAdmin) {
+      setAdminNotice("Удалять пользователей может только владелец или главный администратор.");
+      return;
+    }
+    if (user.id === session?.id || user.login === session?.login) {
+      setAdminNotice("Нельзя удалить собственный аккаунт из текущей сессии.");
+      return;
+    }
+    const confirmed = window.confirm(`Удалить пользователя ${user.name} (${user.login})?\n\nДоступ будет отозван. Проекты и история действий не удаляются.`);
+    if (!confirmed) return;
+    setUsers((items) => items.filter((item) => item.id !== user.id));
+    setExpandedUserId((value) => (value === user.id ? "" : value));
+    setAdminNotice(`Пользователь ${user.name} удалён из реестра доступа.`);
+  }
+
   return (
     <>
       <SectionIntro section="admin" />
@@ -7519,6 +7535,11 @@ function AdminModule({ users, setUsers, session, executors = [] }) {
                   <button type="button" className="secondary" disabled={!canEdit} onClick={() => setExpandedUserId(expandedUserId === user.id ? "" : user.id)}>
                     {expandedUserId === user.id ? "Скрыть" : "Доступ и специализация"}
                   </button>
+                  {isFullUserAdmin && user.id !== session?.id && user.login !== session?.login ? (
+                    <button type="button" className="danger-light" onClick={() => deleteUser(user)}>
+                      Удалить пользователя
+                    </button>
+                  ) : null}
                 </div>
                 {expandedUserId === user.id ? (
                   <div className="user-executor-popover">
