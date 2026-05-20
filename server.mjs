@@ -297,7 +297,7 @@ function omitFields(item, fields) {
 
 function projectFinanceAccessLevel(user) {
   if (!user) return "none";
-  if (["owner", "deputy", "finance", "accountant", "director", "regional_manager", "pm", "project_manager"].includes(user.role)) return "full";
+  if (["owner", "deputy", "finance", "accountant", "regional_admin", "direction_admin", "director", "regional_manager", "pm", "project_manager"].includes(user.role)) return "full";
   if (["sales_manager", "head_of_sales"].includes(user.role)) return "sales";
   if (["executor", "partner"].includes(user.role)) return "ownPayout";
   return "none";
@@ -811,7 +811,7 @@ function canWriteCollection(user, route) {
   if (!user || user.status === "disabled") return false;
   if (["/api/financial-periods", "/api/operational-expenses", "/api/cash-accounts"].includes(route)) return canEditManagementFinance(user);
   if (["owner", "admin", "deputy"].includes(user.role)) return true;
-  if (route === "/api/projects") return ["director", "regional_manager", "pm", "project_manager"].includes(user.role);
+  if (route === "/api/projects") return ["regional_admin", "direction_admin", "director", "regional_manager", "pm", "project_manager"].includes(user.role);
   if (route === "/api/executors") return ["regional_admin", "direction_admin", "director", "regional_manager", "pm"].includes(user.role);
   if (route === "/api/partners") return ["regional_admin", "direction_admin", "director", "regional_manager"].includes(user.role);
   if (route === "/api/sales-leads") return ["head_of_sales", "sales_manager"].includes(user.role);

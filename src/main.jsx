@@ -23,8 +23,8 @@ const roles = [
 const rolePermissions = {
   owner: ["viewAll", "viewClient", "viewFinance", "viewProductionBudget", "manageUsers", "manageProjects", "manageExecutors", "assignExecutors", "viewExecutorContacts", "editFinance", "viewOwnerDashboard"],
   admin: ["viewAll", "viewClient", "manageUsers", "manageProjects", "manageExecutors", "assignExecutors", "viewExecutorContacts"],
-  regional_admin: ["viewClient", "manageUsers", "manageExecutors", "viewExecutorContacts"],
-  direction_admin: ["viewClient", "manageUsers", "manageExecutors", "viewExecutorContacts"],
+  regional_admin: ["viewClient", "viewFinance", "viewProductionBudget", "manageUsers", "manageProjects", "manageExecutors", "assignExecutors", "viewExecutorContacts"],
+  direction_admin: ["viewClient", "viewFinance", "viewProductionBudget", "manageUsers", "manageProjects", "manageExecutors", "assignExecutors", "viewExecutorContacts"],
   deputy: ["viewAll", "viewClient", "viewFinance", "viewProductionBudget", "manageProjects", "manageExecutors", "assignExecutors", "viewExecutorContacts", "viewOwnerDashboard"],
   director: ["viewClient", "viewFinance", "viewProductionBudget", "manageProjects", "manageExecutors", "assignExecutors", "viewExecutorContacts", "viewOwnerDashboard"],
   regional_manager: ["viewClient", "viewFinance", "viewProductionBudget", "manageProjects", "manageExecutors", "assignExecutors", "viewExecutorContacts", "viewOwnerDashboard"],
@@ -1641,10 +1641,10 @@ function canAccessProject(user, project, viewRole = user?.role) {
     return true;
   }
   if (role === "direction_admin") {
-    return project.direction === user.direction || user.direction === "Все направления";
+    return normalizeDirectionName(project.direction) === normalizeDirectionName(user.direction) || normalizeDirectionName(user.direction) === "Все направления";
   }
   if (role === "director") {
-    return project.directorUserId === user.id || project.direction === user.direction;
+    return project.directorUserId === user.id || normalizeDirectionName(project.direction) === normalizeDirectionName(user.direction);
   }
   if (role === "regional_manager") {
     return true;
@@ -1714,14 +1714,14 @@ function canAccessPartner(user, partner, viewRole = user?.role) {
 
   if (role === "regional_admin") return true;
   if (role === "direction_admin") {
-    return partner.direction === user.direction || user.direction === "Все направления";
+    return normalizeDirectionName(partner.direction) === normalizeDirectionName(user.direction) || normalizeDirectionName(user.direction) === "Все направления";
   }
   if (role === "director") {
-    return partner.direction === user.direction || user.direction === "Все направления";
+    return normalizeDirectionName(partner.direction) === normalizeDirectionName(user.direction) || normalizeDirectionName(user.direction) === "Все направления";
   }
   if (role === "regional_manager") return true;
   if (role === "pm" || role === "project_manager") {
-    return partner.direction === user.direction || user.direction === "Все направления";
+    return normalizeDirectionName(partner.direction) === normalizeDirectionName(user.direction) || normalizeDirectionName(user.direction) === "Все направления";
   }
   if (role === "head_of_sales" || role === "sales_manager") {
     return partner.direction === "Единый центр продаж" || partner.relation === "Партнёр приводит нам клиентов";
@@ -6899,7 +6899,7 @@ function PartnersModule({ role, session, partnerItems, visiblePartnerItems, setP
     serviceDescription: "",
     commissionRule: "",
   });
-  const canManagePartners = ["owner", "admin"].includes(role);
+  const canManagePartners = ["owner", "admin", "regional_admin", "direction_admin", "director", "regional_manager"].includes(role);
 
   function updatePartners(nextItems) {
     setPartnerItems(nextItems);
@@ -8184,7 +8184,7 @@ function DashboardModule({ visibleProjects, selectedProject, setSelectedId, role
   const summary = financeSummary(visibleProjects);
   const canSeeFinance = roleCan(role, "viewFinance");
   const canSeeProductionBudget = roleCan(role, "viewProductionBudget") || canSeeFinance;
-  const showOrgBreakdown = ["owner", "deputy", "director", "regional_manager", "finance", "accountant"].includes(role);
+  const showOrgBreakdown = ["owner", "deputy", "director", "regional_manager", "regional_admin", "direction_admin", "finance", "accountant"].includes(role);
   const showProductionRules = !["partner", "sales_manager", "head_of_sales"].includes(role);
   const showControlPath = !["partner"].includes(role);
   const dashboardTitle = dashboardTitleForRole(role);
@@ -8429,12 +8429,20 @@ function DashboardModule({ visibleProjects, selectedProject, setSelectedId, role
   const launchReadyPercent = Math.round((launchReadyCount / launchReadinessCards.length) * 100);
   const partnerTaskRows = visibleTasks.filter((task) => Number(task.executorCost) || Number(task.paid) || task.status).slice(0, 6);
   const rolePrimaryCards = (() => {
-    if (["admin", "regional_admin", "direction_admin"].includes(role)) {
+    if (role === "admin") {
       return [
         { label: "Пользователи в контуре", value: String(scopedUsers.length), hint: role === "admin" ? "вся система" : scopeText, tone: "blue", section: "admin" },
         { label: "Исполнители в базе", value: String(executors.length), hint: "кого можно назначать на этапы", tone: executors.length ? "green" : "yellow", section: "executors" },
         { label: "Проекты контура", value: String(visibleProjects.length), hint: "для проверки данных и прав", tone: "slate", section: "projects" },
         { label: "Партнёры контура", value: String(partners.length), hint: "доступ только по региону/направлению", tone: "blue", section: "partners" },
+      ];
+    }
+    if (["regional_admin", "direction_admin"].includes(role)) {
+      return [
+        { label: role === "regional_admin" ? "Проекты региона" : "Проекты направления", value: String(visibleProjects.length), hint: scopeText, tone: "blue", section: "projects" },
+        { label: "Сумма договоров", value: money(summary.contractAmount), hint: "только доступный контур", tone: "blue", section: "projects" },
+        { label: "Красная зона", value: String(redProjects.length), hint: redProjects[0]?.title || "пожаров нет", tone: redProjects.length ? "red" : "green", project: redProjects[0] },
+        { label: "Пользователи в контуре", value: String(scopedUsers.length), hint: "роли, должности и доступы", tone: "slate", section: "admin" },
       ];
     }
     if (["director", "regional_manager"].includes(role)) {
@@ -8534,13 +8542,21 @@ function DashboardModule({ visibleProjects, selectedProject, setSelectedId, role
     if (role === "partner") {
       return partnerTaskRows.map((task) => ({ id: task.id, title: task.name, meta: `${task.projectTitle} · срок: ${task.due || "не указан"}`, value: task.status, tone: statusClass(task.status) === "danger" ? "red" : statusClass(task.status) === "warning" ? "yellow" : "green", projectId: task.projectId }));
     }
-    if (["pm", "project_manager", "director", "regional_manager"].includes(role)) {
+    if (["pm", "project_manager", "director", "regional_manager", "regional_admin", "direction_admin"].includes(role)) {
       return visibleProjects.slice(0, 6).map((project) => {
         const signals = projectOperationalSignals(project);
-        return { id: project.id, title: project.title, meta: `${project.region || project.city} · ${project.stage || "этап не указан"} · ${signals.schedule.label}`, value: `${project.progress || 0}%`, tone: effectiveProjectRisk(project), project };
+        const economy = projectEconomy(project);
+        return {
+          id: project.id,
+          title: project.title,
+          meta: `${project.region || project.city} · ${project.stage || "этап не указан"} · ${signals.schedule.label}`,
+          value: canSeeFinance ? money(economy.contractAmount) : `${project.progress || 0}%`,
+          tone: effectiveProjectRisk(project),
+          project,
+        };
       });
     }
-    if (["admin", "regional_admin", "direction_admin"].includes(role)) {
+    if (role === "admin") {
       return scopedUsers.slice(0, 6).map((user) => ({ id: user.id, title: user.name, meta: `${roles.find((item) => item.id === user.role)?.name || user.role} · ${user.region || "регион не указан"} · ${user.direction || "направление не указано"}`, value: user.status || "active", tone: user.status === "active" ? "green" : "yellow", section: "admin" }));
     }
     return [];
@@ -8925,8 +8941,10 @@ function DashboardModule({ visibleProjects, selectedProject, setSelectedId, role
                 ? "Лиды"
                 : role === "partner"
                 ? "Мои работы"
-                : ["admin", "regional_admin", "direction_admin"].includes(role)
+                : role === "admin"
                 ? "Пользователи"
+                : ["regional_admin", "direction_admin"].includes(role)
+                ? "Проекты контура"
                 : "Проекты"}
             </span>
             <h3>
@@ -8936,8 +8954,10 @@ function DashboardModule({ visibleProjects, selectedProject, setSelectedId, role
                 ? "Продажи, которые должны дойти до проекта"
                 : role === "partner"
                 ? "Работы партнёра"
-                : ["admin", "regional_admin", "direction_admin"].includes(role)
+                : role === "admin"
                 ? "Пользователи в зоне администрирования"
+                : ["regional_admin", "direction_admin"].includes(role)
+                ? "Проекты, которые администратор должен контролировать"
                 : "Рабочий портфель роли"}
             </h3>
             <p className="section-hint">Здесь показаны только строки, доступные текущей роли по реальной фильтрации данных.</p>
