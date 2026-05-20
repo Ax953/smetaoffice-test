@@ -21,13 +21,13 @@ const roles = [
 ];
 
 const rolePermissions = {
-  owner: ["viewAll", "viewClient", "viewFinance", "viewProductionBudget", "manageUsers", "manageProjects", "manageExecutors", "assignExecutors", "viewExecutorContacts", "editFinance", "viewOwnerDashboard"],
-  admin: ["viewAll", "viewClient", "manageUsers", "manageProjects", "manageExecutors", "assignExecutors", "viewExecutorContacts"],
-  regional_admin: ["viewClient", "viewFinance", "viewProductionBudget", "manageUsers", "manageProjects", "manageExecutors", "assignExecutors", "viewExecutorContacts"],
-  direction_admin: ["viewClient", "viewFinance", "viewProductionBudget", "manageUsers", "manageProjects", "manageExecutors", "assignExecutors", "viewExecutorContacts"],
-  deputy: ["viewAll", "viewClient", "viewFinance", "viewProductionBudget", "manageProjects", "manageExecutors", "assignExecutors", "viewExecutorContacts", "viewOwnerDashboard"],
-  director: ["viewClient", "viewFinance", "viewProductionBudget", "manageProjects", "manageExecutors", "assignExecutors", "viewExecutorContacts", "viewOwnerDashboard"],
-  regional_manager: ["viewClient", "viewFinance", "viewProductionBudget", "manageProjects", "manageExecutors", "assignExecutors", "viewExecutorContacts", "viewOwnerDashboard"],
+  owner: ["viewAll", "viewClient", "viewFinance", "viewProductionBudget", "manageUsers", "manageProjects", "manageExecutors", "assignExecutors", "viewExecutorContacts", "editFinance", "editProjectFinance", "viewOwnerDashboard"],
+  admin: ["viewAll", "viewClient", "viewFinance", "viewProductionBudget", "manageUsers", "manageProjects", "manageExecutors", "assignExecutors", "viewExecutorContacts", "editProjectFinance"],
+  regional_admin: ["viewClient", "viewFinance", "viewProductionBudget", "manageUsers", "manageProjects", "manageExecutors", "assignExecutors", "viewExecutorContacts", "editProjectFinance"],
+  direction_admin: ["viewClient", "viewFinance", "viewProductionBudget", "manageUsers", "manageProjects", "manageExecutors", "assignExecutors", "viewExecutorContacts", "editProjectFinance"],
+  deputy: ["viewAll", "viewClient", "viewFinance", "viewProductionBudget", "manageProjects", "manageExecutors", "assignExecutors", "viewExecutorContacts", "editProjectFinance", "viewOwnerDashboard"],
+  director: ["viewClient", "viewFinance", "viewProductionBudget", "manageProjects", "manageExecutors", "assignExecutors", "viewExecutorContacts", "editProjectFinance", "viewOwnerDashboard"],
+  regional_manager: ["viewClient", "viewFinance", "viewProductionBudget", "manageProjects", "manageExecutors", "assignExecutors", "viewExecutorContacts", "editProjectFinance", "viewOwnerDashboard"],
   pm: ["viewClient", "viewProductionBudget", "manageProjects", "manageExecutors", "assignExecutors"],
   project_manager: ["viewClient", "viewProductionBudget", "manageProjects", "assignExecutors"],
   sales_manager: ["viewClient"],
@@ -2305,7 +2305,7 @@ function toMoneyNumber(value) {
 }
 
 function canCreateProjectRole(role) {
-  return ["owner", "admin", "deputy", "director", "regional_manager", "pm", "project_manager"].includes(role);
+  return ["owner", "admin", "regional_admin", "direction_admin", "deputy", "director", "regional_manager", "pm", "project_manager"].includes(role);
 }
 
 function projectSourceLabel(mode) {
@@ -3459,7 +3459,7 @@ function ProjectEditPanel({ project, users, canEdit, canEditFinance, onUpdatePro
       <div className="section-row">
         <div>
           <h3>Редактирование проекта</h3>
-          <p className="section-hint">Здесь исправляются ошибочно внесённые данные проекта. Финансовые поля доступны только роли с финансовым правом.</p>
+          <p className="section-hint">Здесь исправляются данные проекта. Проектные суммы доступны владельцу, администраторам и ролям, которые отвечают за свой производственный контур.</p>
         </div>
         <button type="button" className="primary" onClick={save}>Сохранить изменения</button>
       </div>
@@ -3489,7 +3489,7 @@ function ProjectEditPanel({ project, users, canEdit, canEditFinance, onUpdatePro
             <label><span>Комиссия продаж вручную, ₽</span><input type="number" value={form.salesCommissionAmount} onChange={(event) => update({ salesCommissionAmount: event.target.value })} /></label>
           </>
         ) : (
-          <div className="wide form-hint">Финансовые поля скрыты для этой роли. Сохранение не изменит сумму договора, оплаты, бюджет РП и комиссию продаж.</div>
+          <div className="wide form-hint">Проектные суммы скрыты для этой роли. Сохранение не изменит сумму договора, оплаты, бюджет РП и комиссию продаж.</div>
         )}
         <label className="wide"><span>Главная папка Яндекс.Диска</span><input value={form.yandexFolder} onChange={(event) => update({ yandexFolder: event.target.value })} /></label>
         {canEditFinance ? <div className="wide form-hint">Расчёт по текущим полям: бюджет РП {money(calculatedProductionBudget)} по проценту; комиссия продаж {money(calculatedSalesCommission)} по проценту. Если вручную указана сумма в ₽, она перебивает процентный расчёт.</div> : null}
@@ -3839,7 +3839,7 @@ function ProjectDetails({ project, role, onUpdateProject, onTaskStatusChange, on
       <BitrixBridgeCard project={project} />
       <ClientParticipantsCard project={project} onAddParticipant={onAddClientParticipant} />
       <ClientApprovalsCard project={project} onCreateApproval={onCreateApproval} />
-      <ProjectEditPanel project={project} users={users} canEdit={canAdminProject} canEditFinance={roleCan(role, "editFinance")} onUpdateProject={onUpdateProject} />
+      <ProjectEditPanel project={project} users={users} canEdit={canAdminProject} canEditFinance={roleCan(role, "editProjectFinance") || roleCan(role, "editFinance")} onUpdateProject={onUpdateProject} />
 
       <section className="office-card economy-card">
         <div className="section-row">

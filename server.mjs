@@ -297,7 +297,7 @@ function omitFields(item, fields) {
 
 function projectFinanceAccessLevel(user) {
   if (!user) return "none";
-  if (["owner", "deputy", "finance", "accountant", "regional_admin", "direction_admin", "director", "regional_manager", "pm", "project_manager"].includes(user.role)) return "full";
+  if (["owner", "admin", "deputy", "finance", "accountant", "regional_admin", "direction_admin", "director", "regional_manager", "pm", "project_manager"].includes(user.role)) return "full";
   if (["sales_manager", "head_of_sales"].includes(user.role)) return "sales";
   if (["executor", "partner"].includes(user.role)) return "ownPayout";
   return "none";
