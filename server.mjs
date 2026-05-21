@@ -132,7 +132,7 @@ const ALL_REGIONS = "Все регионы";
 const ALL_DIRECTIONS = "Все направления";
 const fullUserAdminRoles = ["owner", "admin"];
 const scopedUserAdminRoles = ["regional_admin", "direction_admin"];
-const scopedAdminManageableRoleIds = ["director", "regional_manager", "pm", "project_manager", "sales_manager", "head_of_sales", "executor", "partner"];
+const scopedAdminManageableRoleIds = ["director", "head_of_department", "regional_manager", "pm", "project_manager", "sales_manager", "head_of_sales", "executor", "partner"];
 
 function normalizeRegionName(region) {
   const value = String(region || "").trim();
@@ -306,6 +306,7 @@ function canAccessProject(user, project) {
   if (user.role === "regional_admin" || user.role === "regional_manager") return true;
   if (user.role === "direction_admin") return user.direction === ALL_DIRECTIONS || normalizeDirectionName(project.direction) === normalizeDirectionName(user.direction);
   if (user.role === "director") return project.directorUserId === user.id || normalizeDirectionName(project.direction) === normalizeDirectionName(user.direction);
+  if (user.role === "head_of_department") return normalizeDirectionName(project.direction) === normalizeDirectionName(user.direction);
   if (user.role === "pm") return project.pmUserId === user.id || project.managerId === user.id || project.manager === user.name;
   if (user.role === "project_manager") return project.projectManagerId === user.id || project.pmUserId === user.id || project.managerId === user.id || project.manager === user.name;
   if (user.role === "sales_manager") return project.salesManagerId === user.id;
@@ -367,7 +368,7 @@ function omitFields(item, fields) {
 
 function projectFinanceAccessLevel(user) {
   if (!user) return "none";
-  if (["owner", "admin", "deputy", "finance", "accountant", "regional_admin", "direction_admin", "director", "regional_manager", "pm", "project_manager"].includes(user.role)) return "full";
+  if (["owner", "admin", "deputy", "finance", "accountant", "regional_admin", "direction_admin", "director", "head_of_department", "regional_manager", "pm", "project_manager"].includes(user.role)) return "full";
   if (["sales_manager", "head_of_sales"].includes(user.role)) return "sales";
   if (["executor", "partner"].includes(user.role)) return "ownPayout";
   return "none";
@@ -410,7 +411,7 @@ function canAccessPartner(user, partner) {
   if (user.role === "partner") return normalizedPartner.userId === user.id || normalizedPartner.partnerUserId === user.id || normalizedPartner.name === user.name;
   if (!partnerRegionMatches(user, normalizedPartner)) return false;
   if (user.role === "regional_admin" || user.role === "regional_manager") return true;
-  if (user.role === "direction_admin" || user.role === "director" || user.role === "pm" || user.role === "project_manager") {
+  if (user.role === "direction_admin" || user.role === "director" || user.role === "head_of_department" || user.role === "pm" || user.role === "project_manager") {
     return user.direction === ALL_DIRECTIONS || normalizeDirectionName(normalizedPartner.direction) === normalizeDirectionName(user.direction);
   }
   if (user.role === "head_of_sales" || user.role === "sales_manager") {
@@ -846,7 +847,7 @@ function buildExecutorDirectory(executors = [], users = []) {
 function canViewExecutorContacts(user, executor) {
   if (!user) return false;
   if (executor && (executor.userId === user.id || executor.id === user.executorId)) return true;
-  return ["owner", "admin", "deputy", "regional_admin", "direction_admin", "director", "regional_manager"].includes(user.role);
+  return ["owner", "admin", "deputy", "regional_admin", "direction_admin", "director", "head_of_department", "regional_manager"].includes(user.role);
 }
 
 function sanitizeExecutorForUser(user, executor) {
@@ -882,7 +883,7 @@ function canAccessExecutor(user, executor) {
   const hasRegion = !executor.region && !executor.city ? true : canAccessRegion(user, executor);
   if (!hasRegion) return false;
   if (user.role === "regional_admin" || user.role === "regional_manager" || user.role === "pm" || user.role === "project_manager") return true;
-  if (user.role === "direction_admin" || user.role === "director") {
+  if (user.role === "direction_admin" || user.role === "director" || user.role === "head_of_department") {
     const direction = normalizeDirectionName(executor.direction || ALL_DIRECTIONS);
     return direction === ALL_DIRECTIONS || user.direction === ALL_DIRECTIONS || direction === normalizeDirectionName(user.direction);
   }
@@ -977,9 +978,9 @@ function canWriteCollection(user, route) {
   if (!user || user.status === "disabled") return false;
   if (["/api/financial-periods", "/api/operational-expenses", "/api/cash-accounts"].includes(route)) return canEditManagementFinance(user);
   if (["owner", "admin", "deputy"].includes(user.role)) return true;
-  if (route === "/api/projects") return ["regional_admin", "direction_admin", "director", "regional_manager", "pm", "project_manager"].includes(user.role);
-  if (route === "/api/executors") return ["regional_admin", "direction_admin", "director", "regional_manager", "pm"].includes(user.role);
-  if (route === "/api/partners") return ["regional_admin", "direction_admin", "director", "regional_manager"].includes(user.role);
+  if (route === "/api/projects") return ["regional_admin", "direction_admin", "director", "head_of_department", "regional_manager", "pm", "project_manager"].includes(user.role);
+  if (route === "/api/executors") return ["regional_admin", "direction_admin", "director", "head_of_department", "regional_manager", "pm"].includes(user.role);
+  if (route === "/api/partners") return ["regional_admin", "direction_admin", "director", "head_of_department", "regional_manager"].includes(user.role);
   if (route === "/api/sales-leads") return ["head_of_sales", "sales_manager"].includes(user.role);
   if (route === "/api/integration-settings") return ["owner", "admin", "deputy"].includes(user.role);
   if (route === "/api/users") return [...fullUserAdminRoles, ...scopedUserAdminRoles].includes(user.role);
