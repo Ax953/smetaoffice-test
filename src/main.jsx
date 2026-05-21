@@ -6313,6 +6313,7 @@ function ProjectCreationWizard({ projectForm, setProjectForm, users, partners = 
 
 function ProjectsModule({
   visibleProjects,
+  allAccessibleProjects = visibleProjects,
   setSelectedId,
   role,
   query,
@@ -6362,7 +6363,7 @@ function ProjectsModule({
 
   const clientGroups = useMemo(() => {
     const map = new Map();
-    visibleProjects.forEach((project) => {
+    allAccessibleProjects.forEach((project) => {
       const key = clientKeyForProject(project);
       const item = map.get(key) || {
         key,
@@ -6391,7 +6392,7 @@ function ProjectsModule({
         };
       })
       .sort((a, b) => b.projects.length - a.projects.length || b.summary.contractAmount - a.summary.contractAmount || a.name.localeCompare(b.name));
-  }, [visibleProjects]);
+  }, [allAccessibleProjects]);
 
   useEffect(() => {
     if (selectedClientKey !== "all" && !clientGroups.some((client) => client.key === selectedClientKey)) {
@@ -6418,8 +6419,11 @@ function ProjectsModule({
 
   function selectClientGroup(key) {
     setSelectedClientKey(key);
-    const firstProject = visibleProjects.find((project) => key === "all" || clientKeyForProject(project) === key);
-    if (firstProject) setSelectedId(firstProject.id);
+    setSelectedArea(null);
+    setSelectedCentralCompany(null);
+    setSelectedRegion(null);
+    setSelectedRegionalDirection(null);
+    setCreateOpen(false);
   }
 
   function clearClientFilter() {
@@ -6514,7 +6518,9 @@ function ProjectsModule({
   ];
 
   const levelTitle = !selectedArea
-    ? "Структура SmetaGroup"
+    ? selectedClientGroup
+      ? `Заказчик · ${selectedClientGroup.name}`
+      : "Структура SmetaGroup"
     : selectedArea === "central" && selectedCentralCompany
     ? selectedCentralCompany.title
     : selectedArea === "central"
@@ -6528,7 +6534,9 @@ function ProjectsModule({
     : `${selectedDirectionConfig?.title || "Направление"} · ${selectedRegion}`;
 
   const levelHint = !selectedArea
-    ? "Сначала выбираем уровень: центральные компании, проектный институт или региональную сеть."
+    ? selectedClientGroup
+      ? "Все доступные проекты выбранного контрагента. Внутрь проекта переходим только по карточке проекта."
+      : "Сначала выбираем уровень: центральные компании, проектный институт или региональную сеть."
     : selectedArea === "central"
     ? "Центральные компании не привязаны к региону и работают на всю группу."
     : selectedArea === "institute"
@@ -9886,20 +9894,27 @@ function SmetaOfficePrototype() {
     showAction("Отклик сохранён локально. Сервер не принял заявку или недоступен.");
   }
 
-  const visibleProjects = useMemo(() => {
-    const normalizedQuery = query.trim().toLowerCase();
-
+  const accessibleProjects = useMemo(() => {
     return projectItems.map((project) => {
       const hasAccess = canAccessProject(effectiveAccessUser, project, role);
       const hasRegionAccess = canAccessRegion(effectiveAccessUser, project);
+
+      if (!(hasAccess && hasRegionAccess)) return null;
+      return restrictProjectForRole(effectiveAccessUser, project, role);
+    }).filter(Boolean);
+  }, [projectItems, role, effectiveAccessUser]);
+
+  const visibleProjects = useMemo(() => {
+    const normalizedQuery = query.trim().toLowerCase();
+
+    return accessibleProjects.filter((project) => {
       const searchableText = `${project.title} ${project.client} ${project.city} ${project.direction}`.toLowerCase();
       const matchesQuery = normalizedQuery === "" || searchableText.includes(normalizedQuery);
       const matchesDirection = direction === "Все" || project.direction.includes(direction);
 
-      if (!(hasAccess && hasRegionAccess && matchesQuery && matchesDirection)) return null;
-      return restrictProjectForRole(effectiveAccessUser, project, role);
-    }).filter(Boolean);
-  }, [projectItems, role, query, direction, effectiveAccessUser]);
+      return matchesQuery && matchesDirection;
+    });
+  }, [accessibleProjects, query, direction]);
 
   const visibleTasks = useMemo(() => flattenTasks(visibleProjects).filter((task) => canAccessTask(effectiveAccessUser, task, role)), [visibleProjects, effectiveAccessUser, role]);
   const visiblePartners = useMemo(
@@ -9907,7 +9922,7 @@ function SmetaOfficePrototype() {
     [partners, effectiveAccessUser, role]
   );
 
-  const selectedProject = visibleProjects.find((project) => project.id === selectedId) ?? visibleProjects[0] ?? null;
+  const selectedProject = accessibleProjects.find((project) => project.id === selectedId) ?? visibleProjects[0] ?? accessibleProjects[0] ?? null;
   const attentionCount = visibleTasks.filter((task) => ["Просрочено", "На проверке", "РџСЂРѕСЃСЂРѕС‡РµРЅРѕ", "РќР° РїСЂРѕРІРµСЂРєРµ"].includes(task.status)).length;
   const currentScreenTitle = role === "executor"
     ? activeSection === "projects"
@@ -10773,6 +10788,7 @@ function SmetaOfficePrototype() {
           {role !== "executor" && activeSection === "projects" ? (
             <ProjectsModule
               visibleProjects={visibleProjects}
+              allAccessibleProjects={accessibleProjects}
               selectedProject={selectedProject}
               setSelectedId={selectProject}
               role={role}
