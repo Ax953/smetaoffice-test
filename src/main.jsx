@@ -6337,25 +6337,77 @@ function ProjectsModule({
   const [selectedRegion, setSelectedRegion] = useState(null);
   const [selectedRegionalDirection, setSelectedRegionalDirection] = useState(null);
   const [createOpen, setCreateOpen] = useState(false);
+  const [selectedClientKey, setSelectedClientKey] = useState("all");
 
   useEffect(() => {
     setDirection("Все");
   }, [setDirection]);
-
-  const searchProjects = useMemo(() => {
-    const normalizedQuery = query.trim().toLowerCase();
-    if (!normalizedQuery) return visibleProjects;
-    return visibleProjects.filter((project) => {
-      const text = `${project.title} ${project.client} ${project.city} ${project.region} ${project.direction} ${project.projectType}`.toLowerCase();
-      return text.includes(normalizedQuery);
-    });
-  }, [visibleProjects, query]);
 
   const groupRisk = (projectItems, fallback = "green") => {
     if (projectItems.some((project) => effectiveProjectRisk(project) === "red")) return "red";
     if (projectItems.some((project) => effectiveProjectRisk(project) === "yellow")) return "yellow";
     return fallback;
   };
+
+  const clientKeyForProject = (project) => String(project.client || "Без заказчика").trim().toLowerCase() || "без заказчика";
+
+  const clientGroups = useMemo(() => {
+    const map = new Map();
+    visibleProjects.forEach((project) => {
+      const key = clientKeyForProject(project);
+      const item = map.get(key) || {
+        key,
+        name: project.client || "Без заказчика",
+        projects: [],
+      };
+      item.projects.push(project);
+      map.set(key, item);
+    });
+
+    return Array.from(map.values())
+      .map((item) => {
+        const summary = financeSummary(item.projects);
+        const stages = [...new Set(item.projects.map((project) => project.stage || firstStageForType(project.projectType)).filter(Boolean))];
+        const avgProgress = item.projects.length
+          ? Math.round(item.projects.reduce((sum, project) => sum + (Number(project.progress) || 0), 0) / item.projects.length)
+          : 0;
+        return {
+          ...item,
+          summary,
+          stages,
+          avgProgress,
+          risk: groupRisk(item.projects),
+          redProjects: item.projects.filter((project) => effectiveProjectRisk(project) === "red").length,
+          activeProjects: item.projects.filter((project) => !["Закрыто", "Завершён", "Завершен"].includes(project.status)).length,
+        };
+      })
+      .sort((a, b) => b.projects.length - a.projects.length || b.summary.contractAmount - a.summary.contractAmount || a.name.localeCompare(b.name));
+  }, [visibleProjects]);
+
+  useEffect(() => {
+    if (selectedClientKey !== "all" && !clientGroups.some((client) => client.key === selectedClientKey)) {
+      setSelectedClientKey("all");
+    }
+  }, [selectedClientKey, clientGroups]);
+
+  const selectedClientGroup = selectedClientKey === "all" ? null : clientGroups.find((client) => client.key === selectedClientKey) || null;
+  const canSeeClientMoney = roleCan(role, "viewFinance") || roleCan(role, "viewProductionBudget");
+
+  const searchProjects = useMemo(() => {
+    const normalizedQuery = query.trim().toLowerCase();
+    return visibleProjects.filter((project) => {
+      const text = `${project.title} ${project.client} ${project.city} ${project.region} ${project.direction} ${project.projectType}`.toLowerCase();
+      const queryMatch = !normalizedQuery || text.includes(normalizedQuery);
+      const clientMatch = selectedClientKey === "all" || clientKeyForProject(project) === selectedClientKey;
+      return queryMatch && clientMatch;
+    });
+  }, [visibleProjects, query, selectedClientKey]);
+
+  function handleClientFilterChange(key) {
+    setSelectedClientKey(key);
+    const firstProject = visibleProjects.find((project) => key === "all" || clientKeyForProject(project) === key);
+    if (firstProject) setSelectedId(firstProject.id);
+  }
 
   const regions = useMemo(() => {
     const map = new Map();
@@ -6506,8 +6558,16 @@ function ProjectsModule({
                 setQuery(event.target.value);
                 chooseFirstAvailable(role, direction, event.target.value);
               }}
-              placeholder="Поиск по структуре и проектам"
+              placeholder="Поиск по проекту, заказчику, адресу"
             />
+            <select value={selectedClientKey} onChange={(event) => handleClientFilterChange(event.target.value)} title="Фильтр по заказчику">
+              <option value="all">Все заказчики</option>
+              {clientGroups.map((client) => (
+                <option key={client.key} value={client.key}>
+                  {client.name} · {client.projects.length}
+                </option>
+              ))}
+            </select>
             {selectedArea ? <button type="button" className="secondary" onClick={resetToRoot}>К SmetaGroup</button> : null}
             {selectedArea === "central" && selectedCentralCompany ? <button type="button" className="secondary" onClick={() => setSelectedCentralCompany(null)}>К компаниям</button> : null}
             {selectedArea === "regions" && selectedRegion ? <button type="button" className="secondary" onClick={() => { setSelectedRegion(null); setSelectedRegionalDirection(null); setCreateOpen(false); }}>К регионам</button> : null}
@@ -6526,6 +6586,43 @@ function ProjectsModule({
             errors={projectFormErrors}
             canCreateProject={canCreateProject}
           />
+        ) : null}
+
+        {selectedClientGroup ? (
+          <div className="client-project-summary">
+            <div className="client-summary-main">
+              <span className={cn("risk-chip", selectedClientGroup.risk)}>{riskText(selectedClientGroup.risk)}</span>
+              <h3>{selectedClientGroup.name}</h3>
+              <p>
+                Объектов: <b>{selectedClientGroup.projects.length}</b> · в работе: <b>{selectedClientGroup.activeProjects}</b> · средняя готовность: <b>{selectedClientGroup.avgProgress}%</b>
+              </p>
+            </div>
+            <div className="client-summary-money">
+              <div><span>Сумма договоров</span><b>{canSeeClientMoney ? money(selectedClientGroup.summary.contractAmount) : "Скрыто"}</b></div>
+              <div><span>Оплачено</span><b>{canSeeClientMoney ? money(selectedClientGroup.summary.paidByClient) : "Скрыто"}</b></div>
+              <div><span>Остаток оплаты</span><b>{canSeeClientMoney ? money(selectedClientGroup.summary.receivable) : "Скрыто"}</b></div>
+              <div><span>Красная зона</span><b>{selectedClientGroup.redProjects}</b></div>
+            </div>
+            <div className="client-stage-strip">
+              {selectedClientGroup.stages.slice(0, 8).map((stage) => <span key={stage}>{stage}</span>)}
+              {!selectedClientGroup.stages.length ? <span>Этапы не указаны</span> : null}
+            </div>
+          </div>
+        ) : clientGroups.length ? (
+          <div className="client-filter-strip">
+            <div>
+              <b>Заказчики</b>
+              <span>Выбери заказчика, чтобы увидеть все его объекты, оплаты, остаток и стадии.</span>
+            </div>
+            <div>
+              {clientGroups.slice(0, 8).map((client) => (
+                <button key={client.key} type="button" onClick={() => handleClientFilterChange(client.key)}>
+                  <b>{client.name}</b>
+                  <span>{client.projects.length} объект(а)</span>
+                </button>
+              ))}
+            </div>
+          </div>
         ) : null}
 
         {!selectedArea ? (
