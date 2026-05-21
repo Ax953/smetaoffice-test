@@ -6338,6 +6338,7 @@ function ProjectsModule({
   const [selectedRegionalDirection, setSelectedRegionalDirection] = useState(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [selectedClientKey, setSelectedClientKey] = useState("all");
+  const [clientSearch, setClientSearch] = useState("");
 
   useEffect(() => {
     setDirection("Все");
@@ -6349,7 +6350,15 @@ function ProjectsModule({
     return fallback;
   };
 
-  const clientKeyForProject = (project) => String(project.client || "Без заказчика").trim().toLowerCase() || "без заказчика";
+  const clientNameForProject = (project) => String(project.client || "Без заказчика").trim().replace(/\s+/g, " ") || "Без заказчика";
+  const normalizeClientKey = (value) =>
+    String(value || "Без заказчика")
+      .trim()
+      .replace(/[«»"']/g, "")
+      .replace(/\s+/g, " ")
+      .toLowerCase()
+      .replace(/ё/g, "е") || "без заказчика";
+  const clientKeyForProject = (project) => normalizeClientKey(clientNameForProject(project));
 
   const clientGroups = useMemo(() => {
     const map = new Map();
@@ -6357,7 +6366,7 @@ function ProjectsModule({
       const key = clientKeyForProject(project);
       const item = map.get(key) || {
         key,
-        name: project.client || "Без заказчика",
+        name: clientNameForProject(project),
         projects: [],
       };
       item.projects.push(project);
@@ -6392,6 +6401,10 @@ function ProjectsModule({
 
   const selectedClientGroup = selectedClientKey === "all" ? null : clientGroups.find((client) => client.key === selectedClientKey) || null;
   const canSeeClientMoney = roleCan(role, "viewFinance") || roleCan(role, "viewProductionBudget");
+  const clientSearchQuery = clientSearch.trim().toLowerCase().replace(/ё/g, "е");
+  const suggestedClientGroups = clientSearchQuery
+    ? clientGroups.filter((client) => normalizeClientKey(client.name).includes(clientSearchQuery)).slice(0, 10)
+    : clientGroups.slice(0, 8);
 
   const searchProjects = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
@@ -6403,10 +6416,28 @@ function ProjectsModule({
     });
   }, [visibleProjects, query, selectedClientKey]);
 
-  function handleClientFilterChange(key) {
+  function selectClientGroup(key) {
     setSelectedClientKey(key);
     const firstProject = visibleProjects.find((project) => key === "all" || clientKeyForProject(project) === key);
     if (firstProject) setSelectedId(firstProject.id);
+  }
+
+  function clearClientFilter() {
+    setSelectedClientKey("all");
+    setClientSearch("");
+  }
+
+  function handleClientSearchChange(value) {
+    setClientSearch(value);
+    const normalizedValue = normalizeClientKey(value);
+    const exactClient = clientGroups.find((client) => normalizeClientKey(client.name) === normalizedValue);
+    if (exactClient) {
+      selectClientGroup(exactClient.key);
+      return;
+    }
+    if (!value.trim()) {
+      setSelectedClientKey("all");
+    }
   }
 
   const regions = useMemo(() => {
@@ -6560,14 +6591,17 @@ function ProjectsModule({
               }}
               placeholder="Поиск по проекту, заказчику, адресу"
             />
-            <select value={selectedClientKey} onChange={(event) => handleClientFilterChange(event.target.value)} title="Фильтр по заказчику">
-              <option value="all">Все заказчики</option>
-              {clientGroups.map((client) => (
-                <option key={client.key} value={client.key}>
-                  {client.name} · {client.projects.length}
-                </option>
-              ))}
-            </select>
+            <input
+              list="project-client-options"
+              value={clientSearch}
+              onChange={(event) => handleClientSearchChange(event.target.value)}
+              placeholder="Поиск заказчика: ООО, ИП, юрлицо"
+              title="Начни вводить заказчика и выбери нужного из подсказок"
+            />
+            <datalist id="project-client-options">
+              {clientGroups.map((client) => <option key={client.key} value={client.name} />)}
+            </datalist>
+            {selectedClientGroup ? <button type="button" className="secondary" onClick={clearClientFilter}>Сбросить заказчика</button> : null}
             {selectedArea ? <button type="button" className="secondary" onClick={resetToRoot}>К SmetaGroup</button> : null}
             {selectedArea === "central" && selectedCentralCompany ? <button type="button" className="secondary" onClick={() => setSelectedCentralCompany(null)}>К компаниям</button> : null}
             {selectedArea === "regions" && selectedRegion ? <button type="button" className="secondary" onClick={() => { setSelectedRegion(null); setSelectedRegionalDirection(null); setCreateOpen(false); }}>К регионам</button> : null}
@@ -6607,25 +6641,39 @@ function ProjectsModule({
               {selectedClientGroup.stages.slice(0, 8).map((stage) => <span key={stage}>{stage}</span>)}
               {!selectedClientGroup.stages.length ? <span>Этапы не указаны</span> : null}
             </div>
+            <div className="client-project-results">
+              <div className="section-row">
+                <div>
+                  <h3>Все проекты заказчика</h3>
+                  <p className="section-hint">Здесь показаны все доступные тебе проекты этого контрагента, без ограничения текущим уровнем структуры.</p>
+                </div>
+              </div>
+              <div className="projects-list project-cards-grid">
+                {selectedClientGroup.projects.map((project) => (
+                  <ProjectCard key={project.id} project={project} active={false} onClick={() => setSelectedId(project.id)} />
+                ))}
+              </div>
+            </div>
           </div>
         ) : clientGroups.length ? (
           <div className="client-filter-strip">
             <div>
               <b>Заказчики</b>
-              <span>Выбери заказчика, чтобы увидеть все его объекты, оплаты, остаток и стадии.</span>
+              <span>Начни вводить название в поиске выше или выбери заказчика здесь. После выбора появятся все его объекты.</span>
             </div>
             <div>
-              {clientGroups.slice(0, 8).map((client) => (
-                <button key={client.key} type="button" onClick={() => handleClientFilterChange(client.key)}>
+              {suggestedClientGroups.map((client) => (
+                <button key={client.key} type="button" onClick={() => { setClientSearch(client.name); selectClientGroup(client.key); }}>
                   <b>{client.name}</b>
                   <span>{client.projects.length} объект(а)</span>
                 </button>
               ))}
+              {clientSearchQuery && !suggestedClientGroups.length ? <span className="client-no-match">Заказчик не найден. Проверь написание или общий поиск проекта.</span> : null}
             </div>
           </div>
         ) : null}
 
-        {!selectedArea ? (
+        {!selectedClientGroup && !selectedArea ? (
           <div className="drill-card-grid">
             {holdingAreas.map((area) => {
               const areaMetrics = area.id === "central"
@@ -6656,7 +6704,7 @@ function ProjectsModule({
           </div>
         ) : null}
 
-        {selectedArea === "central" && !selectedCentralCompany ? (
+        {!selectedClientGroup && selectedArea === "central" && !selectedCentralCompany ? (
           <div className="drill-card-grid">
             {centralCompanies.map((company) => (
               <DrillCard
@@ -6676,7 +6724,7 @@ function ProjectsModule({
           </div>
         ) : null}
 
-        {selectedArea === "central" && selectedCentralCompany ? (
+        {!selectedClientGroup && selectedArea === "central" && selectedCentralCompany ? (
           <div className="org-detail-grid">
             <div className="office-card inner-card">
               <span className={cn("risk-chip", selectedCentralCompany.risk)}>{riskText(selectedCentralCompany.risk)}</span>
@@ -6699,7 +6747,7 @@ function ProjectsModule({
           </div>
         ) : null}
 
-        {selectedArea === "institute" ? (
+        {!selectedClientGroup && selectedArea === "institute" ? (
           <div className="projects-list project-cards-grid">
             <div className="office-card inner-card project-span-card">
               <h3>Сводка проектного института</h3>
@@ -6721,7 +6769,7 @@ function ProjectsModule({
           </div>
         ) : null}
 
-        {selectedArea === "regions" && !selectedRegion ? (
+        {!selectedClientGroup && selectedArea === "regions" && !selectedRegion ? (
           <div className="drill-card-grid">
             {regions.map((region) => (
               <DrillCard
@@ -6741,7 +6789,7 @@ function ProjectsModule({
           </div>
         ) : null}
 
-        {selectedArea === "regions" && selectedRegion && !selectedRegionalDirection ? (
+        {!selectedClientGroup && selectedArea === "regions" && selectedRegion && !selectedRegionalDirection ? (
           <>
             <div className="office-card inner-card">
               <h3>{selectedRegion}</h3>
@@ -6773,7 +6821,7 @@ function ProjectsModule({
           </>
         ) : null}
 
-        {selectedArea === "regions" && selectedRegion && selectedRegionalDirection ? (
+        {!selectedClientGroup && selectedArea === "regions" && selectedRegion && selectedRegionalDirection ? (
           <>
             <div className="office-card inner-card">
               <h3>{selectedDirectionConfig?.title}</h3>

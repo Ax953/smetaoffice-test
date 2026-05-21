@@ -422,6 +422,21 @@ input.invalid, select.invalid {
   font-size: 12px;
   font-weight: 800;
 }
+.client-project-results {
+  display: grid;
+  gap: 12px;
+  border-top: 1px solid #e2e8f0;
+  padding-top: 14px;
+}
+.client-project-results .project-cards-grid {
+  margin-top: 0;
+}
+.client-no-match {
+  align-self: center;
+  color: #b45309 !important;
+  font-size: 13px !important;
+  font-weight: 800;
+}
 .quick-form {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
