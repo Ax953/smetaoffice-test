@@ -6339,6 +6339,7 @@ function ProjectsModule({
   const [selectedRegionalDirection, setSelectedRegionalDirection] = useState(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [selectedClientKey, setSelectedClientKey] = useState("all");
+  const [selectedClientType, setSelectedClientType] = useState("all");
   const [clientSearch, setClientSearch] = useState("");
 
   useEffect(() => {
@@ -6352,6 +6353,13 @@ function ProjectsModule({
   };
 
   const clientNameForProject = (project) => String(project.client || "Без заказчика").trim().replace(/\s+/g, " ") || "Без заказчика";
+  const clientTypeOptions = [
+    { id: "all", label: "Все заказчики" },
+    { id: "government", label: "Гос. заказчик" },
+    { id: "legal", label: "Юр. лицо" },
+    { id: "private", label: "Частный заказчик" },
+    { id: "unknown", label: "Не указан" },
+  ];
   const normalizeClientKey = (value) =>
     String(value || "Без заказчика")
       .trim()
@@ -6360,6 +6368,28 @@ function ProjectsModule({
       .toLowerCase()
       .replace(/ё/g, "е") || "без заказчика";
   const clientKeyForProject = (project) => normalizeClientKey(clientNameForProject(project));
+  const normalizeClientType = (value) => {
+    const raw = String(value || "").toLowerCase().replace(/ё/g, "е");
+    if (["government", "gov", "гос", "гос. заказчик", "муниципальный", "муниципальный заказчик"].includes(raw)) return "government";
+    if (["legal", "company", "юр", "юр. лицо", "юридическое лицо"].includes(raw)) return "legal";
+    if (["private", "person", "частный", "частный заказчик", "физлицо", "физ. лицо"].includes(raw)) return "private";
+    return "";
+  };
+  const inferClientType = (name, projects = []) => {
+    const explicit = projects.map((project) => normalizeClientType(project.clientType || project.customerType || project.customerCategory)).find(Boolean);
+    if (explicit) return explicit;
+
+    const normalizedName = normalizeClientKey(name);
+    if (!normalizedName || normalizedName === "без заказчика" || normalizedName === "не указан") return "unknown";
+    if (/\b(гку|мку|мбу|гбу|фгбу|муп)\b/.test(normalizedName) || /(администрац|министерств|департамент|комитет|управление|муниципальн|бюджетн|казенн|государственн|школ|детск|сад)/.test(normalizedName)) {
+      return "government";
+    }
+    if (/\b(ооо|ао|пао|зао|ип|нко|сз|тсж|жск)\b/.test(normalizedName) || /(общество|компания|группа|строй|инвест|проект|капитал|застройщик)/.test(normalizedName)) {
+      return "legal";
+    }
+    return "private";
+  };
+  const clientTypeLabel = (type) => clientTypeOptions.find((item) => item.id === type)?.label || "Заказчик";
 
   const clientGroups = useMemo(() => {
     const map = new Map();
@@ -6383,6 +6413,7 @@ function ProjectsModule({
           : 0;
         return {
           ...item,
+          type: inferClientType(item.name, item.projects),
           summary,
           stages,
           avgProgress,
@@ -6403,9 +6434,24 @@ function ProjectsModule({
   const selectedClientGroup = selectedClientKey === "all" ? null : clientGroups.find((client) => client.key === selectedClientKey) || null;
   const canSeeClientMoney = roleCan(role, "viewFinance") || roleCan(role, "viewProductionBudget");
   const clientSearchQuery = clientSearch.trim().toLowerCase().replace(/ё/g, "е");
-  const suggestedClientGroups = clientSearchQuery
-    ? clientGroups.filter((client) => normalizeClientKey(client.name).includes(clientSearchQuery)).slice(0, 10)
-    : clientGroups.slice(0, 8);
+  const clientTypeGroups = useMemo(() => {
+    return clientTypeOptions
+      .map((type) => {
+        const clients = type.id === "all" ? clientGroups : clientGroups.filter((client) => client.type === type.id);
+        return {
+          ...type,
+          clients,
+          projectsCount: clients.reduce((sum, client) => sum + client.projects.length, 0),
+          contractAmount: clients.reduce((sum, client) => sum + (client.summary?.contractAmount || 0), 0),
+        };
+      })
+      .filter((type) => type.id === "all" || type.clients.length > 0);
+  }, [clientGroups]);
+  const filteredClientGroups = useMemo(() => {
+    const scopedClients = selectedClientType === "all" ? clientGroups : clientGroups.filter((client) => client.type === selectedClientType);
+    if (!clientSearchQuery) return scopedClients;
+    return scopedClients.filter((client) => normalizeClientKey(client.name).includes(clientSearchQuery));
+  }, [clientGroups, selectedClientType, clientSearchQuery]);
 
   const searchProjects = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
@@ -6428,6 +6474,7 @@ function ProjectsModule({
 
   function clearClientFilter() {
     setSelectedClientKey("all");
+    setSelectedClientType("all");
     setClientSearch("");
   }
 
@@ -6442,6 +6489,17 @@ function ProjectsModule({
     if (!value.trim()) {
       setSelectedClientKey("all");
     }
+  }
+
+  function selectClientType(typeId) {
+    setSelectedClientType(typeId);
+    setSelectedClientKey("all");
+    setClientSearch("");
+    setSelectedArea(null);
+    setSelectedCentralCompany(null);
+    setSelectedRegion(null);
+    setSelectedRegionalDirection(null);
+    setCreateOpen(false);
   }
 
   const regions = useMemo(() => {
@@ -6636,7 +6694,7 @@ function ProjectsModule({
               <span className={cn("risk-chip", selectedClientGroup.risk)}>{riskText(selectedClientGroup.risk)}</span>
               <h3>{selectedClientGroup.name}</h3>
               <p>
-                Объектов: <b>{selectedClientGroup.projects.length}</b> · в работе: <b>{selectedClientGroup.activeProjects}</b> · средняя готовность: <b>{selectedClientGroup.avgProgress}%</b>
+                Тип: <b>{clientTypeLabel(selectedClientGroup.type)}</b> · объектов: <b>{selectedClientGroup.projects.length}</b> · в работе: <b>{selectedClientGroup.activeProjects}</b> · средняя готовность: <b>{selectedClientGroup.avgProgress}%</b>
               </p>
             </div>
             <div className="client-summary-money">
@@ -6667,16 +6725,38 @@ function ProjectsModule({
           <div className="client-filter-strip">
             <div>
               <b>Заказчики</b>
-              <span>Начни вводить название в поиске выше или выбери заказчика здесь. После выбора появятся все его объекты.</span>
+              <span>Выбери тип заказчика, затем конкретного контрагента. После выбора появятся все его объекты.</span>
             </div>
-            <div>
-              {suggestedClientGroups.map((client) => (
-                <button key={client.key} type="button" onClick={() => { setClientSearch(client.name); selectClientGroup(client.key); }}>
-                  <b>{client.name}</b>
-                  <span>{client.projects.length} объект(а)</span>
+            <div className="client-directory">
+              <div className="client-type-tabs">
+                {clientTypeGroups.map((type) => (
+                  <button
+                    key={type.id}
+                    type="button"
+                    className={selectedClientType === type.id ? "active" : ""}
+                    onClick={() => selectClientType(type.id)}
+                  >
+                    <b>{type.label}</b>
+                    <span>{type.clients.length} заказчик(а) · {type.projectsCount} объект(а)</span>
+                  </button>
+                ))}
+              </div>
+
+              <div className="client-list-scroll">
+                {filteredClientGroups.map((client) => (
+                  <button key={client.key} type="button" onClick={() => { setClientSearch(client.name); selectClientGroup(client.key); }}>
+                    <b>{client.name}</b>
+                    <span>{clientTypeLabel(client.type)} · {client.projects.length} объект(а)</span>
+                  </button>
+                ))}
+              </div>
+              {clientSearchQuery && !filteredClientGroups.length ? <span className="client-no-match">Заказчик не найден в выбранной категории. Сбрось тип или проверь написание.</span> : null}
+              {!clientSearchQuery && !filteredClientGroups.length ? <span className="client-no-match">В этой категории пока нет заказчиков.</span> : null}
+              {selectedClientType !== "all" ? (
+                <button type="button" className="client-reset-button" onClick={() => selectClientType("all")}>
+                  Показать все типы заказчиков
                 </button>
-              ))}
-              {clientSearchQuery && !suggestedClientGroups.length ? <span className="client-no-match">Заказчик не найден. Проверь написание или общий поиск проекта.</span> : null}
+              ) : null}
             </div>
           </div>
         ) : null}

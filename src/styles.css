@@ -355,6 +355,43 @@ input.invalid, select.invalid {
   flex-wrap: wrap;
   gap: 8px;
 }
+.client-directory {
+  display: grid !important;
+  gap: 12px;
+  min-width: 0;
+}
+.client-type-tabs {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+.client-type-tabs button {
+  min-height: 76px;
+  background: #eef6ff;
+}
+.client-type-tabs button.active {
+  border-color: #1d4ed8;
+  background: #dbeafe;
+  box-shadow: inset 0 0 0 1px rgba(29, 78, 216, .24);
+}
+.client-list-scroll {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+  gap: 8px;
+  max-height: 260px;
+  overflow: auto;
+  padding: 2px 4px 4px 0;
+}
+.client-list-scroll button {
+  min-width: 0;
+}
+.client-reset-button {
+  width: fit-content;
+  border-color: transparent !important;
+  background: #eaf2ff !important;
+  color: #1d4ed8;
+  font-weight: 900;
+}
 .client-filter-strip button {
   border: 1px solid #dbe5ef;
   border-radius: 14px;
@@ -4317,6 +4354,7 @@ h3 { margin: 0; }
   .executor-stage-table > div { grid-template-columns: 1fr; }
   .dashboard-grid, .dashboard-grid.wide { grid-template-columns: 1fr; }
   .owner-direction-strip, .owner-money-grid, .owner-meta-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .client-type-tabs { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
 @media (max-width: 680px) {
@@ -4329,6 +4367,7 @@ h3 { margin: 0; }
   .owner-project-head, .owner-people-grid > button { flex-direction: column; align-items: stretch; }
   .owner-risk-list > button, .owner-stage-timeline > button { grid-template-columns: 1fr; }
   .available-work-meta { justify-items: start; text-align: left; }
+  .client-type-tabs { grid-template-columns: 1fr; }
   .wizard-header, .create-project-summary { flex-direction: column; align-items: stretch; }
   .stage-editor-wide, .stage-approval-actions { grid-column: auto; }
   .task-table > div, .partner-table > div, .partner-table > button, .project-account-meta, .mapping-table > div, .sync-log > div, .task-board > div, .analytics-list > div, .analytics-period-table > div, .sections-table > div:not(.empty), .admin-users-table > div, .finance-table > div, .finance-period-table > div, .finance-period-table > button, .finance-mini-list > div, .dashboard-table > div, .dashboard-table > button, .task-status-chart > div, .bitrix-map-table > div, .client-participants-list > div, .approval-list > div { grid-template-columns: 1fr; }
