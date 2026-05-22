@@ -6553,6 +6553,10 @@ function ProjectsModule({
   }, [searchProjects]);
 
   const totals = useMemo(() => financeSummary(searchProjects), [searchProjects]);
+  const regionalProjects = useMemo(() => {
+    return searchProjects.filter(isRegionalOperatingProject);
+  }, [searchProjects]);
+  const regionalSummary = useMemo(() => financeSummary(regionalProjects), [regionalProjects]);
   const instituteProjects = useMemo(() => {
     return searchProjects.filter(isProjectInstituteProject);
   }, [searchProjects]);
@@ -6792,15 +6796,15 @@ function ProjectsModule({
                   ]
                 : [
                     ["Регионов", regions.length],
-                    ["Проектов", searchProjects.length],
-                    ["Договоры", money(totals.contractAmount)],
+                    ["Проектов", regionalProjects.length],
+                    ["Договоры", money(regionalSummary.contractAmount)],
                   ];
               return (
                 <DrillCard
                   key={area.id}
                   title={area.title}
                   subtitle={area.subtitle}
-                  risk={area.id === "institute" ? groupRisk(instituteProjects, area.risk) : area.risk}
+                  risk={area.id === "institute" ? groupRisk(instituteProjects, area.risk) : area.id === "regions" ? groupRisk(regionalProjects, area.risk) : area.risk}
                   manager={area.manager}
                   metrics={areaMetrics}
                   onClick={() => resetArea(area.id)}
