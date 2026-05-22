@@ -1510,11 +1510,59 @@ const projectCreationModes = [
   { id: "other", label: "Другое" },
 ];
 
+const customerTypeOptions = [
+  { id: "government", label: "Гос. заказчик" },
+  { id: "legal", label: "Юр. лицо" },
+  { id: "private", label: "Частный заказчик" },
+  { id: "unknown", label: "Не указан" },
+];
+
+const customerTypeFilterOptions = [
+  { id: "all", label: "Все заказчики" },
+  ...customerTypeOptions,
+];
+
+function normalizeCustomerNameKey(value) {
+  return String(value || "Без заказчика")
+    .trim()
+    .replace(/[«»"']/g, "")
+    .replace(/\s+/g, " ")
+    .toLowerCase()
+    .replace(/ё/g, "е") || "без заказчика";
+}
+
+function normalizeCustomerType(value) {
+  const raw = String(value || "").trim().toLowerCase().replace(/ё/g, "е");
+  if (["government", "gov", "гос", "гос. заказчик", "муниципальный", "муниципальный заказчик"].includes(raw)) return "government";
+  if (["legal", "company", "юр", "юр. лицо", "юридическое лицо"].includes(raw)) return "legal";
+  if (["private", "person", "частный", "частный заказчик", "физлицо", "физ. лицо"].includes(raw)) return "private";
+  if (["unknown", "не указан", "неизвестно"].includes(raw)) return "unknown";
+  return "";
+}
+
+function inferCustomerType(name, projects = []) {
+  const explicit = projects.map((project) => normalizeCustomerType(project.clientType || project.customerType || project.customerCategory)).find(Boolean);
+  if (explicit) return explicit;
+
+  const normalizedName = normalizeCustomerNameKey(name);
+  if (!normalizedName || normalizedName === "без заказчика" || normalizedName === "не указан") return "unknown";
+  if (/(администрац|министерств|департамент|комитет|управление|муниципальн|бюджетн|казенн|государственн|школ|детск|сад)/.test(normalizedName)) return "government";
+  if (/(^|\s)(гку|мку|мбу|гбу|фгбу|муп)(\s|$)/.test(normalizedName)) return "government";
+  if (/(^|\s)(ооо|ао|пао|зао|ип|нко|сз|тсж|жск)(\s|$)/.test(normalizedName)) return "legal";
+  if (/(общество|компания|группа|строй|инвест|проект|капитал|застройщик|аврора)/.test(normalizedName)) return "legal";
+  return "private";
+}
+
+function customerTypeLabel(type) {
+  return customerTypeFilterOptions.find((item) => item.id === type)?.label || "Заказчик";
+}
+
 const defaultProjectForm = {
   wizardStep: 1,
   creationMode: "existing",
   title: "",
   client: "",
+  clientType: "legal",
   country: "Россия",
   city: "",
   address: "",
@@ -3486,6 +3534,7 @@ function ProjectEditPanel({ project, users, canEdit, canEditFinance, onUpdatePro
   const [form, setForm] = useState(() => ({
     title: project.title || "",
     client: project.client || "",
+    clientType: normalizeCustomerType(project.clientType || project.customerType || project.customerCategory) || inferCustomerType(project.client, [project]),
     region: project.region || "ЧР",
     city: project.city || "",
     address: project.address || "",
@@ -3512,6 +3561,7 @@ function ProjectEditPanel({ project, users, canEdit, canEditFinance, onUpdatePro
     setForm({
       title: project.title || "",
       client: project.client || "",
+      clientType: normalizeCustomerType(project.clientType || project.customerType || project.customerCategory) || inferCustomerType(project.client, [project]),
       region: project.region || "ЧР",
       city: project.city || "",
       address: project.address || "",
@@ -3588,6 +3638,7 @@ function ProjectEditPanel({ project, users, canEdit, canEditFinance, onUpdatePro
       <div className="quick-form">
         <label><span>Название проекта</span><input value={form.title} onChange={(event) => update({ title: event.target.value })} /></label>
         <label><span>Клиент</span><input value={form.client} onChange={(event) => update({ client: event.target.value })} /></label>
+        <label><span>Тип заказчика</span><select value={form.clientType} onChange={(event) => update({ clientType: event.target.value })}>{customerTypeOptions.map((type) => <option key={type.id} value={type.id}>{type.label}</option>)}</select></label>
         <label><span>Регион</span><select value={form.region} onChange={(event) => update({ region: event.target.value })}>{regionOptions.filter((region) => region !== "Все регионы").map((region) => <option key={region}>{region}</option>)}</select></label>
         <label><span>Город</span><input value={form.city} onChange={(event) => update({ city: event.target.value })} /></label>
         <label className="wide"><span>Адрес</span><input value={form.address} onChange={(event) => update({ address: event.target.value })} /></label>
@@ -6265,6 +6316,7 @@ function ProjectCreationWizard({ projectForm, setProjectForm, users, partners = 
           <label><span>Источник</span><select value={projectForm.creationMode} onChange={(event) => update({ creationMode: event.target.value })}>{projectCreationModes.map((mode) => <option key={mode.id} value={mode.id}>{mode.label}</option>)}</select></label>
           <label><span>Название проекта</span><input className={!projectForm.title.trim() ? "invalid" : ""} value={projectForm.title} onChange={(event) => update({ title: event.target.value })} placeholder="Например: ПД школы после обследования" /></label>
           <label><span>Клиент</span><input className={!projectForm.client.trim() ? "invalid" : ""} value={projectForm.client} onChange={(event) => update({ client: event.target.value })} placeholder="ФИО или компания" /></label>
+          <label><span>Тип заказчика</span><select value={projectForm.clientType} onChange={(event) => update({ clientType: event.target.value })}>{customerTypeOptions.map((type) => <option key={type.id} value={type.id}>{type.label}</option>)}</select></label>
           <label><span>Дата начала</span><input className={!projectForm.startDate ? "invalid" : ""} type="date" value={projectForm.startDate} onChange={(event) => update({ startDate: event.target.value })} /></label>
           <label><span>Дата окончания</span><input className={!projectForm.endDate ? "invalid" : ""} type="date" value={projectForm.endDate} onChange={(event) => update({ endDate: event.target.value, deadline: projectForm.deadline || formatProjectDate(event.target.value) })} /></label>
           <label><span>Контрольный срок / текст</span><input value={projectForm.deadline} onChange={(event) => update({ deadline: event.target.value })} placeholder="Например: 30 июня или этапная сдача" /></label>
@@ -6353,43 +6405,9 @@ function ProjectsModule({
   };
 
   const clientNameForProject = (project) => String(project.client || "Без заказчика").trim().replace(/\s+/g, " ") || "Без заказчика";
-  const clientTypeOptions = [
-    { id: "all", label: "Все заказчики" },
-    { id: "government", label: "Гос. заказчик" },
-    { id: "legal", label: "Юр. лицо" },
-    { id: "private", label: "Частный заказчик" },
-    { id: "unknown", label: "Не указан" },
-  ];
-  const normalizeClientKey = (value) =>
-    String(value || "Без заказчика")
-      .trim()
-      .replace(/[«»"']/g, "")
-      .replace(/\s+/g, " ")
-      .toLowerCase()
-      .replace(/ё/g, "е") || "без заказчика";
+  const normalizeClientKey = normalizeCustomerNameKey;
   const clientKeyForProject = (project) => normalizeClientKey(clientNameForProject(project));
-  const normalizeClientType = (value) => {
-    const raw = String(value || "").toLowerCase().replace(/ё/g, "е");
-    if (["government", "gov", "гос", "гос. заказчик", "муниципальный", "муниципальный заказчик"].includes(raw)) return "government";
-    if (["legal", "company", "юр", "юр. лицо", "юридическое лицо"].includes(raw)) return "legal";
-    if (["private", "person", "частный", "частный заказчик", "физлицо", "физ. лицо"].includes(raw)) return "private";
-    return "";
-  };
-  const inferClientType = (name, projects = []) => {
-    const explicit = projects.map((project) => normalizeClientType(project.clientType || project.customerType || project.customerCategory)).find(Boolean);
-    if (explicit) return explicit;
-
-    const normalizedName = normalizeClientKey(name);
-    if (!normalizedName || normalizedName === "без заказчика" || normalizedName === "не указан") return "unknown";
-    if (/\b(гку|мку|мбу|гбу|фгбу|муп)\b/.test(normalizedName) || /(администрац|министерств|департамент|комитет|управление|муниципальн|бюджетн|казенн|государственн|школ|детск|сад)/.test(normalizedName)) {
-      return "government";
-    }
-    if (/\b(ооо|ао|пао|зао|ип|нко|сз|тсж|жск)\b/.test(normalizedName) || /(общество|компания|группа|строй|инвест|проект|капитал|застройщик)/.test(normalizedName)) {
-      return "legal";
-    }
-    return "private";
-  };
-  const clientTypeLabel = (type) => clientTypeOptions.find((item) => item.id === type)?.label || "Заказчик";
+  const clientTypeLabel = customerTypeLabel;
 
   const clientGroups = useMemo(() => {
     const map = new Map();
@@ -6413,7 +6431,7 @@ function ProjectsModule({
           : 0;
         return {
           ...item,
-          type: inferClientType(item.name, item.projects),
+          type: inferCustomerType(item.name, item.projects),
           summary,
           stages,
           avgProgress,
@@ -6435,7 +6453,7 @@ function ProjectsModule({
   const canSeeClientMoney = roleCan(role, "viewFinance") || roleCan(role, "viewProductionBudget");
   const clientSearchQuery = clientSearch.trim().toLowerCase().replace(/ё/g, "е");
   const clientTypeGroups = useMemo(() => {
-    return clientTypeOptions
+    return customerTypeFilterOptions
       .map((type) => {
         const clients = type.id === "all" ? clientGroups : clientGroups.filter((client) => client.type === type.id);
         return {
@@ -10108,6 +10126,7 @@ function SmetaOfficePrototype() {
       id: `SG-${String(300 + nextIndex).padStart(3, "0")}`,
       title,
       client: projectForm.client.trim() || "Новый клиент",
+      clientType: normalizeCustomerType(projectForm.clientType) || inferCustomerType(projectForm.client.trim()),
       country: projectForm.country.trim() || "Россия",
       city: projectForm.city.trim() || "не указан",
       address: projectForm.address.trim(),
