@@ -2397,7 +2397,7 @@ function projectTimeline(project) {
   const today = new Date();
   if (endDate) endDate.setHours(0, 0, 0, 0);
   today.setHours(0, 0, 0, 0);
-  const overdue = Boolean(endDate && endDate < today && project.status !== "Завершён");
+  const overdue = Boolean(endDate && endDate < today && !isCompletedProject(project));
   return { start, end, elapsed, planned, left, overdue };
 }
 
@@ -2897,6 +2897,15 @@ function isProjectInstituteProject(project) {
   return direction === "Проектный институт" || type.includes("87 постанов");
 }
 
+function isCompletedProject(project) {
+  const status = String(project?.status || "").trim().toLowerCase().replace(/ё/g, "е");
+  return ["завершен", "завершено", "закрыто", "закрыт", "архив", "архивный"].includes(status) || Number(project?.progress) >= 100;
+}
+
+function projectCompletionDate(project) {
+  return project.completedAt || project.closedAt || project.endDate || project.deadline || "";
+}
+
 function isRegionalOperatingProject(project) {
   return !isProjectInstituteProject(project);
 }
@@ -3184,6 +3193,91 @@ function ProjectCard({ project, active, onClick }) {
         <span>Остаток: <b>{money(economy.pmBudgetLeft)}</b></span>
       </div>
     </button>
+  );
+}
+
+function CompletedProjectCard({ project, canSeeMoney, onOpen }) {
+  const economy = projectEconomy(project);
+  const folderUrl = String(project.yandexFolder || "").startsWith("http") ? project.yandexFolder : "";
+  const completedDate = projectCompletionDate(project);
+
+  return (
+    <article className="completed-project-card">
+      <div className="completed-project-head">
+        <div>
+          <span className="muted-chip">{project.id}</span>
+          <h4>{project.title}</h4>
+          <p>{project.client || "Заказчик не указан"} · {project.region || project.city || "регион не указан"}</p>
+        </div>
+        <span className="risk-chip green">завершён</span>
+      </div>
+      <div className="completed-project-meta">
+        <div><span>Начало</span><b>{formatProjectDate(project.startDate)}</b></div>
+        <div><span>Завершение</span><b>{formatProjectDate(completedDate)}</b></div>
+        <div><span>Ответственный</span><b>{project.manager || project.projectManager || "не указан"}</b></div>
+        <div><span>Сумма договора</span><b>{canSeeMoney ? money(economy.contractAmount) : "Скрыто"}</b></div>
+      </div>
+      <div className="completed-project-actions">
+        {folderUrl ? <a href={folderUrl} target="_blank" rel="noreferrer">Открыть папку проекта</a> : <span>Папка проекта не привязана</span>}
+        <button type="button" onClick={() => onOpen(project.id)}>Открыть карточку</button>
+      </div>
+    </article>
+  );
+}
+
+function CompletedProjectsArchive({ projects, canSeeMoney, onOpenProject }) {
+  const groups = useMemo(() => {
+    const map = new Map();
+    projects.forEach((project) => {
+      const groupTitle = isProjectInstituteProject(project)
+        ? "Проектный институт"
+        : `${normalizeRegionName(project.region || project.city)} · ${project.direction || "Направление не указано"}`;
+      const item = map.get(groupTitle) || { title: groupTitle, projects: [] };
+      item.projects.push(project);
+      map.set(groupTitle, item);
+    });
+
+    return Array.from(map.values())
+      .map((group) => ({ ...group, summary: financeSummary(group.projects) }))
+      .sort((a, b) => a.title.localeCompare(b.title));
+  }, [projects]);
+
+  if (!projects.length) {
+    return (
+      <div className="completed-archive empty-archive">
+        <h3>Завершённые проекты</h3>
+        <p>В выбранном контуре завершённые проекты пока не найдены. Когда действующий проект получит статус “Завершён” или прогресс 100%, он появится здесь автоматически.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="completed-archive">
+      <div className="section-row">
+        <div>
+          <h3>Завершённые проекты</h3>
+          <p className="section-hint">Архив проектов по контурам. Здесь укороченные карточки: папка, сроки, ответственный, заказчик и сумма.</p>
+        </div>
+        <span className="muted-chip">{projects.length} проект(а)</span>
+      </div>
+      <div className="completed-group-list">
+        {groups.map((group) => (
+          <section key={group.title} className="completed-group">
+            <div className="completed-group-head">
+              <div>
+                <h4>{group.title}</h4>
+                <p>{group.projects.length} проект(а){canSeeMoney ? ` · договоры ${money(group.summary.contractAmount)}` : ""}</p>
+              </div>
+            </div>
+            <div className="completed-project-grid">
+              {group.projects.map((project) => (
+                <CompletedProjectCard key={project.id} project={project} canSeeMoney={canSeeMoney} onOpen={onOpenProject} />
+              ))}
+            </div>
+          </section>
+        ))}
+      </div>
+    </div>
   );
 }
 
@@ -6393,6 +6487,7 @@ function ProjectsModule({
   const [selectedClientKey, setSelectedClientKey] = useState("all");
   const [selectedClientType, setSelectedClientType] = useState("all");
   const [clientSearch, setClientSearch] = useState("");
+  const [projectViewMode, setProjectViewMode] = useState("active");
 
   useEffect(() => {
     setDirection("Все");
@@ -6481,6 +6576,23 @@ function ProjectsModule({
     });
   }, [visibleProjects, query, selectedClientKey]);
 
+  const activeSearchProjects = useMemo(() => {
+    return searchProjects.filter((project) => !isCompletedProject(project));
+  }, [searchProjects]);
+
+  const completedSearchProjects = useMemo(() => {
+    return searchProjects.filter(isCompletedProject);
+  }, [searchProjects]);
+
+  const selectedClientDisplayProjects = useMemo(() => {
+    if (!selectedClientGroup) return [];
+    return projectViewMode === "completed" ? completedSearchProjects : activeSearchProjects;
+  }, [selectedClientGroup, projectViewMode, activeSearchProjects, completedSearchProjects]);
+  const selectedClientDisplaySummary = useMemo(() => financeSummary(selectedClientDisplayProjects), [selectedClientDisplayProjects]);
+  const selectedClientDisplayStages = useMemo(() => {
+    return [...new Set(selectedClientDisplayProjects.map((project) => project.stage || firstStageForType(project.projectType)).filter(Boolean))];
+  }, [selectedClientDisplayProjects]);
+
   function selectClientGroup(key) {
     setSelectedClientKey(key);
     setSelectedArea(null);
@@ -6535,7 +6647,7 @@ function ProjectsModule({
         directions: new Set(),
       });
     });
-    searchProjects.filter(isRegionalOperatingProject).forEach((project) => {
+    activeSearchProjects.filter(isRegionalOperatingProject).forEach((project) => {
       const key = normalizeRegionName(project.region || project.city);
       const economy = projectEconomy(project);
       const item = map.get(key) || { name: key, projects: 0, contractAmount: 0, paidByClient: 0, realizationCost: 0, risk: "green", directions: new Set() };
@@ -6550,21 +6662,21 @@ function ProjectsModule({
       map.set(key, item);
     });
     return Array.from(map.values());
-  }, [searchProjects]);
+  }, [activeSearchProjects]);
 
-  const totals = useMemo(() => financeSummary(searchProjects), [searchProjects]);
+  const totals = useMemo(() => financeSummary(activeSearchProjects), [activeSearchProjects]);
   const regionalProjects = useMemo(() => {
-    return searchProjects.filter(isRegionalOperatingProject);
-  }, [searchProjects]);
+    return activeSearchProjects.filter(isRegionalOperatingProject);
+  }, [activeSearchProjects]);
   const regionalSummary = useMemo(() => financeSummary(regionalProjects), [regionalProjects]);
   const instituteProjects = useMemo(() => {
-    return searchProjects.filter(isProjectInstituteProject);
-  }, [searchProjects]);
+    return activeSearchProjects.filter(isProjectInstituteProject);
+  }, [activeSearchProjects]);
 
   const instituteSummary = useMemo(() => financeSummary(instituteProjects), [instituteProjects]);
   const selectedRegionProjects = useMemo(() => {
-    return searchProjects.filter((project) => isRegionalOperatingProject(project) && normalizeRegionName(project.region || project.city) === selectedRegion);
-  }, [searchProjects, selectedRegion]);
+    return activeSearchProjects.filter((project) => isRegionalOperatingProject(project) && normalizeRegionName(project.region || project.city) === selectedRegion);
+  }, [activeSearchProjects, selectedRegion]);
 
   const selectedRegionSummary = useMemo(() => financeSummary(selectedRegionProjects), [selectedRegionProjects]);
 
@@ -6584,7 +6696,7 @@ function ProjectsModule({
     });
   }, [selectedRegionProjects]);
 
-  const scopedProjects = visibleProjects.filter((project) => {
+  const scopedProjects = activeSearchProjects.filter((project) => {
     const projectRegion = normalizeRegionName(project.region || project.city);
     if (selectedArea === "institute") return instituteProjects.some((item) => item.id === project.id);
     if (!selectedDirectionConfig) return false;
@@ -6710,36 +6822,48 @@ function ProjectsModule({
           />
         ) : null}
 
-        {selectedClientGroup ? (
+        <div className="project-mode-tabs">
+          <button type="button" className={projectViewMode === "active" ? "active" : ""} onClick={() => setProjectViewMode("active")}>
+            <b>Действующие проекты</b>
+            <span>{activeSearchProjects.length} в работе</span>
+          </button>
+          <button type="button" className={projectViewMode === "completed" ? "active" : ""} onClick={() => setProjectViewMode("completed")}>
+            <b>Завершённые проекты</b>
+            <span>{completedSearchProjects.length} в архиве</span>
+          </button>
+        </div>
+
+        {projectViewMode === "active" && selectedClientGroup ? (
           <div className="client-project-summary">
             <div className="client-summary-main">
               <span className={cn("risk-chip", selectedClientGroup.risk)}>{riskText(selectedClientGroup.risk)}</span>
               <h3>{selectedClientGroup.name}</h3>
               <p>
-                Тип: <b>{clientTypeLabel(selectedClientGroup.type)}</b> · объектов: <b>{selectedClientGroup.projects.length}</b> · в работе: <b>{selectedClientGroup.activeProjects}</b> · средняя готовность: <b>{selectedClientGroup.avgProgress}%</b>
+                Тип: <b>{clientTypeLabel(selectedClientGroup.type)}</b> · действующих объектов: <b>{selectedClientDisplayProjects.length}</b>
               </p>
             </div>
             <div className="client-summary-money">
-              <div><span>Сумма договоров</span><b>{canSeeClientMoney ? money(selectedClientGroup.summary.contractAmount) : "Скрыто"}</b></div>
-              <div><span>Оплачено</span><b>{canSeeClientMoney ? money(selectedClientGroup.summary.paidByClient) : "Скрыто"}</b></div>
-              <div><span>Остаток оплаты</span><b>{canSeeClientMoney ? money(selectedClientGroup.summary.receivable) : "Скрыто"}</b></div>
-              <div><span>Красная зона</span><b>{selectedClientGroup.redProjects}</b></div>
+              <div><span>Сумма договоров</span><b>{canSeeClientMoney ? money(selectedClientDisplaySummary.contractAmount) : "Скрыто"}</b></div>
+              <div><span>Оплачено</span><b>{canSeeClientMoney ? money(selectedClientDisplaySummary.paidByClient) : "Скрыто"}</b></div>
+              <div><span>Остаток оплаты</span><b>{canSeeClientMoney ? money(selectedClientDisplaySummary.receivable) : "Скрыто"}</b></div>
+              <div><span>Красная зона</span><b>{selectedClientDisplaySummary.redProjects}</b></div>
             </div>
             <div className="client-stage-strip">
-              {selectedClientGroup.stages.slice(0, 8).map((stage) => <span key={stage}>{stage}</span>)}
-              {!selectedClientGroup.stages.length ? <span>Этапы не указаны</span> : null}
+              {selectedClientDisplayStages.slice(0, 8).map((stage) => <span key={stage}>{stage}</span>)}
+              {!selectedClientDisplayStages.length ? <span>Этапы не указаны</span> : null}
             </div>
             <div className="client-project-results">
               <div className="section-row">
                 <div>
-                  <h3>Все проекты заказчика</h3>
-                  <p className="section-hint">Здесь показаны все доступные тебе проекты этого контрагента, без ограничения текущим уровнем структуры.</p>
+                  <h3>Действующие проекты заказчика</h3>
+                  <p className="section-hint">Здесь показаны действующие доступные тебе проекты этого контрагента. Завершённые смотри во вкладке “Завершённые проекты”.</p>
                 </div>
               </div>
               <div className="projects-list project-cards-grid">
-                {selectedClientGroup.projects.map((project) => (
+                {selectedClientDisplayProjects.map((project) => (
                   <ProjectCard key={project.id} project={project} active={false} onClick={() => setSelectedId(project.id)} />
                 ))}
+                {!selectedClientDisplayProjects.length ? <div className="empty">Действующих проектов по этому заказчику нет.</div> : null}
               </div>
             </div>
           </div>
@@ -6783,7 +6907,11 @@ function ProjectsModule({
           </div>
         ) : null}
 
-        {!selectedClientGroup && !selectedArea ? (
+        {projectViewMode === "completed" ? (
+          <CompletedProjectsArchive projects={completedSearchProjects} canSeeMoney={canSeeClientMoney} onOpenProject={setSelectedId} />
+        ) : null}
+
+        {projectViewMode === "active" && !selectedClientGroup && !selectedArea ? (
           <div className="drill-card-grid">
             {holdingAreas.map((area) => {
               const areaMetrics = area.id === "central"
@@ -6814,7 +6942,7 @@ function ProjectsModule({
           </div>
         ) : null}
 
-        {!selectedClientGroup && selectedArea === "central" && !selectedCentralCompany ? (
+        {projectViewMode === "active" && !selectedClientGroup && selectedArea === "central" && !selectedCentralCompany ? (
           <div className="drill-card-grid">
             {centralCompanies.map((company) => (
               <DrillCard
@@ -6834,7 +6962,7 @@ function ProjectsModule({
           </div>
         ) : null}
 
-        {!selectedClientGroup && selectedArea === "central" && selectedCentralCompany ? (
+        {projectViewMode === "active" && !selectedClientGroup && selectedArea === "central" && selectedCentralCompany ? (
           <div className="org-detail-grid">
             <div className="office-card inner-card">
               <span className={cn("risk-chip", selectedCentralCompany.risk)}>{riskText(selectedCentralCompany.risk)}</span>
@@ -6857,7 +6985,7 @@ function ProjectsModule({
           </div>
         ) : null}
 
-        {!selectedClientGroup && selectedArea === "institute" ? (
+        {projectViewMode === "active" && !selectedClientGroup && selectedArea === "institute" ? (
           <div className="projects-list project-cards-grid">
             <div className="office-card inner-card project-span-card">
               <h3>Сводка проектного института</h3>
@@ -6879,7 +7007,7 @@ function ProjectsModule({
           </div>
         ) : null}
 
-        {!selectedClientGroup && selectedArea === "regions" && !selectedRegion ? (
+        {projectViewMode === "active" && !selectedClientGroup && selectedArea === "regions" && !selectedRegion ? (
           <div className="drill-card-grid">
             {regions.map((region) => (
               <DrillCard
@@ -6899,7 +7027,7 @@ function ProjectsModule({
           </div>
         ) : null}
 
-        {!selectedClientGroup && selectedArea === "regions" && selectedRegion && !selectedRegionalDirection ? (
+        {projectViewMode === "active" && !selectedClientGroup && selectedArea === "regions" && selectedRegion && !selectedRegionalDirection ? (
           <>
             <div className="office-card inner-card">
               <h3>{selectedRegion}</h3>
@@ -6931,7 +7059,7 @@ function ProjectsModule({
           </>
         ) : null}
 
-        {!selectedClientGroup && selectedArea === "regions" && selectedRegion && selectedRegionalDirection ? (
+        {projectViewMode === "active" && !selectedClientGroup && selectedArea === "regions" && selectedRegion && selectedRegionalDirection ? (
           <>
             <div className="office-card inner-card">
               <h3>{selectedDirectionConfig?.title}</h3>
