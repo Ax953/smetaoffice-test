@@ -3047,6 +3047,26 @@ function buildExecutorDirectory(executors = [], users = []) {
   return [...map.values()];
 }
 
+function executorPickerLabel(executor) {
+  if (!executor) return "";
+  const sections = parseExecutorSections(executor.sections).join(", ");
+  return `${executor.name} · ${sections || "без специализации"} · ${executor.id}`;
+}
+
+function findExecutorByReference(executors = [], reference) {
+  const normalized = String(reference || "").trim().toLowerCase();
+  if (!normalized) return null;
+  return (executors || []).find((executor) => {
+    const values = [
+      executor.id,
+      executor.name,
+      executorPickerLabel(executor),
+      `${executor.name} ${executor.id}`,
+    ];
+    return values.some((value) => String(value || "").trim().toLowerCase() === normalized);
+  }) || null;
+}
+
 function leadStageLabel(stage) {
   return salesStageLabels[stage] || stage || "без стадии";
 }
@@ -3765,7 +3785,60 @@ function ProjectEditPanel({ project, users, canEdit, canEditFinance, onUpdatePro
   );
 }
 
-function ProjectSectionsEditor({ project, sections, executors, canEdit, onUpdateSection, onAddSection, onDeleteSection, onDistributeSectionBudget, onApproveSectionPayment, onAcceptSectionBid }) {
+function ExecutorPicker({ executors = [], value, disabled, onSelect, placeholder = "Начни вводить ФИО или выбери исполнителя" }) {
+  const selectedExecutor = findExecutorByReference(executors, value);
+  const selectedLabel = selectedExecutor ? executorPickerLabel(selectedExecutor) : "";
+  const [text, setText] = useState(selectedLabel);
+  const listId = useMemo(() => `executor-picker-${Math.random().toString(36).slice(2)}`, []);
+
+  useEffect(() => {
+    setText(selectedLabel);
+  }, [selectedLabel]);
+
+  function commit(nextText, final = false) {
+    const normalized = nextText.trim();
+    if (!normalized) {
+      onSelect?.(null);
+      setText("");
+      return;
+    }
+    const executor = findExecutorByReference(executors, normalized);
+    if (executor) {
+      onSelect?.(executor);
+      setText(executorPickerLabel(executor));
+      return;
+    }
+    if (final) {
+      showAction("Исполнителя нельзя назначить вручную: сначала добавь его в базу исполнителей SmetaOffice");
+      setText(selectedLabel);
+    }
+  }
+
+  return (
+    <div className="executor-picker">
+      <input
+        disabled={disabled}
+        list={listId}
+        value={text}
+        onChange={(event) => {
+          const nextText = event.target.value;
+          setText(nextText);
+          commit(nextText, false);
+        }}
+        onBlur={(event) => commit(event.target.value, true)}
+        placeholder={placeholder}
+      />
+      <datalist id={listId}>
+        {executors.map((executor) => (
+          <option key={executor.id} value={executorPickerLabel(executor)} />
+        ))}
+      </datalist>
+      <small>Назначить можно только исполнителя, который уже есть в базе.</small>
+    </div>
+  );
+}
+
+function ProjectSectionsEditor({ project, sections, executors, canEdit, onUpdateSection, onAddSection, onDeleteSection, onDistributeSectionBudget, onApproveSectionPayment, onAcceptSectionBid, onOpenExecutor }) {
   const [editingSectionId, setEditingSectionId] = useState("");
   const columnLabels = ["Этап / задача", "Исполнитель", "Срок", "Статус", "Сумма", "Выплачено", "Набор / согласование", "Действие"];
   const editingSection = sections.find((section) => (section.id || section.name) === editingSectionId) || null;
@@ -3817,7 +3890,13 @@ function ProjectSectionsEditor({ project, sections, executors, canEdit, onUpdate
               <b>{section.name}</b>
               <span>{isBillableProductionStage(section) ? "оплачиваемая работа" : "преддоговорный/служебный этап"}</span>
             </div>
-            <span>{dash(executorName && !isExecutorUnassigned(executorName) ? executorName : "")}</span>
+            {executorName && !isExecutorUnassigned(executorName) ? (
+              <button type="button" className="inline-link executor-inline-link" onClick={() => onOpenExecutor?.(section.executorId || executorName)}>
+                {executorName}
+              </button>
+            ) : (
+              <span>{dash("")}</span>
+            )}
             <span>{dash(section.due)}</span>
             <em className={cn("status", statusClass(section.status))}>{section.status || "—"}</em>
             <strong>{amount ? money(amount) : "—"}</strong>
@@ -3850,17 +3929,12 @@ function ProjectSectionsEditor({ project, sections, executors, canEdit, onUpdate
           <div className="stage-editor-form">
             <label><span>Название этапа / задачи</span><input disabled={!canEdit} value={editingSection.name} onChange={(event) => updateEditingSection({ name: event.target.value })} placeholder="Название этапа" /></label>
             <label><span>Исполнитель</span>
-            <select
+            <ExecutorPicker
+              executors={executors}
               disabled={!canEdit}
-              value={editingSection.executorId || ""}
-              onChange={(event) => {
-                const executor = executors.find((item) => item.id === event.target.value);
-                updateEditingSection({ executorId: event.target.value, executor: executor ? executor.name : "не назначен" });
-              }}
-            >
-              <option value="">Исполнитель не назначен</option>
-              {executors.map((executor) => <option key={executor.id} value={executor.id}>{executor.name} · {executor.sections.join(", ")}</option>)}
-            </select>
+              value={editingSection.executorId || editingSection.executor || ""}
+              onSelect={(executor) => updateEditingSection({ executorId: executor?.id || "", executor: executor?.name || "не назначен" })}
+            />
             </label>
             <label><span>Срок</span><input disabled={!canEdit} value={editingSection.due || ""} onChange={(event) => updateEditingSection({ due: event.target.value })} placeholder="Срок" /></label>
             <label><span>Статус работы</span><select disabled={!canEdit} value={editingSection.status || "Ожидает"} onChange={(event) => updateEditingSection({ status: event.target.value })}>
@@ -4025,7 +4099,7 @@ function ProjectCommandCenter({ project, economy, canSeeMoney }) {
   );
 }
 
-function ProjectDetails({ project, role, onUpdateProject, onTaskStatusChange, onProjectMessage, onAddClientParticipant, onCreateApproval, onTransmitClientStatus, onApproveSectionPayment, onAcceptSectionBid, session, onUpdateSection, onAddSection, onDeleteSection, onDistributeSectionBudget, onOpenTask, executors, users }) {
+function ProjectDetails({ project, role, onUpdateProject, onTaskStatusChange, onProjectMessage, onAddClientParticipant, onCreateApproval, onTransmitClientStatus, onApproveSectionPayment, onAcceptSectionBid, session, onUpdateSection, onAddSection, onDeleteSection, onDistributeSectionBudget, onOpenTask, onOpenExecutor, executors, users }) {
   const canSeeMoney = roleCan(role, "viewFinance");
   const canSeeProductionBudget = roleCan(role, "viewProductionBudget") || canSeeMoney;
   const canSeeClient = roleCan(role, "viewClient") || roleCan(role, "manageProjects") || canSeeMoney;
@@ -4171,6 +4245,7 @@ function ProjectDetails({ project, role, onUpdateProject, onTaskStatusChange, on
           onDistributeSectionBudget={onDistributeSectionBudget}
           onApproveSectionPayment={onApproveSectionPayment}
           onAcceptSectionBid={onAcceptSectionBid}
+          onOpenExecutor={onOpenExecutor}
         />
       </section>
 
@@ -4185,7 +4260,13 @@ function ProjectDetails({ project, role, onUpdateProject, onTaskStatusChange, on
               <div key={`${project.id}-${task.name}`}>
                 <div>
                   <b>{task.name}</b>
-                  <span>Ответственный: {task.owner}{task.executorId ? ` · ${task.executorId}` : ""}</span>
+                  <span>
+                    Ответственный: {task.executorId ? (
+                      <button type="button" className="inline-link" onClick={() => onOpenExecutor?.(task.executorId)}>
+                        {task.owner || task.executorId}
+                      </button>
+                    ) : task.owner || "Не назначен"}
+                  </span>
                 </div>
                 {onTaskStatusChange ? (
                   <select className="status-select" value={task.status} onChange={(event) => onTaskStatusChange(project.id, task.id || task.name, event.target.value)}>
@@ -4700,10 +4781,10 @@ function ExecutorDetails({ executor, canSeeContacts, canManage, onUpdate, onMess
   );
 }
 
-function ExecutorsModule({ role, executors, setExecutors, allTasks = [] }) {
+function ExecutorsModule({ role, executors, setExecutors, allTasks = [], initialSelectedExecutorId = "" }) {
   const [section, setSection] = useState("Все");
   const [query, setQuery] = useState("");
-  const [selectedId, setSelectedId] = useState("");
+  const [selectedId, setSelectedId] = useState(() => initialSelectedExecutorId || readStoredValue("smeta.selectedExecutorId", ""));
   const [customGroups, setCustomGroups] = useState(() => readStoredValue("smeta.executorSpecializationGroups", []));
   const [newSpecialization, setNewSpecialization] = useState("");
   const [form, setForm] = useState({
@@ -4763,6 +4844,17 @@ function ExecutorsModule({ role, executors, setExecutors, allTasks = [] }) {
 
   const selectedExecutor = filteredExecutors.find((executor) => executor.id === selectedId) ?? filteredExecutors[0] ?? null;
   const selectedExecutorTasks = selectedExecutor ? allTasks.filter((task) => task.executorId === selectedExecutor.id) : [];
+
+  useEffect(() => {
+    if (!initialSelectedExecutorId) return;
+    setSection("Все");
+    setQuery("");
+    setSelectedId(initialSelectedExecutorId);
+  }, [initialSelectedExecutorId]);
+
+  useEffect(() => {
+    if (selectedId) writeStoredValue("smeta.selectedExecutorId", selectedId);
+  }, [selectedId]);
 
   function addExecutor() {
     if (!canManageExecutors) {
@@ -7091,7 +7183,7 @@ function ProjectsModule({
   );
 }
 
-function ProjectDetailModule({ project, role, session, onBack, onDeleteProject, onUpdateProject, onTaskStatusChange, onProjectMessage, onAddClientParticipant, onCreateApproval, onTransmitClientStatus, onApproveSectionPayment, onAcceptSectionBid, taskForm, setTaskForm, onCreateTask, onOpenTask, executors, users, onUpdateSection, onAddSection, onDeleteSection, onDistributeSectionBudget }) {
+function ProjectDetailModule({ project, role, session, onBack, onDeleteProject, onUpdateProject, onTaskStatusChange, onProjectMessage, onAddClientParticipant, onCreateApproval, onTransmitClientStatus, onApproveSectionPayment, onAcceptSectionBid, taskForm, setTaskForm, onCreateTask, onOpenTask, onOpenExecutor, executors, users, onUpdateSection, onAddSection, onDeleteSection, onDistributeSectionBudget }) {
   if (!project) {
     return (
       <>
@@ -7137,6 +7229,7 @@ function ProjectDetailModule({ project, role, session, onBack, onDeleteProject, 
         onDeleteSection={onDeleteSection}
         onDistributeSectionBudget={onDistributeSectionBudget}
         onOpenTask={onOpenTask}
+        onOpenExecutor={onOpenExecutor}
         executors={executors}
       />
 
@@ -7154,20 +7247,12 @@ function ProjectDetailModule({ project, role, session, onBack, onDeleteProject, 
             <option value="">Выбрать этап проекта</option>
             {projectSections(project).map((section) => <option key={section.id || section.name} value={section.name}>{section.name}</option>)}
           </select>
-          <select
+          <ExecutorPicker
+            executors={executors}
             value={taskForm.executorId}
-            onChange={(event) => {
-              const executor = executors.find((item) => item.id === event.target.value);
-              setTaskForm((next) => ({ ...next, executorId: event.target.value, owner: executor ? executor.name : "" }));
-            }}
-          >
-            <option value="">Выбрать исполнителя из базы</option>
-            {executors.map((executor) => (
-              <option key={executor.id} value={executor.id}>
-                {executor.name} · {executor.sections.join(", ")} · ранг {executor.rank}
-              </option>
-            ))}
-          </select>
+            onSelect={(executor) => setTaskForm((next) => ({ ...next, executorId: executor?.id || "", owner: executor?.name || "" }))}
+            placeholder="Исполнитель из базы для подзадачи"
+          />
           <input value={taskForm.due} onChange={(event) => setTaskForm((next) => ({ ...next, due: event.target.value }))} placeholder="Срок" />
           <select value={taskForm.status} onChange={(event) => setTaskForm((next) => ({ ...next, status: event.target.value }))}>
             <option>Новая</option>
@@ -7184,7 +7269,7 @@ function ProjectDetailModule({ project, role, session, onBack, onDeleteProject, 
   );
 }
 
-function TasksModule({ allTasks, onTaskStatusChange, executors, onGoSection, initialSelectedTaskId, role, onTaskMessage }) {
+function TasksModule({ allTasks, onTaskStatusChange, executors, onGoSection, initialSelectedTaskId, role, onTaskMessage, onOpenExecutor }) {
   const [statusFilter, setStatusFilter] = useState("Все");
   const [sectionFilter, setSectionFilter] = useState("Все");
   const [query, setQuery] = useState("");
@@ -7348,7 +7433,16 @@ function TasksModule({ allTasks, onTaskStatusChange, executors, onGoSection, ini
                 <Info label="Этап" value={selectedTask.section || "Без этапа"} />
                 <Info label="Регион" value={selectedTask.projectRegion} />
                 <Info label="РП" value={selectedTask.projectManager} />
-                <Info label="Исполнитель" value={executorLabel(selectedTask)} />
+                <Info
+                  label="Исполнитель"
+                  value={
+                    selectedTask.executorId || executorLabel(selectedTask) !== "Не назначен" ? (
+                      <button type="button" className="inline-link" onClick={() => onOpenExecutor?.(selectedTask.executorId || executorLabel(selectedTask))}>
+                        {executorLabel(selectedTask)}
+                      </button>
+                    ) : "Не назначен"
+                  }
+                />
                 <Info label="Срок" value={selectedTask.due} />
                 <Info label="Статус" value={selectedTask.status} />
                 <Info label="Бюджет клиента" value={canSeeTaskMoney ? money(selectedTask.clientBudget) : "Скрыто"} />
@@ -8827,7 +8921,7 @@ function ClientAppModule({ projectItems }) {
   );
 }
 
-function DashboardModule({ visibleProjects, selectedProject, setSelectedId, role, session, query, setQuery, direction, setDirection, chooseFirstAvailable, currentRole, onProjectMessage, onGoSection, salesLeads = [], partners = [], executors = [], users = [], financialPeriods = [], operationalExpenses = [], cashAccounts = [] }) {
+function DashboardModule({ visibleProjects, selectedProject, setSelectedId, role, session, query, setQuery, direction, setDirection, chooseFirstAvailable, currentRole, onProjectMessage, onGoSection, onOpenExecutor, salesLeads = [], partners = [], executors = [], users = [], financialPeriods = [], operationalExpenses = [], cashAccounts = [] }) {
   const summary = financeSummary(visibleProjects);
   const canSeeFinance = roleCan(role, "viewFinance");
   const canSeeProductionBudget = roleCan(role, "viewProductionBudget") || canSeeFinance;
@@ -8969,6 +9063,7 @@ function DashboardModule({ visibleProjects, selectedProject, setSelectedId, role
           id: `${project.id}-${section.id || section.name || index}`,
           project,
           section,
+          executorId: section.executorId || section.assigneeId || "",
           executorName,
           sectionName: section.name || "Раздел",
           accrued: executorCost,
@@ -9181,7 +9276,7 @@ function DashboardModule({ visibleProjects, selectedProject, setSelectedId, role
   })();
   const roleWorkRows = (() => {
     if (["finance", "accountant"].includes(role)) {
-      return payoutRows.slice(0, 6).map((row) => ({ id: row.key, title: row.name, meta: `${row.projectCount} проектов · ${row.sectionsText || "разделы не указаны"}`, value: money(row.payable), tone: row.payable ? "yellow" : "green", section: "finance" }));
+      return payoutRows.slice(0, 6).map((row) => ({ id: row.key, title: row.name, meta: `${row.projectCount} проектов · ${row.sectionsText || "разделы не указаны"}`, value: money(row.payable), tone: row.payable ? "yellow" : "green", executorRef: row.key }));
     }
     if (["sales_manager", "head_of_sales"].includes(role)) {
       return visibleSalesLeads.slice(0, 6).map((lead) => ({ id: lead.id, title: `${lead.id} · ${lead.clientName}`, meta: `${lead.city || lead.region} · ${salesDirections[lead.direction] || lead.direction} · ${salesStageLabels[lead.stage] || lead.stage}`, value: slaText(leadSlaStatus(lead)), tone: slaTone(leadSlaStatus(lead)), section: "sales" }));
@@ -9240,6 +9335,10 @@ function DashboardModule({ visibleProjects, selectedProject, setSelectedId, role
       const project = visibleProjects.find((nextProject) => nextProject.id === item.projectId);
       if (project) openDashboardProject(project);
       else showAction("Проект по этой задаче скрыт текущей ролью или не найден");
+      return;
+    }
+    if (item.executorId || item.executorRef) {
+      onOpenExecutor?.(item.executorId || item.executorRef || item.title);
       return;
     }
     if (item.section && sectionAllowed(role, item.section)) {
@@ -9385,6 +9484,34 @@ function DashboardModule({ visibleProjects, selectedProject, setSelectedId, role
             </section>
           </div>
 
+          <section className="office-card owner-risk-projects-card">
+            <div className="section-row">
+              <div>
+                <h3>Красные и жёлтые проекты</h3>
+                <p className="section-hint">Панель не должна прятать остальные проблемные объекты. Здесь видны все доступные проекты в красной и жёлтой зоне; клик открывает именно этот проект.</p>
+              </div>
+              <button type="button" className="secondary" onClick={() => onGoSection?.("projects")}>Открыть реестр</button>
+            </div>
+            <div className="owner-risk-project-grid">
+              {[...redProjects, ...yellowProjects].map((project) => {
+                const signals = projectOperationalSignals(project);
+                return (
+                  <button key={project.id} type="button" onClick={() => openDashboardProject(project)}>
+                    <span className={cn("risk-chip", effectiveProjectRisk(project))}>{riskText(effectiveProjectRisk(project))}</span>
+                    <b>{project.title}</b>
+                    <small>{project.id} · {project.region || project.city} · {project.stage || "этап не указан"}</small>
+                    <div className="owner-risk-mini">
+                      <span>Готовность <strong>{project.progress || 0}%</strong></span>
+                      <span>Просрочки <strong>{signals.overdueTasks.length}</strong></span>
+                      <span>Без исполнителя <strong>{signals.missingExecutorSections.length}</strong></span>
+                    </div>
+                  </button>
+                );
+              })}
+              {[...redProjects, ...yellowProjects].length === 0 ? <div className="empty">Сейчас нет проектов в красной или жёлтой зоне.</div> : null}
+            </div>
+          </section>
+
           <div className="owner-project-grid">
             <section className="office-card owner-live-project">
               {featuredProject ? (
@@ -9469,7 +9596,7 @@ function DashboardModule({ visibleProjects, selectedProject, setSelectedId, role
               <div className="owner-payment-table">
                 <div className="owner-payment-head"><span>Исполнитель</span><span>Раздел</span><span>Начислено</span><span>Выплачено</span><span>Статус</span></div>
                 {featuredPaymentRows.map((item) => (
-                  <button key={item.id} type="button" onClick={() => openDashboardProject(item.project)}>
+                  <button key={item.id} type="button" onClick={() => onOpenExecutor?.(item.executorId || item.executorName)}>
                     <b>{item.executorName}</b>
                     <span>{item.sectionName}</span>
                     <strong>{money(item.accrued)}</strong>
@@ -10212,6 +10339,17 @@ function SmetaOfficePrototype() {
     }
     setSelectedTaskId(taskId);
     setActiveSection("tasks");
+  }
+
+  function openExecutorProfile(reference) {
+    const executor = findExecutorByReference(executorDirectory, reference);
+    if (!executor) {
+      showAction("Исполнитель не найден в базе. Сначала добавь его в раздел «Исполнители» или включи профиль исполнителя у пользователя.");
+      setActiveSection("executors");
+      return;
+    }
+    writeStoredValue("smeta.selectedExecutorId", executor.id);
+    setActiveSection("executors");
   }
 
   function createProject() {
@@ -10976,7 +11114,7 @@ function SmetaOfficePrototype() {
             />
           ) : null}
 
-          {role !== "executor" && activeSection === "executors" ? <ExecutorsModule role={role} executors={executorDirectory} setExecutors={setExecutors} allTasks={visibleTasks} /> : null}
+          {role !== "executor" && activeSection === "executors" ? <ExecutorsModule role={role} executors={executorDirectory} setExecutors={setExecutors} allTasks={visibleTasks} initialSelectedExecutorId={readStoredValue("smeta.selectedExecutorId", "")} /> : null}
 
           {role !== "executor" && activeSection === "integrations" ? <IntegrationsModule setSalesLeads={setSalesLeads} /> : null}
 
@@ -11006,6 +11144,7 @@ function SmetaOfficePrototype() {
               currentRole={currentRole}
               onProjectMessage={addProjectMessage}
               onGoSection={setActiveSection}
+              onOpenExecutor={openExecutorProfile}
               salesLeads={salesLeads}
               partners={visiblePartners}
               executors={executorDirectory}
@@ -11061,6 +11200,7 @@ function SmetaOfficePrototype() {
               setTaskForm={setTaskForm}
               onCreateTask={createTask}
               onOpenTask={openTaskFromProject}
+              onOpenExecutor={openExecutorProfile}
               executors={executorDirectory}
               users={users}
               onUpdateSection={updateProjectSection}
@@ -11070,7 +11210,7 @@ function SmetaOfficePrototype() {
             />
           ) : null}
 
-          {role !== "executor" && activeSection === "tasks" ? <TasksModule allTasks={visibleTasks} onTaskStatusChange={changeTaskStatus} executors={executorDirectory} onGoSection={setActiveSection} initialSelectedTaskId={selectedTaskId} role={role} onTaskMessage={addTaskMessage} /> : null}
+          {role !== "executor" && activeSection === "tasks" ? <TasksModule allTasks={visibleTasks} onTaskStatusChange={changeTaskStatus} executors={executorDirectory} onGoSection={setActiveSection} initialSelectedTaskId={selectedTaskId} role={role} onTaskMessage={addTaskMessage} onOpenExecutor={openExecutorProfile} /> : null}
           {role !== "executor" && activeSection === "partners" ? <PartnersModule role={role} session={effectiveAccessUser} partnerItems={partners} visiblePartnerItems={visiblePartners} setPartnerItems={setPartners} /> : null}
           {role !== "executor" && activeSection === "admin" ? <AdminModule users={users} setUsers={setUsers} session={session} executors={executors} /> : null}
           {role !== "executor" && activeSection === "analytics" ? <AnalyticsModule projectItems={visibleProjects} allTasks={visibleTasks} role={role} /> : null}

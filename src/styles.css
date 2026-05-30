@@ -2113,12 +2113,35 @@ h3 { margin: 0; }
 }
 .stage-link,
 .inline-link {
+  border: 0;
+  background: transparent;
+  padding: 0;
   color: #1d4ed8;
   font-weight: 900;
   text-decoration: none;
+  text-align: left;
+  cursor: pointer;
 }
 .stage-link:hover,
 .inline-link:hover { text-decoration: underline; }
+.executor-inline-link {
+  width: fit-content;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+.executor-picker {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+.executor-picker input {
+  width: 100%;
+}
+.executor-picker small {
+  color: #64748b;
+  font-size: 11px;
+  line-height: 1.35;
+}
 .stage-bids-list {
   grid-column: span 6;
   display: grid;
@@ -4109,6 +4132,60 @@ h3 { margin: 0; }
   color: #1d4ed8;
   font-size: 13px;
 }
+.owner-risk-projects-card {
+  display: grid;
+  gap: 14px;
+}
+.owner-risk-project-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+.owner-risk-project-grid > button {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+  min-height: 178px;
+  border: 1px solid #dbe5ef;
+  border-radius: 18px;
+  background: #fff;
+  padding: 14px;
+  text-align: left;
+}
+.owner-risk-project-grid > button:hover {
+  border-color: #93c5fd;
+  background: #eff6ff;
+}
+.owner-risk-project-grid b,
+.owner-risk-project-grid small {
+  display: block;
+}
+.owner-risk-project-grid b {
+  color: #020617;
+  line-height: 1.25;
+}
+.owner-risk-project-grid small {
+  color: #64748b;
+  line-height: 1.35;
+}
+.owner-risk-mini {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+.owner-risk-mini span {
+  border-radius: 12px;
+  background: #f8fafc;
+  padding: 8px;
+  color: #64748b;
+  font-size: 11px;
+}
+.owner-risk-mini strong {
+  display: block;
+  margin-top: 3px;
+  color: #020617;
+  font-size: 14px;
+}
 .owner-project-head {
   display: flex;
   align-items: flex-start;
@@ -4475,7 +4552,7 @@ h3 { margin: 0; }
   .projects-list, .drill-card-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .executor-list { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .owner-two-grid, .owner-project-grid, .role-command-grid, .owner-holding-map { grid-template-columns: 1fr; }
-  .owner-kpi-grid, .owner-region-grid, .owner-people-grid, .role-kpi-grid, .launch-readiness-grid, .executor-edit-panel { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .owner-kpi-grid, .owner-region-grid, .owner-people-grid, .owner-risk-project-grid, .role-kpi-grid, .launch-readiness-grid, .executor-edit-panel { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
 @media (max-width: 980px) {
@@ -4503,7 +4580,7 @@ h3 { margin: 0; }
   .header-actions, .filters, .module-head { flex-direction: column; align-items: stretch; }
   .header-actions label, .moscow-clock, .filters input, .filters select { width: 100%; min-width: 0; }
   .stats-grid, .projects-list, .drill-card-grid, .card-money-row, .drill-metrics, .info-grid, .bottom-panels, .pipeline, .summary-grid, .executor-groups, .executor-list, .executor-form, .executor-two-cols, .chat-input, .project-chat-input, .mvp-days, .integration-form, .quick-form, .task-create-form, .economy-summary, .production-budget-card, .login-card, .finance-grid, .finance-kpi-list, .finance-plain-grid, .finance-entry-form, .org-detail-grid, .mini-kpi-grid, .client-filter-strip, .client-summary-money, .plan-grid, .focus-grid, .risk-project-strip, .task-command-bar, .task-kanban, .executor-process-grid, .task-inspector-actions, .client-participant-form, .sales-grid, .sales-board, .stage-editor-row, .stage-editor-head, .stage-compact-head, .stage-compact-row, .stage-editor-form, .admin-directory-grid, .admin-create-user-form, .admin-executor-create-panel, .empty-start-card, .role-scope-card, .role-scope-meta, .role-command-grid, .role-kpi-grid, .role-work-list > button, .quick-action-grid, .task-meaning-grid, .partner-filter-row, .partner-detail-grid, .analytics-grid, .specialization-add, .deadline-bars, .account-progress-grid, .executor-pay-card, .executor-guide-grid, .executor-project-kpis, .executor-stage-table > div, .available-work-list > div, .executor-payout-table > div, .launch-readiness-grid, .executor-edit-panel { grid-template-columns: 1fr; }
-  .owner-kpi-grid, .owner-region-grid, .owner-direction-strip, .owner-project-grid, .owner-two-grid, .owner-money-grid, .owner-meta-grid, .owner-approval-strip, .owner-people-grid, .owner-payment-table > div, .owner-payment-table > button { grid-template-columns: 1fr; }
+  .owner-kpi-grid, .owner-region-grid, .owner-direction-strip, .owner-project-grid, .owner-two-grid, .owner-money-grid, .owner-meta-grid, .owner-approval-strip, .owner-people-grid, .owner-risk-project-grid, .owner-payment-table > div, .owner-payment-table > button { grid-template-columns: 1fr; }
   .owner-project-head, .owner-people-grid > button { flex-direction: column; align-items: stretch; }
   .owner-risk-list > button, .owner-stage-timeline > button { grid-template-columns: 1fr; }
   .available-work-meta { justify-items: start; text-align: left; }
@@ -4520,7 +4597,7 @@ h3 { margin: 0; }
   .project-command-center { grid-template-columns: 1fr; }
   .owner-problem-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .owner-two-grid, .owner-project-grid, .role-command-grid, .owner-holding-map { grid-template-columns: 1fr; }
-  .owner-kpi-grid, .owner-region-grid, .owner-people-grid, .role-kpi-grid, .launch-readiness-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .owner-kpi-grid, .owner-region-grid, .owner-people-grid, .owner-risk-project-grid, .role-kpi-grid, .launch-readiness-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .project-lifecycle-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
 
@@ -4534,6 +4611,7 @@ h3 { margin: 0; }
   .owner-region-grid,
   .owner-direction-strip,
   .owner-people-grid,
+  .owner-risk-project-grid,
   .owner-approval-strip,
   .owner-money-grid,
   .owner-meta-grid,
