@@ -12,9 +12,12 @@ const roles = [
   { id: "head_of_department", name: "Руководитель отдела", hint: "свой отдел внутри направления" },
   { id: "regional_manager", name: "Региональный менеджер", hint: "свой регион" },
   { id: "pm", name: "Руководитель проекта", hint: "свои проекты и исполнители проекта" },
+  { id: "gip", name: "ГИП", hint: "все проекты без финансов" },
   { id: "project_manager", name: "Менеджер проекта", hint: "ведение операционных задач" },
   { id: "sales_manager", name: "Менеджер продаж", hint: "лиды, клиенты, сделки" },
+  { id: "senior_sales_manager", name: "Старший менеджер продаж", hint: "контроль группы менеджеров" },
   { id: "head_of_sales", name: "Руководитель отдела продаж", hint: "продажи и показатели отдела" },
+  { id: "ecp_manager", name: "Управляющий ЕЦП", hint: "единый центр продаж и руководители отделов" },
   { id: "accountant", name: "Бухгалтер", hint: "счета, акты, выплаты" },
   { id: "finance", name: "Финансы", hint: "деньги, оплаты, задолженность" },
   { id: "executor", name: "Исполнитель", hint: "только свои этапы и задачи" },
@@ -31,9 +34,12 @@ const rolePermissions = {
   head_of_department: ["viewClient", "viewProductionBudget", "manageProjects", "manageExecutors", "assignExecutors", "viewExecutorContacts", "viewOwnerDashboard"],
   regional_manager: ["viewClient", "viewFinance", "viewProductionBudget", "manageProjects", "manageExecutors", "assignExecutors", "viewExecutorContacts", "editProjectFinance", "viewOwnerDashboard"],
   pm: ["viewClient", "viewProductionBudget", "manageProjects", "manageExecutors", "assignExecutors"],
+  gip: ["viewClient"],
   project_manager: ["viewClient", "viewProductionBudget", "manageProjects", "assignExecutors"],
   sales_manager: ["viewClient"],
+  senior_sales_manager: ["viewClient"],
   head_of_sales: ["viewClient", "manageProjects", "viewOwnerDashboard"],
+  ecp_manager: ["viewClient", "viewOwnerDashboard"],
   accountant: ["viewFinance", "editFinance"],
   finance: ["viewFinance", "editFinance"],
   executor: [],
@@ -42,7 +48,23 @@ const rolePermissions = {
 
 const fullUserAdminRoles = ["owner", "admin"];
 const scopedUserAdminRoles = ["regional_admin", "direction_admin"];
-const scopedAdminManageableRoleIds = ["director", "head_of_department", "regional_manager", "pm", "project_manager", "sales_manager", "head_of_sales", "executor", "partner"];
+const scopedAdminManageableRoleIds = ["director", "head_of_department", "regional_manager", "pm", "gip", "project_manager", "sales_manager", "senior_sales_manager", "head_of_sales", "ecp_manager", "executor", "partner"];
+const salesControlRoleIds = ["sales_manager", "senior_sales_manager", "head_of_sales", "ecp_manager"];
+const salesRolePlanDefaults = {
+  sales_manager: { contractAmount: 3000000, paidAmount: 1500000, deals: 6, handoffs: 2, commissionRate: 0.05, planBonus: 35000, label: "личный план менеджера" },
+  senior_sales_manager: { contractAmount: 6500000, paidAmount: 3500000, deals: 12, handoffs: 5, commissionRate: 0.025, planBonus: 55000, label: "план старшего менеджера" },
+  head_of_sales: { contractAmount: 12000000, paidAmount: 7000000, deals: 24, handoffs: 10, commissionRate: 0.015, planBonus: 90000, label: "план РОПа / отдела" },
+  ecp_manager: { contractAmount: 25000000, paidAmount: 15000000, deals: 45, handoffs: 18, commissionRate: 0.01, planBonus: 150000, label: "план единого центра продаж" },
+};
+const salesCareerLevels = [
+  { id: "intern", title: "L1 Стажёр продаж", minPoints: 0, tone: "slate", position: "допуск к обучению", requirement: "работает только под контролем, без самостоятельного повышения" },
+  { id: "junior", title: "L2 Младший менеджер", minPoints: 150, tone: "yellow", position: "самостоятельные тёплые сделки", requirement: "CRM 80%, SLA 90%, есть отчётность по сделкам" },
+  { id: "manager", title: "L3 Менеджер продаж", minPoints: 350, tone: "blue", position: "полный цикл до договора/аванса", requirement: "выполняет план не ниже 80% и передаёт сделки через шлюз" },
+  { id: "strong", title: "L4 Сильный менеджер", minPoints: 650, tone: "blue", position: "крупные сделки и сложные клиенты", requirement: "план от 100%, стабильный SLA, нет открытых критичных эскалаций" },
+  { id: "senior", title: "L5 Старший менеджер", minPoints: 950, tone: "green", position: "наставник / контроль группы", requirement: "может вести группу, помогает закрывать чужие риски" },
+  { id: "head_candidate", title: "L6 Кандидат в РОП", minPoints: 1350, tone: "green", position: "кандидат на руководителя отдела продаж", requirement: "план от 120%, качество CRM команды, передача в проект без провалов" },
+  { id: "head", title: "L7 Руководитель отдела продаж", minPoints: 1800, tone: "green", position: "руководитель отдела продаж", requirement: "подтверждённый результат отдела и управленческая дисциплина" },
+];
 
 const roleCan = (role, permission) => role === "owner" || (rolePermissions[role] || []).includes(permission);
 const userCan = (user, permission) => roleCan(user?.role, permission);
@@ -59,9 +81,12 @@ const demoUsers = import.meta.env.DEV ? [
   { id: "USR-004", login: "director", role: "director", name: "Руководитель направления", status: "active", region: "ЧР", regions: ["ЧР", "ДНР", "ЛНР"], direction: "Проектный институт", position: "Руководитель направления" },
   { id: "USR-005", login: "regional", role: "regional_manager", name: "Региональный менеджер", status: "active", region: "Ростов", regions: ["Ростов"], direction: "Все направления", position: "Управляющий региона" },
   { id: "USR-006", login: "pm", role: "pm", name: "Руководитель проекта", status: "active", region: "ДНР", regions: ["ДНР"], direction: "Проектный институт", position: "Руководитель проекта" },
+  { id: "USR-016", login: "gip", role: "gip", name: "Главный инженер проекта", status: "active", region: "ДНР", regions: ["ДНР"], direction: "Проектный институт", position: "ГИП" },
   { id: "USR-007", login: "project", role: "project_manager", name: "Менеджер проекта", status: "active", region: "ЧР", regions: ["ЧР"], direction: "Бюро архитектуры и дизайна", position: "Менеджер проекта" },
   { id: "USR-008", login: "sales", role: "sales_manager", name: "Менеджер продаж", status: "active", region: "ЧР", regions: ["ЧР"], direction: "Единый центр продаж", position: "Менеджер продаж" },
   { id: "USR-009", login: "headsales", role: "head_of_sales", name: "Руководитель отдела продаж", status: "active", region: "ЧР", regions: ["ЧР"], direction: "Единый центр продаж", position: "Руководитель отдела продаж" },
+  { id: "USR-017", login: "seniorsales", role: "senior_sales_manager", name: "Старший менеджер продаж", status: "active", region: "ЧР", regions: ["ЧР"], direction: "Единый центр продаж", position: "Старший менеджер продаж" },
+  { id: "USR-018", login: "ecp", role: "ecp_manager", name: "Управляющий ЕЦП", status: "active", region: "Все регионы", regions: ["Все регионы"], direction: "Единый центр продаж", position: "Управляющий единого центра продаж" },
   { id: "USR-010", login: "accountant", role: "accountant", name: "Бухгалтер", status: "active", region: "Все регионы", regions: ["Все регионы"], direction: "Финансы", position: "Бухгалтер" },
   { id: "USR-011", login: "finance", role: "finance", name: "Финансист", status: "active", region: "Все регионы", regions: ["Все регионы"], direction: "Финансы", position: "Финансовый контроль" },
   { id: "USR-012", login: "executor", role: "executor", name: "Исполнитель", status: "active", region: "ЧР", regions: ["ЧР"], direction: "Бюро архитектуры и дизайна", position: "Исполнитель / визуализатор", executorId: "EX-063" },
@@ -426,12 +451,12 @@ function normalizeProjectAccess(project) {
 
   const defaultsById = {
     "SG-154": { directorUserId: "USR-007", projectManagerId: "USR-007", salesManagerId: "USR-008" },
-    "SG-181": { directorUserId: "USR-004", pmUserId: "USR-006" },
+    "SG-181": { directorUserId: "USR-004", pmUserId: "USR-006", gipUserId: "USR-016" },
     "SG-206": { regionalManagerId: "USR-005", partnerUserId: "USR-013" },
     "SG-219": { headOfSalesId: "USR-009", salesManagerId: "USR-008", partnerUserId: "USR-013" },
-    "SG-401": { directorUserId: "USR-004", pmUserId: "USR-006" },
+    "SG-401": { directorUserId: "USR-004", pmUserId: "USR-006", gipUserId: "USR-016" },
     "SG-402": { directorUserId: "USR-007", projectManagerId: "USR-007", salesManagerId: "USR-008" },
-    "SG-403": { directorUserId: "USR-004", pmUserId: "USR-006" },
+    "SG-403": { directorUserId: "USR-004", pmUserId: "USR-006", gipUserId: "USR-016" },
   };
 
   return {
@@ -439,6 +464,7 @@ function normalizeProjectAccess(project) {
     directorUserId: project.directorUserId || defaultsById[project.id]?.directorUserId || (isProjectInstitute ? "USR-004" : ""),
     regionalManagerId: project.regionalManagerId || defaultsById[project.id]?.regionalManagerId || (isRostov ? "USR-005" : ""),
     pmUserId: project.pmUserId || defaultsById[project.id]?.pmUserId || (isDnr || isProjectInstitute ? "USR-006" : ""),
+    gipUserId: project.gipUserId || defaultsById[project.id]?.gipUserId || "",
     projectManagerId: project.projectManagerId || defaultsById[project.id]?.projectManagerId || (isDesign ? "USR-007" : ""),
     salesManagerId: project.salesManagerId || defaultsById[project.id]?.salesManagerId || (isSmetaGoLead ? "USR-008" : ""),
     headOfSalesId: project.headOfSalesId || defaultsById[project.id]?.headOfSalesId || (isSmetaGoLead ? "USR-009" : ""),
@@ -1579,6 +1605,7 @@ const defaultProjectForm = {
   sourceComment: "",
   directorUserId: "",
   pmUserId: "",
+  gipUserId: "",
   projectManagerId: "",
   salesManagerId: "",
   partnerUserId: "",
@@ -1760,6 +1787,8 @@ function canAccessProject(user, project, viewRole = user?.role) {
     return assignedTasks.some((task) => task.executorId === executorId || task.assigneeId === executorId);
   }
 
+  if (role === "gip") return true;
+
   if (!canAccessRegion(user, project)) return false;
 
   if (role === "regional_admin") {
@@ -1858,7 +1887,7 @@ function canAccessPartner(user, partner, viewRole = user?.role) {
   if (role === "pm" || role === "project_manager") {
     return normalizeDirectionName(partner.direction) === normalizeDirectionName(user.direction) || normalizeDirectionName(user.direction) === "Все направления";
   }
-  if (role === "head_of_sales" || role === "sales_manager") {
+  if (salesControlRoleIds.includes(role)) {
     return partner.direction === "Единый центр продаж" || partner.relation === "Партнёр приводит нам клиентов";
   }
   return false;
@@ -1873,8 +1902,8 @@ function sectionAllowed(role, sectionId) {
   if (role === "finance" || role === "accountant") return ["dashboard", ...projectSections, "analytics", "finance"].includes(sectionId);
   if (role === "executor") return ["dashboard", "projects", "tasks"].includes(sectionId);
   if (role === "partner") return ["dashboard", "sales", ...projectSections, "tasks"].includes(sectionId);
-  if (role === "sales_manager" || role === "head_of_sales") return salesSections.includes(sectionId);
-  if (role === "pm" || role === "project_manager") return ["dashboard", ...projectSections, "tasks", "executors", "analytics", "client"].includes(sectionId);
+  if (["sales_manager", "senior_sales_manager", "head_of_sales", "ecp_manager"].includes(role)) return salesSections.includes(sectionId);
+  if (role === "pm" || role === "gip" || role === "project_manager") return ["dashboard", ...projectSections, "tasks", "executors", "analytics", "client"].includes(sectionId);
   if (role === "head_of_department") return ["dashboard", ...projectSections, "tasks", "executors", "partners", "analytics", "client"].includes(sectionId);
   if (role === "director" || role === "regional_manager") return ["dashboard", ...projectSections, "tasks", "executors", "partners", "analytics", "finance", "client"].includes(sectionId);
   return ["dashboard", ...projectSections, "tasks", "analytics", "client"].includes(sectionId);
@@ -1890,9 +1919,12 @@ function roleScopeText(role, user) {
   if (role === "head_of_department") return `${user?.position || "руководитель отдела"} · ${user?.direction || "своё направление"}`;
   if (role === "regional_manager") return `${user?.region || "свой регион"} · все направления региона`;
   if (role === "pm") return "только проекты, где пользователь назначен РП";
+  if (role === "gip") return "все существующие проекты без финансовых показателей";
   if (role === "project_manager") return "только проекты, где пользователь назначен менеджером проекта";
   if (role === "sales_manager") return "свои лиды, сделки и проекты продаж";
+  if (role === "senior_sales_manager") return "группа менеджеров продаж и операционные эскалации";
   if (role === "head_of_sales") return `${user?.region || "регион"} · единый центр продаж`;
+  if (role === "ecp_manager") return "единый центр продаж, руководители отделов и региональные срезы";
   if (role === "finance" || role === "accountant") return "финансовые показатели доступных проектов";
   if (role === "partner") return "только свои заявки, работы и выплаты";
   if (role === "executor") return "только свои проекты, задачи, уровень и выплаты";
@@ -1907,9 +1939,12 @@ function dashboardTitleForRole(role) {
   if (role === "head_of_department") return "Панель руководителя отдела";
   if (role === "regional_manager") return "Панель регионального менеджера";
   if (role === "pm") return "Панель руководителя проекта";
+  if (role === "gip") return "Панель ГИПа";
   if (role === "project_manager") return "Панель менеджера проекта";
   if (role === "sales_manager") return "Панель менеджера продаж";
+  if (role === "senior_sales_manager") return "Панель старшего менеджера продаж";
   if (role === "head_of_sales") return "Панель руководителя отдела продаж";
+  if (role === "ecp_manager") return "Панель управляющего ЕЦП";
   if (role === "finance" || role === "accountant") return "Панель финансов";
   if (role === "partner") return "Панель партнёра";
   return "Сводка владельца";
@@ -1923,9 +1958,12 @@ function dashboardHintForRole(role) {
   if (role === "head_of_department") return "Руководитель отдела видит свой отдел внутри направления: проекты, задачи, исполнителей, партнёров и производственные показатели без полного админ-доступа.";
   if (role === "regional_manager") return "Региональный менеджер видит все направления своего региона: проекты, сроки, риски, исполнителей и партнёров региона.";
   if (role === "pm") return "РП видит только свои проекты: этапы, исполнителей, сроки, задачи, файлы и производственный бюджет.";
+  if (role === "gip") return "ГИП видит все существующие проекты, этапы, сроки, файлы, задачи и клиентов, но не видит суммы договоров, бюджеты, себестоимость и выплаты.";
   if (role === "project_manager") return "Менеджер проекта работает как операционный помощник РП: свои проекты, задачи, этапы и статусы.";
   if (role === "sales_manager") return "Менеджер продаж видит свои лиды, сделки, задачи по клиентам и связанные проекты без производственной маржи.";
+  if (role === "senior_sales_manager") return "Старший менеджер видит группу менеджеров, SLA, качество CRM и эскалации своей группы.";
   if (role === "head_of_sales") return "РОП видит продажи своего региона/отдела: SLA, КП, договоры, авансы и передачу в проекты.";
+  if (role === "ecp_manager") return "Управляющий ЕЦП видит продажи центра, руководителей отделов, региональные срезы и передачу в производство.";
   if (role === "finance" || role === "accountant") return "Финансы видят договоры, оплаты, задолженность, себестоимость и выплаты, но не управляют доступами.";
   if (role === "partner") return "Партнёр видит только назначенные работы, свои заявки, статус выплат и рейтинг. Регионы и чужие клиенты скрыты.";
   return "Здесь показан только тот контур, который доступен выбранной роли.";
@@ -3081,7 +3119,8 @@ function addMinutesIso(iso, minutes) {
 }
 
 function leadSlaStatus(lead, now = new Date()) {
-  if (lead.firstResponseAt) return "ok";
+  const closedByStage = ["proposal_sent", "contract_and_advance", "contract_advance", "deposit", "archive"].includes(lead.stage) || Boolean(lead.projectId);
+  if (lead.firstResponseAt || closedByStage) return "closed";
   const deadline = lead.slaDeadlineAt ? new Date(lead.slaDeadlineAt) : new Date(addMinutesIso(lead.createdAt, 5));
   const diff = deadline.getTime() - now.getTime();
   if (diff <= 0) return "breached";
@@ -3090,12 +3129,14 @@ function leadSlaStatus(lead, now = new Date()) {
 }
 
 function slaText(status) {
+  if (status === "closed") return "SLA закрыт";
   if (status === "breached") return "SLA нарушен";
   if (status === "warning") return "SLA скоро";
   return "SLA в норме";
 }
 
 function slaTone(status) {
+  if (status === "closed") return "green";
   if (status === "breached") return "red";
   if (status === "warning") return "yellow";
   return "green";
@@ -3117,6 +3158,11 @@ function leadCanAccess(user, lead, viewRole = user?.role) {
   if (role === "head_of_sales") {
     const regions = userRegionList(user);
     return regions.includes("Все регионы") || regions.includes(normalizeRegionName(lead.region));
+  }
+  if (role === "ecp_manager") return true;
+  if (role === "senior_sales_manager") {
+    const regions = userRegionList(user);
+    return regions.includes("Все регионы") || regions.includes(normalizeRegionName(lead.region)) || lead.seniorManagerId === user.id || lead.salesHeadId === user.id;
   }
   if (role === "finance" || role === "accountant") return true;
   if (role === "partner") return lead.partnerId === user.id || lead.farmerId === user.id;
@@ -3151,6 +3197,418 @@ function salesLeadStats(leads) {
   return { breached, linked, proposal, contract };
 }
 
+const salesClosedStageIds = ["proposal_sent", "contract_and_advance", "contract_advance", "deposit", "transferred_to_project", "won", "archive"];
+const salesHandoffStageIds = ["contract_and_advance", "contract_advance", "deposit", "project_handoff", "transferred_to_project"];
+
+function salesStageFromLead(lead = {}) {
+  if (lead.salesStage) return lead.salesStage;
+  if (lead.projectId) return "transferred_to_project";
+  if (lead.stage === "contract_advance" || lead.stage === "deposit") return "contract_and_advance";
+  return lead.stage || "qualified";
+}
+
+function daysSinceDate(value) {
+  const date = value ? new Date(value) : null;
+  if (!date || Number.isNaN(date.getTime())) return 0;
+  return Math.max(0, Math.floor((Date.now() - date.getTime()) / (24 * 60 * 60 * 1000)));
+}
+
+function salesDealMissingFields(deal = {}) {
+  return [
+    ["clientName", deal.clientName],
+    ["region", deal.region],
+    ["direction", deal.direction],
+    ["objectName", deal.objectName],
+    ["amount", deal.contractAmount || deal.quoteAmount || deal.amountPotential],
+    ["salesManagerId", deal.salesManagerId],
+    ["nextStep", deal.nextStep],
+  ].filter(([, value]) => value === undefined || value === null || String(value).trim() === "").map(([field]) => field);
+}
+
+function salesDealRisk(deal = {}) {
+  if (deal.slaStatus === "breached") return { tone: "red", label: "SLA нарушен" };
+  if (deal.nextStepDueAt && new Date(deal.nextStepDueAt).getTime() < Date.now()) return { tone: "red", label: "Просрочен следующий шаг" };
+  if (!deal.nextStep && !salesClosedStageIds.includes(deal.salesStage)) return { tone: "yellow", label: "Нет следующего шага" };
+  if (daysSinceDate(deal.lastContactAt || deal.updatedAt || deal.createdAt) >= 3 && !salesClosedStageIds.includes(deal.salesStage)) return { tone: "yellow", label: "Нет движения 3+ дня" };
+  return { tone: "green", label: "Под контролем" };
+}
+
+function salesDealFromLead(lead = {}) {
+  const createdAt = lead.createdAt || new Date().toISOString();
+  const salesStage = salesStageFromLead(lead);
+  const contractAmount = Number(lead.contractAmount || lead.amount || lead.budget || 0) || 0;
+  const paidAmount = Number(lead.paidAmount || lead.paid || 0) || 0;
+  const base = {
+    id: lead.salesDealId || lead.id,
+    sourceSystem: lead.bitrixDealId ? "Bitrix24" : (lead.sourceSystem || lead.source || "manual"),
+    sourceId: lead.bitrixDealId || lead.sourceId || lead.id,
+    leadId: lead.id,
+    bitrixDealId: lead.bitrixDealId || "",
+    clientName: lead.clientName || lead.title || "Клиент не указан",
+    phone: lead.clientPhone || lead.phone || "",
+    email: lead.clientEmail || lead.email || "",
+    region: normalizeRegionName(lead.region || "Все регионы"),
+    direction: lead.direction || "design",
+    objectName: lead.objectName || lead.objectType || lead.city || "",
+    clientNeed: lead.clientNeed || lead.requestText || "",
+    source: lead.source || "Bitrix24",
+    bitrixStage: lead.rawStage || lead.bitrixStage || lead.stage || "",
+    salesStage,
+    status: lead.status || "active",
+    salesManagerId: lead.salesManagerId || lead.hunterId || lead.farmerId || "",
+    seniorManagerId: lead.seniorManagerId || "",
+    salesHeadId: lead.salesHeadId || lead.headOfSalesId || "",
+    ecpManagerId: lead.ecpManagerId || "",
+    amountPotential: Number(lead.amountPotential || lead.amount || lead.budget || 0) || 0,
+    quoteAmount: Number(lead.quoteAmount || 0) || 0,
+    contractAmount,
+    paidAmount,
+    expectedPayment: Math.max(0, contractAmount - paidAmount),
+    probability: Number(lead.probability || (contractAmount ? 80 : 50)) || 50,
+    firstResponseAt: lead.firstResponseAt || "",
+    slaDeadlineAt: lead.slaDeadlineAt || addMinutesIso(createdAt, 5),
+    lastContactAt: lead.lastContactAt || lead.lastActivityAt || lead.updatedAt || createdAt,
+    nextStep: lead.nextStep || "",
+    nextStepDueAt: lead.nextStepDueAt || "",
+    projectHandoffStatus: lead.projectHandoffStatus || (lead.projectId ? "transferred" : ""),
+    projectId: lead.projectId || "",
+    comment: lead.comment || "",
+    createdAt,
+    updatedAt: lead.updatedAt || lead.lastBitrixSyncAt || lead.lastActivityAt || createdAt,
+  };
+  const slaStatus = leadSlaStatus({ ...lead, stage: salesStage, projectId: base.projectId });
+  const missingFields = salesDealMissingFields(base);
+  return {
+    ...base,
+    slaStatus,
+    responseMinutes: base.firstResponseAt ? Math.max(0, Math.round((new Date(base.firstResponseAt).getTime() - new Date(createdAt).getTime()) / 60000)) : null,
+    daysWithoutMovement: daysSinceDate(base.lastContactAt),
+    overdue: salesDealRisk({ ...base, slaStatus }).tone === "red",
+    riskLevel: salesDealRisk({ ...base, slaStatus }).tone,
+    riskReason: salesDealRisk({ ...base, slaStatus }).label,
+    weightedForecast: Math.round(base.amountPotential * (Math.max(0, Math.min(base.probability, 100)) / 100)),
+    crmQualityScore: Math.max(0, Math.round(((7 - missingFields.length) / 7) * 100)),
+    missingFields,
+  };
+}
+
+function buildSalesDealsFromLeads(leads = [], serverDeals = []) {
+  const map = new Map();
+  leads.map(salesDealFromLead).forEach((deal) => map.set(`${deal.sourceSystem}:${deal.sourceId}`, deal));
+  (serverDeals || []).forEach((deal) => map.set(`${deal.sourceSystem || "manual"}:${deal.sourceId || deal.id}`, { ...(map.get(`${deal.sourceSystem || "manual"}:${deal.sourceId || deal.id}`) || {}), ...deal }));
+  return Array.from(map.values());
+}
+
+function salesControlReport(deals = [], escalations = [], handoffs = []) {
+  const activeDeals = deals.filter((deal) => !["archive", "won"].includes(deal.salesStage));
+  const contractDeals = deals.filter((deal) => ["contract_and_advance", "contract_advance", "deposit"].includes(deal.salesStage));
+  const quoteDeals = deals.filter((deal) => deal.salesStage === "proposal_sent");
+  const transferredDealIds = new Set(handoffs.filter((handoff) => handoff.projectId || handoff.status === "transferred").map((handoff) => handoff.salesDealId));
+  const transferredDeals = deals.filter((deal) => deal.projectId || deal.projectHandoffStatus === "transferred" || transferredDealIds.has(deal.id));
+  const contractAmount = deals.reduce((sum, deal) => sum + (Number(deal.contractAmount) || 0), 0);
+  const paidAmount = deals.reduce((sum, deal) => sum + (Number(deal.paidAmount) || 0), 0);
+  return {
+    activeDeals: activeDeals.length,
+    quoteCount: quoteDeals.length,
+    contractCount: contractDeals.length,
+    transferredCount: transferredDeals.length,
+    contractAmount,
+    paidAmount,
+    expectedPayment: Math.max(0, contractAmount - paidAmount),
+    slaViolations: deals.filter((deal) => deal.slaStatus === "breached").length,
+    overdueCount: deals.filter((deal) => deal.overdue).length,
+    openEscalations: escalations.filter((item) => item.status !== "closed").length,
+    readyHandoffs: handoffs.filter((item) => item.status === "ready").length,
+    acceptedHandoffs: handoffs.filter((item) => item.status === "accepted").length,
+    crmQualityAverage: deals.length ? Math.round(deals.reduce((sum, deal) => sum + (Number(deal.crmQualityScore) || 0), 0) / deals.length) : 0,
+  };
+}
+
+function isProjectHandoffEligibleDeal(deal = {}) {
+  return Boolean(
+    deal.projectId ||
+    salesHandoffStageIds.includes(deal.salesStage) ||
+    ["draft", "ready", "accepted", "transferred"].includes(deal.projectHandoffStatus)
+  );
+}
+
+function projectHandoffChecklist(deal = {}) {
+  return [
+    { id: "client", label: "Клиент", ok: Boolean(deal.clientName) },
+    { id: "contact", label: "Контакт", ok: Boolean(deal.phone || deal.email) },
+    { id: "region", label: "Регион", ok: Boolean(deal.region) },
+    { id: "direction", label: "Направление", ok: Boolean(deal.direction) },
+    { id: "object", label: "Объект / что продано", ok: Boolean(deal.objectName || deal.clientNeed) },
+    { id: "amount", label: "Сумма КП / договора", ok: Boolean(deal.contractAmount || deal.quoteAmount || deal.amountPotential) },
+    { id: "advance", label: "Оплата / аванс", ok: Number(deal.paidAmount) > 0 },
+    { id: "sales_owner", label: "Ответственный продаж", ok: Boolean(deal.salesManagerId) },
+    { id: "production_owner", label: "Ответственный производства", ok: Boolean(deal.productionOwnerId || deal.projectManagerId || deal.projectId) },
+    { id: "next_step", label: "Следующий шаг", ok: Boolean(deal.nextStep) },
+  ];
+}
+
+const projectHandoffFlow = [
+  { id: "bitrix", label: "Bitrix Deal", text: "Сделка и CRM-история остаются в Bitrix24" },
+  { id: "salesDeal", label: "SalesDeal", text: "SmetaOffice видит управленческую сделку" },
+  { id: "handoff", label: "ProjectHandoff", text: "Проверка данных и готовности передачи" },
+  { id: "production", label: "Подтверждение производства", text: "РП / ГИП / управляющий принимает сделку" },
+  { id: "project", label: "Project", text: "Проект создаётся или связывается после принятия" },
+];
+
+const handoffStatusText = {
+  draft: "нужны данные",
+  ready: "готово к проверке",
+  accepted: "принято производством",
+  transferred: "проект создан / связан",
+};
+
+const handoffStatusTone = {
+  draft: "yellow",
+  ready: "blue",
+  accepted: "green",
+  transferred: "green",
+};
+
+function handoffEffectiveStatus(handoff = {}, deal = {}) {
+  const checklist = handoff.checklist || projectHandoffChecklist(deal);
+  if (handoff.projectId || deal.projectId || handoff.status === "transferred" || deal.projectHandoffStatus === "transferred") return "transferred";
+  if (handoff.status === "accepted" || deal.projectHandoffStatus === "accepted") return "accepted";
+  if (handoff.status === "ready" || checklist.every((item) => item.ok)) return "ready";
+  return "draft";
+}
+
+function handoffStatusLabel(status) {
+  return handoffStatusText[status] || "нужны данные";
+}
+
+function handoffTone(status) {
+  return handoffStatusTone[status] || "yellow";
+}
+
+function normalizeHandoffForView(handoff = {}, deal = {}) {
+  const checklist = handoff.checklist || projectHandoffChecklist(deal);
+  const status = handoffEffectiveStatus({ ...handoff, checklist }, deal);
+  return {
+    ...handoff,
+    salesDealId: handoff.salesDealId || deal.id || "",
+    projectId: handoff.projectId || deal.projectId || "",
+    checklist,
+    status,
+    missingData: checklist.filter((item) => !item.ok).map((item) => item.id),
+  };
+}
+
+function salesEscalationsFromDeals(deals = []) {
+  return deals
+    .filter((deal) => deal.riskLevel && deal.riskLevel !== "green" && !["archive", "won"].includes(deal.salesStage))
+    .map((deal) => ({
+      id: `SE-AUTO-${deal.id}-${deal.riskReason || deal.riskLevel}`,
+      dealId: deal.id,
+      fromUserId: deal.salesManagerId || "",
+      toUserId: deal.salesHeadId || deal.seniorManagerId || deal.ecpManagerId || "",
+      level: deal.riskLevel === "red" ? "head_of_sales" : "senior_sales_manager",
+      reason: deal.riskReason || deal.riskLevel,
+      status: "open",
+      createdAt: deal.nextStepDueAt || deal.updatedAt || deal.createdAt || new Date().toISOString(),
+      comment: "Системная эскалация по риску сделки",
+    }));
+}
+
+function salesUserIdentityIds(user = {}) {
+  return [
+    user.id,
+    user.bitrixUserId ? `B24-${user.bitrixUserId}` : "",
+    user.bitrixId ? `B24-${user.bitrixId}` : "",
+    user.externalUserId || "",
+    user.crmUserId || "",
+  ].filter(Boolean).map(String);
+}
+
+function salesDealAssignedTo(user = {}, deal = {}, fields = []) {
+  const identities = new Set(salesUserIdentityIds(user));
+  const assigned = fields.length
+    ? fields.map((field) => deal[field]).filter(Boolean).map(String)
+    : [deal.salesManagerId, deal.hunterId, deal.farmerId, deal.seniorManagerId, deal.salesHeadId, deal.ecpManagerId].filter(Boolean).map(String);
+  return assigned.some((id) => identities.has(id));
+}
+
+function salesGamificationUserVisible(viewer = {}, target = {}, viewRole = viewer?.role) {
+  if (!salesControlRoleIds.includes(target.role)) return false;
+  if (["owner", "admin", "deputy"].includes(viewRole)) return true;
+  if (viewRole === "ecp_manager") return true;
+  if (viewRole === "head_of_sales") {
+    const viewerRegions = userRegionList(viewer);
+    const targetRegions = userRegionList(target);
+    return viewer.id === target.id || viewerRegions.includes("Все регионы") || targetRegions.some((region) => viewerRegions.includes(region));
+  }
+  if (viewRole === "senior_sales_manager") {
+    const viewerRegions = userRegionList(viewer);
+    const targetRegions = userRegionList(target);
+    return viewer.id === target.id || (["sales_manager", "senior_sales_manager"].includes(target.role) && targetRegions.some((region) => viewerRegions.includes(region)));
+  }
+  if (viewRole === "sales_manager") return viewer.id === target.id || viewer.login === target.login;
+  return viewer.id === target.id;
+}
+
+function salesDealInGamificationScope(user = {}, deal = {}) {
+  if (!user || !deal) return false;
+  if (user.role === "ecp_manager") return true;
+  if (user.role === "head_of_sales") {
+    const regions = userRegionList(user);
+    return regions.includes("Все регионы") || regions.includes(normalizeRegionName(deal.region)) || salesDealAssignedTo(user, deal, ["salesHeadId", "headOfSalesId", "seniorManagerId"]);
+  }
+  if (user.role === "senior_sales_manager") {
+    const regions = userRegionList(user);
+    return salesDealAssignedTo(user, deal, ["seniorManagerId", "salesHeadId", "headOfSalesId", "salesManagerId", "hunterId", "farmerId"]) ||
+      regions.includes("Все регионы") ||
+      regions.includes(normalizeRegionName(deal.region));
+  }
+  return salesDealAssignedTo(user, deal);
+}
+
+function salesPlanForUser(user = {}) {
+  const base = salesRolePlanDefaults[user.role] || salesRolePlanDefaults.sales_manager;
+  return {
+    ...base,
+    contractAmount: Number(user.salesPlanContractAmount || user.salesPlanRevenue || user.planRevenue || base.contractAmount) || base.contractAmount,
+    paidAmount: Number(user.salesPlanPaidAmount || user.salesPlanPaid || user.planPaid || base.paidAmount) || base.paidAmount,
+    deals: Number(user.salesPlanDeals || user.planDeals || base.deals) || base.deals,
+    handoffs: Number(user.salesPlanHandoffs || user.planHandoffs || base.handoffs) || base.handoffs,
+    commissionRate: Number(user.salesCommissionRate || user.commissionRate || base.commissionRate) || base.commissionRate,
+    planBonus: Number(user.salesPlanBonus || user.planBonus || base.planBonus) || base.planBonus,
+  };
+}
+
+function salesPlanBonusByCompletion(planExecution, baseBonus) {
+  if (planExecution >= 150) return Math.round(baseBonus * 1.5);
+  if (planExecution >= 120) return Math.round(baseBonus * 1.25);
+  if (planExecution >= 100) return Math.round(baseBonus);
+  return 0;
+}
+
+function salesCareerLevelByPoints(points, eligible) {
+  if (!eligible) {
+    return { ...salesCareerLevels[0], title: "допуск закрыт", tone: "red" };
+  }
+  return [...salesCareerLevels].reverse().find((level) => points >= level.minPoints) || salesCareerLevels[0];
+}
+
+function nextSalesCareerLevel(currentLevel) {
+  const index = salesCareerLevels.findIndex((level) => level.id === currentLevel?.id);
+  return index >= 0 ? salesCareerLevels[index + 1] || null : salesCareerLevels[1];
+}
+
+function salesLevelProgress(points, currentLevel, nextLevel) {
+  if (!nextLevel) return 100;
+  const currentMin = currentLevel?.minPoints || 0;
+  const gap = Math.max(nextLevel.minPoints - currentMin, 1);
+  return clampPercent(((points - currentMin) / gap) * 100);
+}
+
+function salesPercent(part, total, emptyValue = 0) {
+  if (!total) return emptyValue;
+  return clampPercent((part / total) * 100);
+}
+
+function salesLevelByPoints(points, eligible) {
+  const level = salesCareerLevelByPoints(points, eligible);
+  return { ...level, label: level.title };
+}
+
+function salesGamificationProfile(user, deals = [], activities = [], escalations = [], handoffs = []) {
+  const report = salesControlReport(deals, escalations, handoffs);
+  const plan = salesPlanForUser(user);
+  const activeDealIds = new Set(deals.map((deal) => deal.id));
+  const activityDealIds = new Set((activities || []).filter((item) => activeDealIds.has(item.dealId || item.salesDealId)).map((item) => item.dealId || item.salesDealId));
+  const crmScore = report.crmQualityAverage || 0;
+  const slaScore = salesPercent(deals.length - report.slaViolations, deals.length, 0);
+  const reportedDeals = deals.filter((deal) => deal.nextStep && (deal.lastContactAt || activityDealIds.has(deal.id))).length;
+  const reportScore = salesPercent(reportedDeals, deals.length, 0);
+  const handoffEligibleDeals = deals.filter(isProjectHandoffEligibleDeal);
+  const handoffDealIds = new Set(handoffEligibleDeals.map((deal) => deal.id));
+  const acceptedHandoffs = handoffs.filter((handoff) => handoffDealIds.has(handoff.salesDealId) && ["accepted", "transferred"].includes(handoff.status)).length;
+  const handoffScore = handoffEligibleDeals.length ? salesPercent(acceptedHandoffs, handoffEligibleDeals.length, 100) : deals.length ? 100 : 0;
+  const disciplineScore = clampPercent((crmScore * 0.35) + (slaScore * 0.25) + (reportScore * 0.2) + (handoffScore * 0.2));
+  const blockers = [
+    deals.length ? "" : "нет сделок в контуре",
+    crmScore >= 80 ? "" : "CRM ниже 80%",
+    slaScore >= 90 ? "" : "SLA ниже 90%",
+    reportScore >= 80 ? "" : "нет отчётности/следующего шага",
+    handoffScore >= 70 ? "" : "передача в проект ниже 70%",
+  ].filter(Boolean);
+  const eligible = blockers.length === 0;
+  const contractPlan = salesPercent(report.contractAmount, plan.contractAmount, 0);
+  const paidPlan = salesPercent(report.paidAmount, plan.paidAmount, 0);
+  const dealPlan = salesPercent(report.activeDeals, plan.deals, 0);
+  const handoffPlan = salesPercent(report.acceptedHandoffs + report.transferredCount, plan.handoffs, handoffEligibleDeals.length ? 0 : 100);
+  const planExecution = clampPercent((paidPlan * 0.5) + (contractPlan * 0.25) + (handoffPlan * 0.15) + (dealPlan * 0.1));
+  const baseCommission = Math.round(report.paidAmount * plan.commissionRate);
+  const expectedCommission = Math.round(report.expectedPayment * plan.commissionRate);
+  const planBonus = salesPlanBonusByCompletion(planExecution, plan.planBonus);
+  const earnedNow = eligible ? baseCommission + planBonus : 0;
+  const blockedByDiscipline = eligible ? 0 : baseCommission;
+  const potentialTotal = baseCommission + expectedCommission + planBonus;
+  const rawPoints = Math.max(0, Math.round(
+    (report.paidAmount / 10000) +
+    report.contractCount * 35 +
+    report.transferredCount * 60 +
+    planExecution +
+    crmScore +
+    slaScore +
+    reportScore +
+    handoffScore -
+    report.openEscalations * 20
+  ));
+  const points = eligible ? rawPoints : 0;
+  const level = salesLevelByPoints(points, eligible);
+  const nextLevel = nextSalesCareerLevel(level);
+  const pointsToNext = nextLevel ? Math.max(0, nextLevel.minPoints - points) : 0;
+  const levelProgress = salesLevelProgress(points, level, nextLevel);
+  const promotionBlockers = [
+    ...blockers,
+    planExecution >= 100 ? "" : `план выполнен на ${planExecution}%`,
+    report.openEscalations === 0 ? "" : "есть открытые эскалации",
+  ].filter(Boolean);
+  const promotionStatus = !eligible
+    ? `не повышается: ${blockers[0] || "закрыт допуск"}`
+    : promotionBlockers.length
+      ? `не повышается: ${promotionBlockers[promotionBlockers.length - 1]}`
+      : nextLevel
+        ? `до ${nextLevel.title}: ${pointsToNext} баллов`
+        : "верхний уровень подтверждён";
+  return {
+    user,
+    report,
+    plan,
+    planProgress: { contractPlan, paidPlan, dealPlan, handoffPlan, execution: planExecution },
+    earnings: {
+      baseCommission,
+      expectedCommission,
+      planBonus,
+      earnedNow,
+      blockedByDiscipline,
+      potentialTotal,
+      commissionRatePercent: Math.round(plan.commissionRate * 1000) / 10,
+    },
+    dealsCount: deals.length,
+    crmScore,
+    slaScore,
+    reportScore,
+    handoffScore,
+    disciplineScore,
+    blockers,
+    eligible,
+    rawPoints,
+    points,
+    level,
+    nextLevel,
+    pointsToNext,
+    levelProgress,
+    promotionStatus,
+    promotionBlockers,
+  };
+}
+
 function StatCard({ item }) {
   return (
     <div className="stat-card">
@@ -3163,11 +3621,13 @@ function StatCard({ item }) {
   );
 }
 
-function ProjectCard({ project, active, onClick }) {
+function ProjectCard({ project, active, onClick, canSeeMoney = true }) {
   const economy = projectEconomy(project);
   const timeline = projectTimeline(project);
   const schedule = projectScheduleControl(project);
   const projectRisk = effectiveProjectRisk(project);
+  const sections = projectSections(project);
+  const taskCount = sections.length + (project.tasks || []).length;
 
   return (
     <button type="button" onClick={onClick} className={cn("project-card", active && "active")}>
@@ -3207,11 +3667,19 @@ function ProjectCard({ project, active, onClick }) {
         <span>Срок: {project.deadline}</span>
         <span>Идёт: {timeline.elapsed == null ? "не указано" : `${timeline.elapsed} дн.`}</span>
       </div>
-      <div className="card-money-row">
-        <span>Договор: <b>{money(economy.contractAmount)}</b></span>
-        <span>Бюджет РП: <b>{money(economy.allocatedProductionBudget)}</b></span>
-        <span>Остаток: <b>{money(economy.pmBudgetLeft)}</b></span>
-      </div>
+      {canSeeMoney ? (
+        <div className="card-money-row">
+          <span>Договор: <b>{money(economy.contractAmount)}</b></span>
+          <span>Бюджет РП: <b>{money(economy.allocatedProductionBudget)}</b></span>
+          <span>Остаток: <b>{money(economy.pmBudgetLeft)}</b></span>
+        </div>
+      ) : (
+        <div className="card-money-row no-finance">
+          <span>Этапов: <b>{sections.length}</b></span>
+          <span>Задач: <b>{taskCount}</b></span>
+          <span>Финансы: <b>скрыты</b></span>
+        </div>
+      )}
     </button>
   );
 }
@@ -3327,9 +3795,9 @@ function DrillCard({ title, subtitle, risk, metrics, onClick, manager }) {
 
 function AccessMatrix({ role }) {
   const rows = [
-    { label: "Клиенты", allowed: ["owner", "director", "pm"].includes(role) },
-    { label: "Все проекты", allowed: role === "owner" },
-    { label: "Свои проекты", allowed: ["owner", "director", "pm", "executor", "partner"].includes(role) },
+    { label: "Клиенты", allowed: ["owner", "director", "pm", "gip", "project_manager"].includes(role) },
+    { label: "Все проекты", allowed: role === "owner" || role === "gip" },
+    { label: "Свои проекты", allowed: ["owner", "director", "pm", "gip", "project_manager", "executor", "partner"].includes(role) },
     { label: "Финансы и маржа", allowed: ["owner", "finance"].includes(role) },
     { label: "Чужие партнёры", allowed: ["owner", "director"].includes(role) },
     { label: "Настройки прав", allowed: role === "owner" },
@@ -3667,6 +4135,7 @@ function ProjectEditPanel({ project, users, canEdit, canEditFinance, onUpdatePro
     salesCommissionPercent: Number(project.salesCommissionPercent) || 0,
     salesCommissionAmount: Number(project.salesCommissionAmount) || 0,
     pmUserId: project.pmUserId || "",
+    gipUserId: project.gipUserId || "",
     projectManagerId: project.projectManagerId || "",
     salesManagerId: project.salesManagerId || "",
   }));
@@ -3694,6 +4163,7 @@ function ProjectEditPanel({ project, users, canEdit, canEditFinance, onUpdatePro
       salesCommissionPercent: Number(project.salesCommissionPercent) || 0,
       salesCommissionAmount: Number(project.salesCommissionAmount) || 0,
       pmUserId: project.pmUserId || "",
+      gipUserId: project.gipUserId || "",
       projectManagerId: project.projectManagerId || "",
       salesManagerId: project.salesManagerId || "",
     });
@@ -3702,8 +4172,9 @@ function ProjectEditPanel({ project, users, canEdit, canEditFinance, onUpdatePro
   if (!canEdit) return null;
 
   const projectStages = projectSections(project).map((section) => section.name);
-  const projectLeads = roleUserOptions(users, ["pm", "project_manager", "head_of_department", "director", "regional_manager", "deputy", "owner"]);
-  const salesManagers = roleUserOptions(users, ["sales_manager", "head_of_sales", "owner", "director"]);
+  const projectLeads = roleUserOptions(users, ["pm", "gip", "project_manager", "head_of_department", "director", "regional_manager", "deputy", "owner"]);
+  const gipUsers = roleUserOptions(users, ["gip", "pm", "head_of_department", "director", "regional_manager", "deputy", "owner"]);
+  const salesManagers = roleUserOptions(users, ["sales_manager", "senior_sales_manager", "head_of_sales", "ecp_manager", "owner", "director"]);
   const calculatedProductionBudget = Math.round((Number(form.contractAmount) || 0) * ((Number(form.productionAllocationPercent) || 0) / 100));
   const calculatedSalesCommission = Math.round((Number(form.contractAmount) || 0) * ((Number(form.salesCommissionPercent) || 0) / 100));
 
@@ -3764,6 +4235,7 @@ function ProjectEditPanel({ project, users, canEdit, canEditFinance, onUpdatePro
         <label><span>Дата окончания</span><input type="date" value={form.endDate} onChange={(event) => update({ endDate: event.target.value })} /></label>
         <label><span>Контрольный срок</span><input value={form.deadline} onChange={(event) => update({ deadline: event.target.value })} /></label>
         <label><span>Руководитель проекта</span><select value={form.pmUserId} onChange={(event) => update({ pmUserId: event.target.value })}><option value="">Не назначен</option>{projectLeads.map((user) => <option key={user.id} value={user.id}>{user.name} · {user.position}</option>)}</select></label>
+        <label><span>ГИП</span><select value={form.gipUserId} onChange={(event) => update({ gipUserId: event.target.value })}><option value="">Не назначен</option>{gipUsers.map((user) => <option key={user.id} value={user.id}>{user.name} · {user.position}</option>)}</select></label>
         <label><span>Менеджер проекта</span><select value={form.projectManagerId} onChange={(event) => update({ projectManagerId: event.target.value })}><option value="">Не назначен</option>{projectLeads.map((user) => <option key={user.id} value={user.id}>{user.name} · {user.position}</option>)}</select></label>
         <label><span>Менеджер продаж</span><select value={form.salesManagerId} onChange={(event) => update({ salesManagerId: event.target.value })}><option value="">Нет / не из продаж</option>{salesManagers.map((user) => <option key={user.id} value={user.id}>{user.name} · {user.position}</option>)}</select></label>
         {canEditFinance ? (
@@ -3838,9 +4310,11 @@ function ExecutorPicker({ executors = [], value, disabled, onSelect, placeholder
   );
 }
 
-function ProjectSectionsEditor({ project, sections, executors, canEdit, onUpdateSection, onAddSection, onDeleteSection, onDistributeSectionBudget, onApproveSectionPayment, onAcceptSectionBid, onOpenExecutor }) {
+function ProjectSectionsEditor({ project, sections, executors, canEdit, canSeeFinancials, onUpdateSection, onAddSection, onDeleteSection, onDistributeSectionBudget, onApproveSectionPayment, onAcceptSectionBid, onOpenExecutor }) {
   const [editingSectionId, setEditingSectionId] = useState("");
-  const columnLabels = ["Этап / задача", "Исполнитель", "Срок", "Статус", "Сумма", "Выплачено", "Набор / согласование", "Действие"];
+  const columnLabels = canSeeFinancials
+    ? ["Этап / задача", "Исполнитель", "Срок", "Статус", "Сумма", "Выплачено", "Набор / согласование", "Действие"]
+    : ["Этап / задача", "Исполнитель", "Срок", "Статус", "Набор / согласование", "Действие"];
   const editingSection = sections.find((section) => (section.id || section.name) === editingSectionId) || null;
   const editingId = editingSection?.id || editingSection?.name || "";
   const dash = (value) => value || "—";
@@ -3849,6 +4323,127 @@ function ProjectSectionsEditor({ project, sections, executors, canEdit, onUpdate
   function updateEditingSection(patch) {
     if (!editingId) return;
     onUpdateSection(project.id, editingId, patch);
+  }
+
+  function renderInlineSectionEditor() {
+    if (!editingSection) return null;
+
+    return (
+      <div className="stage-editor-panel inline">
+        <div className="section-row stage-editor-title-row">
+          <div>
+            <span className="muted-chip">{project.id} · редактирование этапа</span>
+            <h3>{editingSection.name}</h3>
+            <p className="section-hint">Редактирование открыто прямо в выбранном этапе. Здесь меняются исполнитель, срок, статус, согласования и ссылка на папку{canSeeFinancials ? ", а также деньги, премии и удержания" : ""}.</p>
+          </div>
+          <button type="button" className="secondary" onClick={() => setEditingSectionId("")}>Закрыть</button>
+        </div>
+
+        <div className="stage-editor-groups">
+          <div className="stage-editor-group">
+            <h4>Основное</h4>
+            <div className="stage-editor-form compact">
+              <label><span>Название этапа / задачи</span><input disabled={!canEdit} value={editingSection.name} onChange={(event) => updateEditingSection({ name: event.target.value })} placeholder="Название этапа" /></label>
+              <label><span>Исполнитель</span>
+                <ExecutorPicker
+                  executors={executors}
+                  disabled={!canEdit}
+                  value={editingSection.executorId || editingSection.executor || ""}
+                  onSelect={(executor) => updateEditingSection({ executorId: executor?.id || "", executor: executor?.name || "не назначен" })}
+                />
+              </label>
+              <label><span>Срок</span><input disabled={!canEdit} value={editingSection.due || ""} onChange={(event) => updateEditingSection({ due: event.target.value })} placeholder="Срок" /></label>
+              <label><span>Статус работы</span><select disabled={!canEdit} value={editingSection.status || "Ожидает"} onChange={(event) => updateEditingSection({ status: event.target.value })}>
+                {["Ожидает", "Новая", "В работе", "На проверке", "Правки", "Принято", "Просрочено"].map((status) => <option key={status}>{status}</option>)}
+              </select></label>
+              <label><span>Набор исполнителей</span><select
+                disabled={!canEdit}
+                value={editingSection.recruitmentStatus || (editingSection.openForBids === true ? "open" : editingSection.openForBids === false ? "closed" : "auto")}
+                onChange={(event) => {
+                  const value = event.target.value;
+                  updateEditingSection({
+                    recruitmentStatus: value,
+                    openForBids: value === "open" ? true : value === "closed" ? false : undefined,
+                  });
+                }}
+              >
+                <option value="auto">Авто: открыть без исполнителя и с суммой</option>
+                <option value="open">Открыть набор / принимать отклики</option>
+                <option value="closed">Закрыть набор</option>
+              </select></label>
+              <label><span>Готовность, %</span><input disabled={!canEdit} type="number" value={editingSection.progress || 0} onChange={(event) => updateEditingSection({ progress: Number(event.target.value) })} placeholder="%" /></label>
+            </div>
+          </div>
+
+          {canSeeFinancials ? <div className="stage-editor-group">
+            <h4>Деньги исполнителя</h4>
+            <div className="stage-editor-form compact finance">
+              <label><span>Сумма задачи исполнителя, ₽</span><input disabled={!canEdit} type="number" value={editingSection.executorCost || 0} onChange={(event) => updateEditingSection({ executorCost: Number(event.target.value), balance: (Number(event.target.value) || 0) - (Number(editingSection.paid) || 0) })} placeholder="Сумма задачи, ₽" /></label>
+              <label><span>Выплачено исполнителю, ₽</span><input disabled={!canEdit} type="number" value={editingSection.paid || 0} onChange={(event) => updateEditingSection({ paid: Number(event.target.value), balance: (Number(editingSection.executorCost) || 0) - (Number(event.target.value) || 0) })} placeholder="Выплачено, ₽" /></label>
+              <label><span>Финансовый статус</span><select disabled={!canEdit} value={editingSection.financeStatus || "не рассчитан"} onChange={(event) => updateEditingSection({ financeStatus: event.target.value })}>
+                {["не рассчитан", "план", "счёт", "к выплате", "частично выплачено", "выплачено", "удержание"].map((status) => <option key={status}>{status}</option>)}
+              </select></label>
+            </div>
+          </div> : null}
+
+          {canSeeFinancials ? <div className="stage-editor-group">
+            <h4>Премия / удержание</h4>
+            <div className="stage-editor-form compact">
+              <label><span>Премия, ₽</span><input disabled={!canEdit} type="number" value={editingSection.bonusAmount || 0} onChange={(event) => updateEditingSection({ bonusAmount: Number(event.target.value) || 0 })} placeholder="Премия" /></label>
+              <label><span>Причина премии</span><input disabled={!canEdit} value={editingSection.bonusReason || ""} onChange={(event) => updateEditingSection({ bonusReason: event.target.value })} placeholder="Быстрее срока, без правок, клиент доволен" /></label>
+              <label><span>Удержание / штраф, ₽</span><input disabled={!canEdit} type="number" value={editingSection.penaltyAmount || 0} onChange={(event) => updateEditingSection({ penaltyAmount: Number(event.target.value) || 0 })} placeholder="Удержание" /></label>
+              <label><span>Причина удержания</span><input disabled={!canEdit} value={editingSection.penaltyReason || ""} onChange={(event) => updateEditingSection({ penaltyReason: event.target.value })} placeholder="Просрочка, качество, отказ от работы" /></label>
+              <label><span>Влияние на уровень</span><select disabled={!canEdit} value={editingSection.rankImpact || "без изменения"} onChange={(event) => updateEditingSection({ rankImpact: event.target.value })}>
+                {["без изменения", "повысить рейтинг", "понизить рейтинг", "понизить ранг", "заблокировать допуск"].map((status) => <option key={status}>{status}</option>)}
+              </select></label>
+            </div>
+          </div> : null}
+
+          <div className="stage-editor-group">
+            <h4>Файлы и комментарий</h4>
+            <div className="stage-editor-form compact one-column">
+              <label><span>Ссылка на Яндекс.Диск этапа</span><input disabled={!canEdit} value={editingSection.yandexLink || ""} onChange={(event) => updateEditingSection({ yandexLink: event.target.value, documents: event.target.value ? [event.target.value] : [] })} placeholder="Ссылка на Яндекс.Диск этапа" /></label>
+              <label><span>Комментарий к этапу</span><input disabled={!canEdit} value={(editingSection.comments || []).join("; ")} onChange={(event) => updateEditingSection({ comments: event.target.value ? [event.target.value] : [] })} placeholder="Комментарий к этапу" /></label>
+            </div>
+            <div className="stage-editor-meta">
+              {!isBillableProductionStage(editingSection) ? <span className="stage-note">Без дополнительной оплаты: этот блок должен быть готов до договора или является служебным.</span> : null}
+              {editingSection.bids?.length ? <span className="stage-note">Отклики исполнителей: {editingSection.bids.length}</span> : null}
+              {editingSection.yandexLink ? <a className="stage-link" href={editingSection.yandexLink} target="_blank" rel="noreferrer">Открыть папку этапа</a> : <span className="stage-note">Папка этапа не привязана</span>}
+            </div>
+          </div>
+        </div>
+
+        {editingSection.bids?.length ? (
+          <div className="stage-bids-list">
+            {editingSection.bids.map((bid) => (
+              <div key={bid.id || `${editingId}-${bid.executorId || bid.bidderName}`}>
+                <span>{bid.bidderName || bid.executorName || bid.executorId || "Исполнитель"}</span>
+                {canSeeFinancials ? <b>{money(Number(bid.requestedAmount) || Number(bid.amount) || 0)}</b> : <b>сумма скрыта</b>}
+                <em>{bid.offeredDue || bid.due || "срок не указан"}</em>
+                {canEdit ? <button type="button" className="secondary" onClick={() => onAcceptSectionBid?.(project.id, editingId, bid.id || bid.executorId)}>Назначить</button> : null}
+              </div>
+            ))}
+          </div>
+        ) : null}
+
+        <div className="stage-editor-footer">
+          {isBillableProductionStage(editingSection) ? (
+            <div className="stage-approval-actions">
+              <button type="button" className="secondary" disabled={!canEdit || editingSection.clientApproved} onClick={() => onApproveSectionPayment?.(project.id, editingId, "client")}>
+                {editingSection.clientApproved ? "Клиент согласовал" : "Согласовать с клиентом"}
+              </button>
+              <button type="button" className="secondary" disabled={!canEdit || editingSection.paymentApproved} onClick={() => onApproveSectionPayment?.(project.id, editingId, "internal")}>
+                {editingSection.paymentApproved ? "Оплата согласована" : "Согласовать оплату"}
+              </button>
+            </div>
+          ) : <span className="stage-note">Согласование оплаты не требуется для преддоговорного или служебного блока.</span>}
+          <button type="button" className="secondary danger" disabled={!canDeleteSection} onClick={() => {
+            onDeleteSection(project.id, editingId);
+            setEditingSectionId("");
+          }}>Удалить этап / задачу</button>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -3866,12 +4461,14 @@ function ProjectSectionsEditor({ project, sections, executors, canEdit, onUpdate
         ) : <span className="muted-chip">Редактирует только владелец / админ</span>}
       </div>
 
-      <div className="stage-compact-head">
+      <div className={cn("stage-compact-head", !canSeeFinancials && "no-finance")}>
         {columnLabels.map((label) => <span key={label}>{label}</span>)}
       </div>
 
+      <div className="stage-compact-list">
       {sections.length ? sections.map((section) => {
         const sectionId = section.id || section.name;
+        const isActive = editingSectionId === sectionId;
         const approval = taskApprovalState(section);
         const executorName = section.executor || section.executorName || (section.executorId ? section.executorId : "");
         const amount = Number(section.executorCost) || 0;
@@ -3885,131 +4482,39 @@ function ProjectSectionsEditor({ project, sections, executors, canEdit, onUpdate
         const recruitmentLabel = assigned ? "Исполнитель назначен" : recruitmentOpen ? "Набор открыт" : "Набор закрыт";
         const recruitmentTone = assigned ? "green" : recruitmentOpen ? "yellow" : "slate";
         return (
-          <div key={sectionId} className={cn("stage-compact-row", editingSectionId === sectionId && "active")}>
-            <div>
-              <b>{section.name}</b>
-              <span>{isBillableProductionStage(section) ? "оплачиваемая работа" : "преддоговорный/служебный этап"}</span>
+          <div key={sectionId} className={cn("stage-section-card", isActive && "active")}>
+            <div className={cn("stage-compact-row", isActive && "active", !canSeeFinancials && "no-finance")}>
+              <div>
+                <b>{section.name}</b>
+                <span>{isBillableProductionStage(section) ? "оплачиваемая работа" : "преддоговорный/служебный этап"}</span>
+              </div>
+              {executorName && !isExecutorUnassigned(executorName) ? (
+                <button type="button" className="inline-link executor-inline-link" onClick={() => onOpenExecutor?.(section.executorId || executorName)}>
+                  {executorName}
+                </button>
+              ) : (
+                <span>{dash("")}</span>
+              )}
+              <span>{dash(section.due)}</span>
+              <em className={cn("status", statusClass(section.status))}>{section.status || "—"}</em>
+              {canSeeFinancials ? <strong>{amount ? money(amount) : "—"}</strong> : null}
+              {canSeeFinancials ? <span>{paid ? money(paid) : "—"}</span> : null}
+              <span className="recruitment-cell">
+                <small className={cn("recruitment-chip", recruitmentTone)}>{recruitmentLabel}</small>
+                <em>{approval.label}</em>
+              </span>
+              <div className="stage-compact-actions">
+                <button type="button" className="secondary" onClick={() => canEdit ? setEditingSectionId(editingSectionId === sectionId ? "" : sectionId) : showAction("Редактирование доступно владельцу, админу или роли с правом управления проектом")}>
+                  {editingSectionId === sectionId ? "Закрыть" : "Редактировать"}
+                </button>
+                {section.yandexLink ? <a className="stage-link" href={section.yandexLink} target="_blank" rel="noreferrer">Папка</a> : null}
+              </div>
             </div>
-            {executorName && !isExecutorUnassigned(executorName) ? (
-              <button type="button" className="inline-link executor-inline-link" onClick={() => onOpenExecutor?.(section.executorId || executorName)}>
-                {executorName}
-              </button>
-            ) : (
-              <span>{dash("")}</span>
-            )}
-            <span>{dash(section.due)}</span>
-            <em className={cn("status", statusClass(section.status))}>{section.status || "—"}</em>
-            <strong>{amount ? money(amount) : "—"}</strong>
-            <span>{paid ? money(paid) : "—"}</span>
-            <span className="recruitment-cell">
-              <small className={cn("recruitment-chip", recruitmentTone)}>{recruitmentLabel}</small>
-              <em>{approval.label}</em>
-            </span>
-            <div className="stage-compact-actions">
-              <button type="button" className="secondary" onClick={() => canEdit ? setEditingSectionId(editingSectionId === sectionId ? "" : sectionId) : showAction("Редактирование доступно владельцу, админу или роли с правом управления проектом")}>
-                {editingSectionId === sectionId ? "Закрыть" : "Редактировать"}
-              </button>
-              {section.yandexLink ? <a className="stage-link" href={section.yandexLink} target="_blank" rel="noreferrer">Папка</a> : null}
-            </div>
+            {isActive ? renderInlineSectionEditor() : null}
           </div>
         );
       }) : <div className="empty">Этапы пока не созданы.</div>}
-
-      {editingSection ? (
-        <div className="stage-editor-panel">
-          <div className="section-row">
-            <div>
-              <span className="muted-chip">{project.id} · редактирование</span>
-              <h3>{editingSection.name}</h3>
-              <p className="section-hint">Здесь меняются исполнитель, срок, деньги, согласования, бонусы, удержания и рейтинг. В обычном реестре это скрыто, чтобы карточка проекта не превращалась в таблицу.</p>
-            </div>
-            <button type="button" className="secondary" onClick={() => setEditingSectionId("")}>Закрыть окно</button>
-          </div>
-
-          <div className="stage-editor-form">
-            <label><span>Название этапа / задачи</span><input disabled={!canEdit} value={editingSection.name} onChange={(event) => updateEditingSection({ name: event.target.value })} placeholder="Название этапа" /></label>
-            <label><span>Исполнитель</span>
-            <ExecutorPicker
-              executors={executors}
-              disabled={!canEdit}
-              value={editingSection.executorId || editingSection.executor || ""}
-              onSelect={(executor) => updateEditingSection({ executorId: executor?.id || "", executor: executor?.name || "не назначен" })}
-            />
-            </label>
-            <label><span>Срок</span><input disabled={!canEdit} value={editingSection.due || ""} onChange={(event) => updateEditingSection({ due: event.target.value })} placeholder="Срок" /></label>
-            <label><span>Статус работы</span><select disabled={!canEdit} value={editingSection.status || "Ожидает"} onChange={(event) => updateEditingSection({ status: event.target.value })}>
-              {["Ожидает", "Новая", "В работе", "На проверке", "Правки", "Принято", "Просрочено"].map((status) => <option key={status}>{status}</option>)}
-            </select></label>
-            <label><span>Набор исполнителей</span><select
-              disabled={!canEdit}
-              value={editingSection.recruitmentStatus || (editingSection.openForBids === true ? "open" : editingSection.openForBids === false ? "closed" : "auto")}
-              onChange={(event) => {
-                const value = event.target.value;
-                updateEditingSection({
-                  recruitmentStatus: value,
-                  openForBids: value === "open" ? true : value === "closed" ? false : undefined,
-                });
-              }}
-            >
-              <option value="auto">Авто: открыт без исполнителя и с суммой</option>
-              <option value="open">Открыть набор / принимать отклики</option>
-              <option value="closed">Закрыть набор</option>
-            </select></label>
-            <label><span>Готовность, %</span><input disabled={!canEdit} type="number" value={editingSection.progress || 0} onChange={(event) => updateEditingSection({ progress: Number(event.target.value) })} placeholder="%" /></label>
-            <label><span>Сумма задачи исполнителя, ₽</span><input disabled={!canEdit} type="number" value={editingSection.executorCost || 0} onChange={(event) => updateEditingSection({ executorCost: Number(event.target.value), balance: (Number(event.target.value) || 0) - (Number(editingSection.paid) || 0) })} placeholder="Сумма задачи, ₽" /></label>
-            <label><span>Выплачено исполнителю, ₽</span><input disabled={!canEdit} type="number" value={editingSection.paid || 0} onChange={(event) => updateEditingSection({ paid: Number(event.target.value), balance: (Number(editingSection.executorCost) || 0) - (Number(event.target.value) || 0) })} placeholder="Выплачено, ₽" /></label>
-            <label><span>Финансовый статус</span><select disabled={!canEdit} value={editingSection.financeStatus || "не рассчитан"} onChange={(event) => updateEditingSection({ financeStatus: event.target.value })}>
-              {["не рассчитан", "план", "счёт", "к выплате", "частично выплачено", "выплачено", "удержание"].map((status) => <option key={status}>{status}</option>)}
-            </select></label>
-            <label><span>Премия, ₽</span><input disabled={!canEdit} type="number" value={editingSection.bonusAmount || 0} onChange={(event) => updateEditingSection({ bonusAmount: Number(event.target.value) || 0 })} placeholder="Премия" /></label>
-            <label><span>Причина премии</span><input disabled={!canEdit} value={editingSection.bonusReason || ""} onChange={(event) => updateEditingSection({ bonusReason: event.target.value })} placeholder="Быстрее срока, без правок, клиент доволен" /></label>
-            <label><span>Удержание / штраф, ₽</span><input disabled={!canEdit} type="number" value={editingSection.penaltyAmount || 0} onChange={(event) => updateEditingSection({ penaltyAmount: Number(event.target.value) || 0 })} placeholder="Удержание" /></label>
-            <label><span>Причина удержания</span><input disabled={!canEdit} value={editingSection.penaltyReason || ""} onChange={(event) => updateEditingSection({ penaltyReason: event.target.value })} placeholder="Просрочка, качество, отказ от работы" /></label>
-            <label><span>Влияние на уровень</span><select disabled={!canEdit} value={editingSection.rankImpact || "без изменения"} onChange={(event) => updateEditingSection({ rankImpact: event.target.value })}>
-              {["без изменения", "повысить рейтинг", "понизить рейтинг", "понизить ранг", "заблокировать допуск"].map((status) => <option key={status}>{status}</option>)}
-            </select></label>
-            <label className="wide"><span>Ссылка на Яндекс.Диск этапа</span><input disabled={!canEdit} value={editingSection.yandexLink || ""} onChange={(event) => updateEditingSection({ yandexLink: event.target.value, documents: event.target.value ? [event.target.value] : [] })} placeholder="Ссылка на Яндекс.Диск этапа" /></label>
-            <label className="wide"><span>Комментарий к этапу</span><input disabled={!canEdit} value={(editingSection.comments || []).join("; ")} onChange={(event) => updateEditingSection({ comments: event.target.value ? [event.target.value] : [] })} placeholder="Комментарий к этапу" /></label>
-          </div>
-
-          <div className="stage-editor-meta">
-            {!isBillableProductionStage(editingSection) ? <span className="stage-note">Без дополнительной оплаты: этот блок должен быть готов до договора или является служебным.</span> : null}
-            {editingSection.bids?.length ? <span className="stage-note">Отклики исполнителей: {editingSection.bids.length}</span> : null}
-            {editingSection.yandexLink ? <a className="stage-link" href={editingSection.yandexLink} target="_blank" rel="noreferrer">Открыть папку этапа</a> : <span className="stage-note">Папка этапа не привязана</span>}
-          </div>
-
-          {editingSection.bids?.length ? (
-              <div className="stage-bids-list">
-                {editingSection.bids.map((bid) => (
-                  <div key={bid.id || `${editingId}-${bid.executorId || bid.bidderName}`}>
-                    <span>{bid.bidderName || bid.executorName || bid.executorId || "Исполнитель"}</span>
-                    <b>{money(Number(bid.requestedAmount) || Number(bid.amount) || 0)}</b>
-                    <em>{bid.offeredDue || bid.due || "срок не указан"}</em>
-                    {canEdit ? <button type="button" className="secondary" onClick={() => onAcceptSectionBid?.(project.id, editingId, bid.id || bid.executorId)}>Назначить</button> : null}
-                  </div>
-                ))}
-              </div>
-            ) : null}
-
-          {isBillableProductionStage(editingSection) ? (
-              <div className="stage-approval-actions">
-                <button type="button" className="secondary" disabled={!canEdit || editingSection.clientApproved} onClick={() => onApproveSectionPayment?.(project.id, editingId, "client")}>
-                  {editingSection.clientApproved ? "Клиент согласовал" : "Согласовать с клиентом"}
-                </button>
-                <button type="button" className="secondary" disabled={!canEdit || editingSection.paymentApproved} onClick={() => onApproveSectionPayment?.(project.id, editingId, "internal")}>
-                  {editingSection.paymentApproved ? "Оплата согласована" : "Согласовать оплату"}
-                </button>
-              </div>
-            ) : null}
-
-          <div className="stage-editor-danger">
-            <button type="button" className="secondary danger" disabled={!canDeleteSection} onClick={() => {
-              onDeleteSection(project.id, editingId);
-              setEditingSectionId("");
-            }}>Удалить этап / задачу</button>
-          </div>
-        </div>
-      ) : null}
+      </div>
     </div>
   );
 }
@@ -4134,6 +4639,7 @@ function ProjectDetails({ project, role, onUpdateProject, onTaskStatusChange, on
         <div className="info-grid">
           <Info label="Клиент" value={canSeeClient ? project.client : "Скрыто"} />
           <Info label="РП" value={project.manager} />
+          <Info label="ГИП" value={userNameById(users, project.gipUserId, project.gipName || "Не назначен")} />
           <Info label="Исполнитель" value={project.executor} />
           <Info label="Партнёр" value={project.partner} />
           <Info label="Дата начала" value={formatProjectDate(timeline.start)} />
@@ -4220,17 +4726,19 @@ function ProjectDetails({ project, role, onUpdateProject, onTaskStatusChange, on
           </div>
         ) : null}
 
-        <div className="economy-summary">
-          <Info label="Сумма договора" value={money(economy.contractAmount)} />
-          <Info label="Оплачено клиентом" value={money(economy.paidByClient)} />
-          <Info label="Остаток оплаты клиента" value={money(economy.receivable)} />
-          <Info label="Доступный бюджет" value={money(economy.allocatedProductionBudget)} />
-          <Info label="Себестоимость исполнителей" value={money(economy.productionCost)} />
-          <Info label="К выплате исполнителям" value={money(Math.max(economy.executorCost - economy.paidToExecutors, 0))} />
-          <Info label="Плановая валовая часть компании" value={money(economy.companyPlannedGross)} />
-        </div>
+        {canSeeProductionBudget ? (
+          <div className="economy-summary">
+            <Info label="Сумма договора" value={money(economy.contractAmount)} />
+            <Info label="Оплачено клиентом" value={money(economy.paidByClient)} />
+            <Info label="Остаток оплаты клиента" value={money(economy.receivable)} />
+            <Info label="Доступный бюджет" value={money(economy.allocatedProductionBudget)} />
+            <Info label="Себестоимость исполнителей" value={money(economy.productionCost)} />
+            <Info label="К выплате исполнителям" value={money(Math.max(economy.executorCost - economy.paidToExecutors, 0))} />
+            <Info label="Плановая валовая часть компании" value={money(economy.companyPlannedGross)} />
+          </div>
+        ) : null}
 
-        {economy.sections.every((section) => !Number(section.clientBudget) && !Number(section.executorCost)) ? (
+        {canSeeProductionBudget && economy.sections.every((section) => !Number(section.clientBudget) && !Number(section.executorCost)) ? (
           <div className="form-hint">Суммы этапов пока не заполнены. Заполни бюджет этапов, назначь исполнителей и обнови факт выплат — экономика пересчитается автоматически.</div>
         ) : null}
 
@@ -4239,6 +4747,7 @@ function ProjectDetails({ project, role, onUpdateProject, onTaskStatusChange, on
           sections={economy.sections}
           executors={executors}
           canEdit={canAdminProject}
+          canSeeFinancials={canSeeProductionBudget}
           onUpdateSection={onUpdateSection}
           onAddSection={onAddSection}
           onDeleteSection={onDeleteSection}
@@ -6046,7 +6555,8 @@ function SectionIntro({ section }) {
   );
 }
 
-function SalesLeadsModule({ leads, setSalesLeads, projectItems, users, role, session }) {
+function SalesLeadsModule({ leads, setSalesLeads, projectItems, users, role, session, salesControl, setSalesControl, onGoSection }) {
+  const [activeSalesTab, setActiveSalesTab] = useState("dashboard");
   const [viewFilter, setViewFilter] = useState("operational");
   const [directionFilter, setDirectionFilter] = useState("all");
   const [regionFilter, setRegionFilter] = useState("all");
@@ -6055,8 +6565,9 @@ function SalesLeadsModule({ leads, setSalesLeads, projectItems, users, role, ses
   const [selectedLeadId, setSelectedLeadId] = useState(leads[0]?.id || "");
   const [transferForm, setTransferForm] = useState({ direction: "design", farmerId: "USR-007", stage: "qualified" });
   const [projectLinkId, setProjectLinkId] = useState(projectItems[0]?.id || "");
-  const canChangeSales = ["owner", "admin", "deputy", "head_of_sales", "sales_manager"].includes(role);
-  const canSeeMoney = roleCan(role, "viewFinance") || ["owner", "deputy", "head_of_sales", "sales_manager"].includes(role);
+  const canChangeSales = ["owner", "admin", "deputy", "head_of_sales", "senior_sales_manager", "ecp_manager", "sales_manager"].includes(role);
+  const canSeeMoney = roleCan(role, "viewFinance") || ["owner", "deputy", "head_of_sales", "senior_sales_manager", "ecp_manager", "sales_manager"].includes(role);
+  const salesDeals = useMemo(() => buildSalesDealsFromLeads(leads, salesControl?.deals || []), [leads, salesControl]);
 
   const visibleLeads = useMemo(() => {
     return leads.filter((lead) => {
@@ -6076,8 +6587,121 @@ function SalesLeadsModule({ leads, setSalesLeads, projectItems, users, role, ses
   }, [leads, session, role, viewFilter, directionFilter, regionFilter, sourceFilter, slaFilter]);
 
   const selectedLead = visibleLeads.find((lead) => lead.id === selectedLeadId) || visibleLeads[0] || null;
+  const visibleSalesDeals = useMemo(() => {
+    return salesDeals.filter((deal) => {
+      const leadLike = { ...deal, stage: deal.salesStage, hunterId: deal.salesManagerId, farmerId: deal.salesManagerId };
+      if (!leadCanAccess(session, leadLike, role)) return false;
+      if (viewFilter === "operational" && !["qualified", "proposal_sent", "contract_and_advance", "contract_advance", "deposit", "transferred_to_project"].includes(deal.salesStage)) return false;
+      if (viewFilter === "qualified" && !["qualified", "proposal_sent", "contract_and_advance", "contract_advance", "deposit"].includes(deal.salesStage)) return false;
+      if (viewFilter === "contract" && !["contract_and_advance", "contract_advance", "deposit"].includes(deal.salesStage)) return false;
+      if (viewFilter === "project" && !deal.projectId && deal.projectHandoffStatus !== "transferred") return false;
+      if (directionFilter !== "all" && deal.direction !== directionFilter) return false;
+      if (regionFilter !== "all" && deal.region !== regionFilter) return false;
+      if (sourceFilter !== "all" && deal.source !== sourceFilter && deal.sourceSystem !== sourceFilter) return false;
+      if (slaFilter !== "all" && deal.slaStatus !== slaFilter) return false;
+      return true;
+    });
+  }, [salesDeals, session, role, viewFilter, directionFilter, regionFilter, sourceFilter, slaFilter]);
+  const visibleActivities = useMemo(() => {
+    const visibleDealIds = new Set(visibleSalesDeals.map((deal) => deal.id));
+    return Array.isArray(salesControl?.activities)
+      ? salesControl.activities.filter((item) => visibleDealIds.has(item.dealId || item.salesDealId))
+      : [];
+  }, [salesControl, visibleSalesDeals]);
+  const projectHandoffs = useMemo(() => {
+    const explicit = Array.isArray(salesControl?.projectHandoffs) ? salesControl.projectHandoffs : [];
+    const byDeal = new Map(explicit.map((handoff) => [handoff.salesDealId, handoff]));
+    return visibleSalesDeals.filter(isProjectHandoffEligibleDeal).map((deal) => {
+      const checklist = projectHandoffChecklist(deal);
+      const existing = byDeal.get(deal.id);
+      return normalizeHandoffForView(existing || {
+        id: `handoff-${deal.id}`,
+        salesDealId: deal.id,
+        projectId: deal.projectId || "",
+        status: deal.projectId || deal.projectHandoffStatus === "transferred" ? "transferred" : deal.projectHandoffStatus === "accepted" ? "accepted" : checklist.every((item) => item.ok) ? "ready" : "draft",
+        checklist,
+        missingData: checklist.filter((item) => !item.ok).map((item) => item.id),
+      }, deal);
+    });
+  }, [salesControl, visibleSalesDeals]);
+  const visibleEscalations = useMemo(() => {
+    const visibleDealIds = new Set(visibleSalesDeals.map((deal) => deal.id));
+    const explicit = Array.isArray(salesControl?.escalations)
+      ? salesControl.escalations.filter((item) => visibleDealIds.has(item.dealId || item.salesDealId))
+      : [];
+    const map = new Map(explicit.map((item) => [`${item.dealId || item.salesDealId}:${item.reason}:${item.status}`, item]));
+    salesEscalationsFromDeals(visibleSalesDeals).forEach((item) => {
+      const key = `${item.dealId}:${item.reason}:${item.status}`;
+      if (!map.has(key)) map.set(key, item);
+    });
+    return Array.from(map.values());
+  }, [salesControl, visibleSalesDeals]);
+  const salesReport = useMemo(() => salesControlReport(visibleSalesDeals, visibleEscalations, projectHandoffs), [visibleSalesDeals, visibleEscalations, projectHandoffs]);
+  const gamificationProfiles = useMemo(() => {
+    return users
+      .filter((user) => salesGamificationUserVisible(session, user, role))
+      .map((user) => {
+        const scopedDeals = visibleSalesDeals.filter((deal) => salesDealInGamificationScope(user, deal));
+        const scopedDealIds = new Set(scopedDeals.map((deal) => deal.id));
+        const scopedActivities = visibleActivities.filter((item) => scopedDealIds.has(item.dealId || item.salesDealId));
+        const scopedEscalations = visibleEscalations.filter((item) => scopedDealIds.has(item.dealId || item.salesDealId));
+        const scopedHandoffs = projectHandoffs.filter((item) => scopedDealIds.has(item.salesDealId));
+        return salesGamificationProfile(user, scopedDeals, scopedActivities, scopedEscalations, scopedHandoffs);
+      })
+      .sort((first, second) =>
+        Number(second.eligible) - Number(first.eligible) ||
+        second.points - first.points ||
+        second.disciplineScore - first.disciplineScore ||
+        second.dealsCount - first.dealsCount
+      );
+  }, [users, session, role, visibleSalesDeals, visibleActivities, visibleEscalations, projectHandoffs]);
   const stats = salesLeadStats(visibleLeads);
-  const farmers = users.filter((user) => ["project_manager", "pm", "sales_manager", "partner", "director", "regional_manager"].includes(user.role));
+  const farmers = users.filter((user) => ["project_manager", "pm", "gip", "sales_manager", "senior_sales_manager", "head_of_sales", "partner", "director", "regional_manager"].includes(user.role));
+  const canConfirmProductionHandoff = ["owner", "admin", "deputy", "pm", "project_manager", "gip", "director", "regional_manager"].includes(role);
+  const handoffSummary = useMemo(() => ({
+    draft: projectHandoffs.filter((item) => item.status === "draft").length,
+    ready: projectHandoffs.filter((item) => item.status === "ready").length,
+    accepted: projectHandoffs.filter((item) => item.status === "accepted").length,
+    transferred: projectHandoffs.filter((item) => item.status === "transferred").length,
+  }), [projectHandoffs]);
+  const primaryGamificationProfile = gamificationProfiles.find((profile) => profile.user.id === session?.id || profile.user.login === session?.login) || gamificationProfiles[0] || null;
+
+  async function persistProjectHandoffs(nextHandoffs) {
+    const nextControl = { ...(salesControl || {}), projectHandoffs: nextHandoffs };
+    setSalesControl?.(nextControl);
+    writeStoredValue("smeta.salesControl", nextControl);
+    await apiPut("/project-handoffs", nextHandoffs);
+  }
+
+  function upsertProjectHandoff(nextHandoff) {
+    const existing = Array.isArray(salesControl?.projectHandoffs) ? salesControl.projectHandoffs : [];
+    const nextMap = new Map(existing.map((item) => [item.salesDealId || item.id, item]));
+    nextMap.set(nextHandoff.salesDealId || nextHandoff.id, nextHandoff);
+    return Array.from(nextMap.values());
+  }
+
+  async function acceptProductionHandoff(handoff, deal) {
+    if (!canConfirmProductionHandoff) {
+      showAction("Подтвердить передачу может производство: РП, ГИП, управляющий, админ или владелец");
+      return;
+    }
+    const view = normalizeHandoffForView(handoff, deal);
+    if (view.status === "draft") {
+      showAction("Нельзя принять передачу: сначала заполните обязательные данные сделки");
+      return;
+    }
+    const now = new Date().toISOString();
+    const nextHandoff = {
+      ...view,
+      status: "accepted",
+      acceptedBy: session?.id || session?.login || role,
+      acceptedAt: now,
+      updatedAt: now,
+      comment: view.comment || "Производство приняло сделку. Теперь проект можно создавать или связывать в разделе проектов.",
+    };
+    await persistProjectHandoffs(upsertProjectHandoff(nextHandoff));
+    showAction("Производство подтвердило передачу. Следующий шаг: создать или связать проект в разделе “Проекты”.");
+  }
 
   useEffect(() => {
     if (selectedLeadId && visibleLeads.some((lead) => lead.id === selectedLeadId)) return;
@@ -6152,10 +6776,10 @@ function SalesLeadsModule({ leads, setSalesLeads, projectItems, users, role, ses
     <>
       <SectionIntro section="sales" />
       <section className="stats-grid">
-        <StatCard item={{ label: "Лиды в текущем виде", value: String(visibleLeads.length), tone: "blue" }} />
-        <StatCard item={{ label: "SLA нарушен", value: String(stats.breached), tone: stats.breached ? "red" : "green" }} />
-        <StatCard item={{ label: "КП отправлено", value: String(stats.proposal), tone: "orange" }} />
-        <StatCard item={{ label: "Связаны с проектом", value: String(stats.linked), tone: "green" }} />
+        <StatCard item={{ label: "Активные сделки", value: String(salesReport.activeDeals), tone: "blue" }} />
+        <StatCard item={{ label: "SLA нарушен", value: String(salesReport.slaViolations), tone: salesReport.slaViolations ? "red" : "green" }} />
+        <StatCard item={{ label: "Договор / аванс", value: String(salesReport.contractCount), tone: "orange" }} />
+        <StatCard item={{ label: "Передача в проект", value: String(salesReport.transferredCount), tone: "green" }} />
       </section>
 
       <section className="workspace-card">
@@ -6194,7 +6818,53 @@ function SalesLeadsModule({ leads, setSalesLeads, projectItems, users, role, ses
         </div>
       </section>
 
-      <section className="sales-grid">
+      <section className="sales-control-tabs">
+        {[
+          ["dashboard", "Дашборд"],
+          ["board", "Сделки / воронка"],
+          ["reports", "Отчёты"],
+          ["escalations", "Эскалации"],
+          ["handoff", "Передача в проект"],
+          ["gamification", "Геймификация"],
+          ["integrations", "Интеграции"],
+        ].map(([id, label]) => (
+          <button key={id} type="button" className={activeSalesTab === id ? "active" : ""} onClick={() => setActiveSalesTab(id)}>
+            {label}
+          </button>
+        ))}
+      </section>
+
+      {activeSalesTab === "dashboard" ? (
+        <section className="sales-control-grid">
+          <div className="office-card">
+            <h3>Дашборд продаж</h3>
+            <p className="section-hint">Здесь контроль продаж, а не производство. Bitrix24 остаётся CRM, SmetaOffice показывает управленческий срез и готовность передачи в проект.</p>
+            <div className="sales-report-grid">
+              <Info label="Сумма договоров" value={money(salesReport.contractAmount)} />
+              <Info label="Оплачено" value={money(salesReport.paidAmount)} />
+              <Info label="Ожидается к оплате" value={money(salesReport.expectedPayment)} />
+              <Info label="Качество CRM" value={`${salesReport.crmQualityAverage}%`} />
+              <Info label="Просрочки" value={salesReport.overdueCount} />
+              <Info label="Открытые эскалации" value={salesReport.openEscalations} />
+            </div>
+          </div>
+          <div className="office-card">
+            <h3>Проблемные сделки</h3>
+            <div className="sales-issue-list">
+              {visibleSalesDeals.filter((deal) => deal.riskLevel !== "green").slice(0, 8).map((deal) => (
+                <button key={deal.id} type="button" onClick={() => { setSelectedLeadId(deal.leadId || deal.id); setActiveSalesTab("board"); }}>
+                  <b>{deal.clientName}</b>
+                  <span className={cn("risk-chip", deal.riskLevel)}>{deal.riskReason}</span>
+                  <small>{leadStageLabel(deal.salesStage)} · {deal.region}</small>
+                </button>
+              ))}
+              {!visibleSalesDeals.some((deal) => deal.riskLevel !== "green") ? <div className="empty compact">Критичных сделок по текущим фильтрам нет.</div> : null}
+            </div>
+          </div>
+        </section>
+      ) : null}
+
+      {activeSalesTab === "board" ? <section className="sales-grid">
         <div className="office-card">
           <div className="section-row">
             <div>
@@ -6209,7 +6879,7 @@ function SalesLeadsModule({ leads, setSalesLeads, projectItems, users, role, ses
                 <div key={bucket.id} className="sales-column">
                   <strong>{bucket.title}</strong>
                   <span>{items.length}</span>
-                  {items.slice(0, 4).map((lead) => {
+                  {items.map((lead) => {
                     const slaStatus = leadSlaStatus(lead);
                     return (
                       <button key={lead.id} type="button" className={selectedLead?.id === lead.id ? "active" : ""} onClick={() => setSelectedLeadId(lead.id)}>
@@ -6275,9 +6945,268 @@ function SalesLeadsModule({ leads, setSalesLeads, projectItems, users, role, ses
             <div className="empty">Лид не выбран. Включи “Смотреть всё” или дождись синхронизации Bitrix24, если в SmetaOffice пока нет рабочих лидов.</div>
           )}
         </aside>
-      </section>
+      </section> : null}
 
-      <section className="office-card">
+      {activeSalesTab === "reports" ? (
+        <section className="office-card">
+          <h3>Отчётность продаж</h3>
+          <p className="section-hint">Первый слой отчётности: план/факт подключим после настройки планов по месяцам и регионам.</p>
+          <div className="sales-report-table">
+            <div className="sales-report-head"><span>Срез</span><span>Сделки</span><span>Договоры</span><span>Оплачено</span><span>SLA</span><span>CRM</span></div>
+            {["Все", ...regionOptions.filter((item) => item !== "Все регионы")].map((regionName) => {
+              const scoped = regionName === "Все" ? visibleSalesDeals : visibleSalesDeals.filter((deal) => normalizeRegionName(deal.region) === normalizeRegionName(regionName));
+              const row = salesControlReport(scoped, visibleEscalations, projectHandoffs);
+              return (
+                <div key={regionName}>
+                  <span>{regionName}</span>
+                  <b>{row.activeDeals}</b>
+                  <b>{row.contractCount}</b>
+                  <b>{money(row.paidAmount)}</b>
+                  <b>{row.slaViolations}</b>
+                  <b>{row.crmQualityAverage}%</b>
+                </div>
+              );
+            })}
+          </div>
+        </section>
+      ) : null}
+
+      {activeSalesTab === "escalations" ? (
+        <section className="office-card">
+          <h3>Риски и эскалации</h3>
+          <p className="section-hint">Эскалация идёт по цепочке: менеджер → старший → РОП → управляющий ЕЦП → ответственный за регион → административный блок.</p>
+          <div className="sales-escalation-grid">
+            {visibleEscalations.map((escalation) => {
+              const deal = visibleSalesDeals.find((item) => item.id === escalation.dealId || item.sourceId === escalation.dealId || item.leadId === escalation.dealId) || {};
+              return (
+                <div key={escalation.id} className="sales-escalation-card">
+                  <span className={cn("risk-chip", deal.riskLevel || (escalation.status === "closed" ? "green" : "yellow"))}>{escalation.reason || deal.riskReason || "требует внимания"}</span>
+                  <b>{deal.clientName || escalation.dealId}</b>
+                  <small>{leadStageLabel(deal.salesStage)} · {deal.region || "регион не указан"}</small>
+                  <p>Текущий ответственный: {users.find((user) => user.id === deal.salesManagerId)?.name || deal.salesManagerId || "не назначен"}</p>
+                  <p>Куда эскалировано: {users.find((user) => user.id === escalation.toUserId)?.name || escalation.level || "следующий уровень"}</p>
+                </div>
+              );
+            })}
+            {!visibleEscalations.length ? <div className="empty">Нет открытых рисков по текущему фильтру.</div> : null}
+          </div>
+        </section>
+      ) : null}
+
+      {activeSalesTab === "handoff" ? (
+        <section className="office-card">
+          <h3>Шлюз передачи в проект</h3>
+          <p className="section-hint">Сделка не становится проектом напрямую. Правильная цепочка: Bitrix Deal → SalesDeal → ProjectHandoff → подтверждение производства → Project.</p>
+          <div className="handoff-flow">
+            {projectHandoffFlow.map((step, index) => (
+              <div key={step.id}>
+                <span>{index + 1}</span>
+                <b>{step.label}</b>
+                <small>{step.text}</small>
+              </div>
+            ))}
+          </div>
+          <div className="handoff-summary-grid">
+            <Info label="Нужны данные" value={handoffSummary.draft} />
+            <Info label="Готово к проверке" value={handoffSummary.ready} />
+            <Info label="Принято производством" value={handoffSummary.accepted} />
+            <Info label="Проект создан / связан" value={handoffSummary.transferred} />
+          </div>
+          <div className="handoff-list">
+            {projectHandoffs.map((handoff) => {
+              const deal = visibleSalesDeals.find((item) => item.id === handoff.salesDealId) || {};
+              const view = normalizeHandoffForView(handoff, deal);
+              return (
+                <div key={view.id} className="handoff-card">
+                  <div>
+                    <div>
+                      <b>{deal.clientName || view.salesDealId}</b>
+                      <small>{deal.sourceSystem || "SalesDeal"} · {deal.sourceId || deal.bitrixDealId || view.salesDealId} · {leadStageLabel(deal.salesStage)}</small>
+                    </div>
+                    <span className={cn("risk-chip", handoffTone(view.status))}>{handoffStatusLabel(view.status)}</span>
+                  </div>
+                  <div className="handoff-gate-meta">
+                    <span>SalesDeal: {view.salesDealId || "не указан"}</span>
+                    <span>ProjectHandoff: {view.id}</span>
+                    <span>Project: {view.projectId || "ещё не создан"}</span>
+                  </div>
+                  <div className="handoff-checks">
+                    {view.checklist.map((item) => (
+                      <span key={item.id} className={item.ok ? "ok" : "fail"}>{item.ok ? "✓" : "!"} {item.label || item.id}</span>
+                    ))}
+                  </div>
+                  <div className="handoff-actions">
+                    {view.status === "draft" ? (
+                      <button type="button" className="secondary" onClick={() => showAction("Сначала заполните недостающие данные сделки: клиент, контакт, регион, направление, сумма, аванс, ответственные и следующий шаг")}>Что не готово</button>
+                    ) : null}
+                    {view.status === "ready" ? (
+                      <button type="button" className="primary" onClick={() => acceptProductionHandoff(view, deal)} disabled={!canConfirmProductionHandoff}>Подтвердить производство</button>
+                    ) : null}
+                    {view.status === "accepted" ? (
+                      <button type="button" className="primary" onClick={() => onGoSection?.("projects")}>Перейти к созданию проекта</button>
+                    ) : null}
+                    {view.status === "transferred" ? (
+                      <button type="button" className="secondary" onClick={() => onGoSection?.("projects")}>Открыть проекты</button>
+                    ) : null}
+                    <span>{view.status === "accepted" ? "Производство приняло сделку. Теперь можно создать или связать проект." : view.status === "transferred" ? "Шлюз закрыт: проект уже создан или связан." : "Проект не создаётся из продаж напрямую."}</span>
+                  </div>
+                </div>
+              );
+            })}
+            {!projectHandoffs.length ? <div className="empty">Нет сделок на стадии договора, аванса или передачи в проект.</div> : null}
+          </div>
+        </section>
+      ) : null}
+
+      {activeSalesTab === "gamification" ? (
+        <section className="office-card">
+          <h3>Геймификация продаж</h3>
+          <p className="section-hint">Это не игра ради игры. Менеджер должен видеть план, факт, сколько уже заработал по оплатам, что ещё может получить, почему уровень повышается или блокируется.</p>
+
+          {primaryGamificationProfile ? (
+            <div className="gamification-focus-grid">
+              <div className="gamification-money-card">
+                <span>{primaryGamificationProfile.plan.label}</span>
+                <b>{primaryGamificationProfile.planProgress.execution}%</b>
+                <div className="bar"><span className={cn("bar-fill", primaryGamificationProfile.planProgress.execution >= 100 ? "green" : primaryGamificationProfile.planProgress.execution >= 70 ? "yellow" : "red")} style={{ width: `${Math.max(4, primaryGamificationProfile.planProgress.execution)}%` }} /></div>
+                <p>План по оплатам: {money(primaryGamificationProfile.report.paidAmount)} из {money(primaryGamificationProfile.plan.paidAmount)}. По договорам: {money(primaryGamificationProfile.report.contractAmount)} из {money(primaryGamificationProfile.plan.contractAmount)}.</p>
+              </div>
+              <div className="gamification-money-card">
+                <span>Заработок по текущему срезу</span>
+                <b>{money(primaryGamificationProfile.earnings.earnedNow)}</b>
+                <p>Комиссия по оплатам: {money(primaryGamificationProfile.earnings.baseCommission)}. Бонус за план: {money(primaryGamificationProfile.earnings.planBonus)}. Потенциал после оплат: {money(primaryGamificationProfile.earnings.potentialTotal)}.</p>
+                <small>Ставка MVP: {primaryGamificationProfile.earnings.commissionRatePercent}% от оплат. Реальные ставки можно вынести в админку.</small>
+              </div>
+              <div className="gamification-money-card">
+                <span>Уровень и повышение</span>
+                <b>{primaryGamificationProfile.level.label}</b>
+                <div className="bar"><span className={cn("bar-fill", primaryGamificationProfile.level.tone)} style={{ width: `${Math.max(4, primaryGamificationProfile.levelProgress)}%` }} /></div>
+                <p>{primaryGamificationProfile.promotionStatus}</p>
+                <small>{primaryGamificationProfile.nextLevel ? `Следующий уровень: ${primaryGamificationProfile.nextLevel.title}. Должность: ${primaryGamificationProfile.nextLevel.position}.` : "Это верхний уровень лестницы."}</small>
+              </div>
+            </div>
+          ) : (
+            <div className="empty compact">Нет сотрудников продаж в текущем контуре.</div>
+          )}
+
+          <div className="gamification-rule-grid">
+            <div>
+              <span>1</span>
+              <b>CRM-дисциплина</b>
+              <p>Карточка сделки заполнена: клиент, регион, направление, сумма, ответственный и следующий шаг.</p>
+              <em>порог 80%</em>
+            </div>
+            <div>
+              <span>2</span>
+              <b>SLA</b>
+              <p>Первый ответ и следующий шаг не проваливаются. Просрочки сразу закрывают допуск к рейтингу.</p>
+              <em>порог 90%</em>
+            </div>
+            <div>
+              <span>3</span>
+              <b>Отчётность</b>
+              <p>У сделки есть следующий шаг, дата движения или активность менеджера. Пустая карточка не даёт баллы.</p>
+              <em>порог 80%</em>
+            </div>
+            <div>
+              <span>4</span>
+              <b>Передача в проект</b>
+              <p>Договор или аванс передаются в производство через чек-лист ProjectHandoff.</p>
+              <em>порог 70%</em>
+            </div>
+            <div>
+              <span>5</span>
+              <b>План / деньги</b>
+              <p>Повышение возможно, когда выполнен план по оплатам/договорам и нет критичных провалов.</p>
+              <em>порог 100%</em>
+            </div>
+          </div>
+
+          <div className="gamification-table">
+            <div className="gamification-head">
+              <span>Сотрудник</span>
+              <span>План / факт</span>
+              <span>Заработок</span>
+              <span>Дисциплина</span>
+              <span>Допуск</span>
+              <span>Уровень</span>
+              <span>Повышение</span>
+            </div>
+            {gamificationProfiles.map((profile, index) => (
+              <div key={profile.user.id} className={cn("gamification-row", !profile.eligible && "locked")}>
+                <span>
+                  <b>{index + 1}. {profile.user.name}</b>
+                  <small>{roles.find((item) => item.id === profile.user.role)?.name || profile.user.role}</small>
+                </span>
+                <span>
+                  <strong>{profile.planProgress.execution}%</strong>
+                  <small>Оплаты: {profile.planProgress.paidPlan}% · Договоры: {profile.planProgress.contractPlan}%</small>
+                  <i style={{ width: `${profile.planProgress.execution}%` }} />
+                </span>
+                <span>
+                  <strong>{money(profile.earnings.earnedNow)}</strong>
+                  <small>Потенциал: {money(profile.earnings.potentialTotal)}</small>
+                  {profile.earnings.blockedByDiscipline ? <small>Заблокировано: {money(profile.earnings.blockedByDiscipline)}</small> : null}
+                </span>
+                <span>
+                  <strong>{profile.disciplineScore}%</strong>
+                  <small>CRM {profile.crmScore}% · SLA {profile.slaScore}%</small>
+                  <small>Отчёты {profile.reportScore}% · Передача {profile.handoffScore}%</small>
+                </span>
+                <span>
+                  <em className={cn("risk-chip", profile.eligible ? "green" : "red")}>{profile.eligible ? "допущен" : "закрыт"}</em>
+                  <small>{profile.blockers[0] || "дисциплина выполнена"}</small>
+                </span>
+                <span>
+                  <strong>{profile.points}</strong>
+                  <em className={cn("risk-chip", profile.level.tone)}>{profile.level.label}</em>
+                  <small>{profile.level.position}</small>
+                </span>
+                <span>
+                  <strong>{profile.pointsToNext ? `${profile.pointsToNext} б.` : "готов"}</strong>
+                  <small>{profile.promotionStatus}</small>
+                </span>
+              </div>
+            ))}
+          </div>
+
+          <div className="gamification-card-grid">
+            {gamificationProfiles.map((profile) => (
+              <div key={`${profile.user.id}-card`} className={cn("gamification-profile-card", profile.eligible ? "ready" : "locked")}>
+                <div>
+                  <b>{profile.user.name}</b>
+                  <span className={cn("risk-chip", profile.level.tone)}>{profile.level.label}</span>
+                </div>
+                <strong>{profile.disciplineScore}% дисциплина</strong>
+                <div className="bar">
+                  <span className={cn("bar-fill", profile.eligible ? "green" : "red")} style={{ width: `${Math.max(4, profile.disciplineScore)}%` }} />
+                </div>
+                <p>{profile.eligible ? `Рейтинг открыт. Сейчас к выплате по модели: ${money(profile.earnings.earnedNow)}.` : `Рейтинг и выплаты по бонусной модели заблокированы: ${profile.blockers.join(", ")}.`}</p>
+                <small>Сделок: {profile.dealsCount} · план: {profile.planProgress.execution}% · открытых эскалаций: {profile.report.openEscalations} · передача: {profile.handoffScore}%</small>
+              </div>
+            ))}
+          </div>
+
+          <div className="sales-level-roadmap">
+            <div>
+              <h4>Лестница уровней продаж</h4>
+              <p>Уровень растёт только при открытом допуске. Если CRM, SLA, отчёты или передача в проект провалены, баллы не превращаются в повышение.</p>
+            </div>
+            <div className="sales-level-grid">
+              {salesCareerLevels.map((level) => (
+                <div key={level.id} className="sales-level-card">
+                  <span className={cn("risk-chip", level.tone)}>{level.title}</span>
+                  <b>{level.position}</b>
+                  <small>От {level.minPoints} баллов</small>
+                  <p>{level.requirement}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+      ) : null}
+
+      {activeSalesTab === "integrations" ? <section className="office-card">
         <h3>Стадии по направлениям</h3>
         <p className="section-hint">Это памятка соответствия SmetaOffice и Bitrix24. На следующих итерациях эти стадии будут подтягиваться из реальных воронок Bitrix24.</p>
         <div className="bitrix-stage-map">
@@ -6288,7 +7217,7 @@ function SalesLeadsModule({ leads, setSalesLeads, projectItems, users, role, ses
             </div>
           ))}
         </div>
-      </section>
+      </section> : null}
     </>
   );
 }
@@ -6424,9 +7353,10 @@ function ProjectCreationWizard({ projectForm, setProjectForm, users, partners = 
   const projectTypes = projectTypesForDirection(projectForm.direction);
   const stages = projectStageTemplates[projectForm.projectType] || [];
   const directors = roleUserOptions(users, ["owner", "deputy", "director", "regional_manager"]);
-  const projectLeads = roleUserOptions(users, ["pm", "project_manager", "head_of_department", "director", "regional_manager", "deputy", "owner"]);
-  const projectManagers = roleUserOptions(users, ["project_manager", "pm", "head_of_department", "director", "regional_manager"]);
-  const salesManagers = roleUserOptions(users, ["sales_manager", "head_of_sales", "owner", "director"]);
+  const projectLeads = roleUserOptions(users, ["pm", "gip", "project_manager", "head_of_department", "director", "regional_manager", "deputy", "owner"]);
+  const gipUsers = roleUserOptions(users, ["gip", "pm", "head_of_department", "director", "regional_manager", "deputy", "owner"]);
+  const projectManagers = roleUserOptions(users, ["project_manager", "pm", "gip", "head_of_department", "director", "regional_manager"]);
+  const salesManagers = roleUserOptions(users, ["sales_manager", "senior_sales_manager", "head_of_sales", "ecp_manager", "owner", "director"]);
   const partnerUsers = roleUserOptions(users, ["partner"]);
   const contractAmount = Number(projectForm.contractAmount) || 0;
   const productionPercent = Number(projectForm.productionAllocationPercent) || 0;
@@ -6515,6 +7445,7 @@ function ProjectCreationWizard({ projectForm, setProjectForm, users, partners = 
           <label><span>Светофор</span><select value={projectForm.risk} onChange={(event) => update({ risk: event.target.value })}><option value="green">В норме</option><option value="yellow">Есть риск</option><option value="red">Красная зона</option></select></label>
           <label><span>Руководитель направления</span><select className={!projectForm.directorUserId ? "invalid" : ""} value={projectForm.directorUserId} onChange={(event) => update({ directorUserId: event.target.value })}><option value="">Выбрать пользователя</option>{directors.map((user) => <option key={user.id} value={user.id}>{user.name} · {user.position}</option>)}</select></label>
           <label><span>Руководитель проекта</span><select className={!projectForm.pmUserId ? "invalid" : ""} value={projectForm.pmUserId} onChange={(event) => update({ pmUserId: event.target.value })}><option value="">Выбрать пользователя</option>{projectLeads.map((user) => <option key={user.id} value={user.id}>{user.name} · {user.position}</option>)}</select></label>
+          <label><span>ГИП</span><select value={projectForm.gipUserId} onChange={(event) => update({ gipUserId: event.target.value })}><option value="">Отсутствует / позже</option>{gipUsers.map((user) => <option key={user.id} value={user.id}>{user.name} · {user.position}</option>)}</select></label>
           <label><span>Менеджер проекта</span><select value={projectForm.projectManagerId} onChange={(event) => update({ projectManagerId: event.target.value })}><option value="">Отсутствует / позже</option>{projectManagers.map((user) => <option key={user.id} value={user.id}>{user.name} · {user.position}</option>)}</select></label>
           <label><span>Менеджер продаж</span><select value={projectForm.salesManagerId} onChange={(event) => update({ salesManagerId: event.target.value })}><option value="">Нет / не из продаж</option>{salesManagers.map((user) => <option key={user.id} value={user.id}>{user.name} · {user.position}</option>)}</select></label>
           <label><span>Партнёр из базы</span><select value={projectForm.partnerRegistryId || ""} onChange={(event) => update({ partnerRegistryId: event.target.value })}><option value="">Не выбран</option>{partners.map((partner) => <option key={partner.id || partner.name} value={partner.id || partner.name}>{partner.name} · {partnerCoverageLabel(partner)} · {partnerRegionsLabel(partner)}</option>)}</select></label>
@@ -6638,6 +7569,60 @@ function ProjectsModule({
 
   const selectedClientGroup = selectedClientKey === "all" ? null : clientGroups.find((client) => client.key === selectedClientKey) || null;
   const canSeeClientMoney = roleCan(role, "viewFinance") || roleCan(role, "viewProductionBudget");
+  const operationalSummaryMetrics = (projects) => {
+    const tasks = flattenTasks(projects);
+    const avgProgress = projects.length ? Math.round(projects.reduce((sum, project) => sum + (Number(project.progress) || 0), 0) / projects.length) : 0;
+    return {
+      taskCount: tasks.length,
+      reviewCount: tasks.filter((task) => task.status === "На проверке").length,
+      avgProgress,
+      redProjects: projects.filter((project) => effectiveProjectRisk(project) === "red").length,
+    };
+  };
+  const projectSummaryMetrics = (projects) => {
+    const summary = financeSummary(projects);
+    const operational = operationalSummaryMetrics(projects);
+    return canSeeClientMoney
+      ? [
+          ["Проектов", projects.length],
+          ["Договоры", money(summary.contractAmount)],
+          ["Красная зона", summary.redProjects],
+        ]
+      : [
+          ["Проектов", projects.length],
+          ["Красная зона", operational.redProjects],
+          ["Выполнение", `${operational.avgProgress}%`],
+        ];
+  };
+  const regionalMoneyMetrics = (item) => {
+    const projects = activeSearchProjects.filter((project) => isRegionalOperatingProject(project) && normalizeRegionName(project.region || project.city) === item.name);
+    const operational = operationalSummaryMetrics(projects);
+    return canSeeClientMoney
+      ? [
+          ["Договоры", money(item.contractAmount)],
+          ["Оплачено", money(item.paidByClient)],
+          ["Реализация", money(item.realizationCost)],
+        ]
+      : [
+          ["Проекты", item.projects],
+          ["Выполнение", `${operational.avgProgress}%`],
+          ["На проверке", operational.reviewCount],
+        ];
+  };
+  const directionMetrics = (projects, economy) => {
+    const operational = operationalSummaryMetrics(projects);
+    return canSeeClientMoney
+      ? [
+          ["Договоры", money(economy.contractAmount)],
+          ["Оплачено", money(economy.paidByClient)],
+          ["Реализация", money(economy.realizationCost)],
+        ]
+      : [
+          ["Проекты", projects.length],
+          ["Выполнение", `${operational.avgProgress}%`],
+          ["На проверке", operational.reviewCount],
+        ];
+  };
   const clientSearchQuery = clientSearch.trim().toLowerCase().replace(/ё/g, "е");
   const clientTypeGroups = useMemo(() => {
     return customerTypeFilterOptions
@@ -6798,7 +7783,9 @@ function ProjectsModule({
   const centralSummaryCards = [
     { label: "Компаний", value: centralCompanies.length },
     { label: "Проектов под контролем", value: searchProjects.length },
-    { label: "Договоры", value: money(totals.contractAmount) },
+    canSeeClientMoney
+      ? { label: "Договоры", value: money(totals.contractAmount) }
+      : { label: "Финансы", value: "скрыты" },
   ];
 
   const levelTitle = !selectedArea
@@ -6953,7 +7940,7 @@ function ProjectsModule({
               </div>
               <div className="projects-list project-cards-grid">
                 {selectedClientDisplayProjects.map((project) => (
-                  <ProjectCard key={project.id} project={project} active={false} onClick={() => setSelectedId(project.id)} />
+                  <ProjectCard key={project.id} project={project} active={false} canSeeMoney={canSeeClientMoney} onClick={() => setSelectedId(project.id)} />
                 ))}
                 {!selectedClientDisplayProjects.length ? <div className="empty">Действующих проектов по этому заказчику нет.</div> : null}
               </div>
@@ -7009,15 +7996,17 @@ function ProjectsModule({
               const areaMetrics = area.id === "central"
                 ? centralSummaryCards.map((item) => [item.label, item.value])
                 : area.id === "institute"
+                ? projectSummaryMetrics(instituteProjects)
+                : canSeeClientMoney
                 ? [
-                    ["Проектов", instituteProjects.length],
-                    ["Договоры", money(instituteSummary.contractAmount)],
-                    ["Красная зона", instituteSummary.redProjects],
+                    ["Регионов", regions.length],
+                    ["Проектов", regionalProjects.length],
+                    ["Договоры", money(regionalSummary.contractAmount)],
                   ]
                 : [
                     ["Регионов", regions.length],
                     ["Проектов", regionalProjects.length],
-                    ["Договоры", money(regionalSummary.contractAmount)],
+                    ["Красная зона", operationalSummaryMetrics(regionalProjects).redProjects],
                   ];
               return (
                 <DrillCard
@@ -7084,14 +8073,24 @@ function ProjectsModule({
               <p className="section-hint">Это отдельный контур: проекты идут по регионам, но производственный блок работает сквозным образом.</p>
               <div className="mini-kpi-grid">
                 <div><span>Проектов</span><b>{instituteProjects.length}</b></div>
-                <div><span>Договоры</span><b>{money(instituteSummary.contractAmount)}</b></div>
-                <div><span>Реализация</span><b>{money(instituteSummary.realizationCost)}</b></div>
-                <div><span>Остаток бюджета РП</span><b>{money(instituteSummary.pmBudgetLeft)}</b></div>
+                {canSeeClientMoney ? (
+                  <>
+                    <div><span>Договоры</span><b>{money(instituteSummary.contractAmount)}</b></div>
+                    <div><span>Реализация</span><b>{money(instituteSummary.realizationCost)}</b></div>
+                    <div><span>Остаток бюджета РП</span><b>{money(instituteSummary.pmBudgetLeft)}</b></div>
+                  </>
+                ) : (
+                  <>
+                    <div><span>Красная зона</span><b>{operationalSummaryMetrics(instituteProjects).redProjects}</b></div>
+                    <div><span>На проверке</span><b>{operationalSummaryMetrics(instituteProjects).reviewCount}</b></div>
+                    <div><span>Финансы</span><b>скрыты</b></div>
+                  </>
+                )}
               </div>
             </div>
             {instituteProjects.length > 0 ? (
               instituteProjects.map((project) => (
-                <ProjectCard key={project.id} project={project} active={false} onClick={() => setSelectedId(project.id)} />
+                <ProjectCard key={project.id} project={project} active={false} canSeeMoney={canSeeClientMoney} onClick={() => setSelectedId(project.id)} />
               ))
             ) : (
               <div className="empty">Проекты проектного института пока не найдены.</div>
@@ -7108,11 +8107,7 @@ function ProjectsModule({
                 subtitle={`${region.city || "Регион"} · Проектов: ${region.projects} · Направлений в работе: ${region.directions.size}`}
                 risk={region.risk}
                 manager={region.manager}
-                metrics={[
-                  ["Договоры", money(region.contractAmount)],
-                  ["Оплачено", money(region.paidByClient)],
-                  ["Реализация", money(region.realizationCost)],
-                ]}
+                metrics={regionalMoneyMetrics(region)}
                 onClick={() => openRegion(region.name)}
               />
             ))}
@@ -7126,8 +8121,17 @@ function ProjectsModule({
               <p className="section-hint">В регионе работают локальные направления. Проектный институт может подключаться к региональным проектам, но не является направлением региона.</p>
               <div className="mini-kpi-grid">
                 <div><span>Проектов</span><b>{selectedRegionProjects.length}</b></div>
-                <div><span>Договоры</span><b>{money(selectedRegionSummary.contractAmount)}</b></div>
-                <div><span>Оплачено</span><b>{money(selectedRegionSummary.paidByClient)}</b></div>
+                {canSeeClientMoney ? (
+                  <>
+                    <div><span>Договоры</span><b>{money(selectedRegionSummary.contractAmount)}</b></div>
+                    <div><span>Оплачено</span><b>{money(selectedRegionSummary.paidByClient)}</b></div>
+                  </>
+                ) : (
+                  <>
+                    <div><span>Выполнение</span><b>{operationalSummaryMetrics(selectedRegionProjects).avgProgress}%</b></div>
+                    <div><span>На проверке</span><b>{operationalSummaryMetrics(selectedRegionProjects).reviewCount}</b></div>
+                  </>
+                )}
                 <div><span>Красная зона</span><b>{selectedRegionSummary.redProjects}</b></div>
               </div>
             </div>
@@ -7139,11 +8143,7 @@ function ProjectsModule({
                   subtitle={`${item.hint} · Проектов: ${item.projects.length}`}
                   risk={item.risk}
                   manager={item.manager}
-                  metrics={[
-                    ["Договоры", money(item.economy.contractAmount)],
-                    ["Оплачено", money(item.economy.paidByClient)],
-                    ["Реализация", money(item.economy.realizationCost)],
-                  ]}
+                  metrics={directionMetrics(item.projects, item.economy)}
                   onClick={() => openRegionalDirection(item.id)}
                 />
               ))}
@@ -7169,7 +8169,7 @@ function ProjectsModule({
             <div className="projects-list project-cards-grid">
               {scopedProjects.length > 0 ? (
                 scopedProjects.map((project) => (
-                  <ProjectCard key={project.id} project={project} active={false} onClick={() => setSelectedId(project.id)} />
+                  <ProjectCard key={project.id} project={project} active={false} canSeeMoney={canSeeClientMoney} onClick={() => setSelectedId(project.id)} />
                 ))
               ) : (
                 <div className="empty">В этом направлении пока нет проектов. Можно создать первый проект.</div>
@@ -8926,7 +9926,7 @@ function DashboardModule({ visibleProjects, selectedProject, setSelectedId, role
   const canSeeFinance = roleCan(role, "viewFinance");
   const canSeeProductionBudget = roleCan(role, "viewProductionBudget") || canSeeFinance;
   const showOrgBreakdown = ["owner", "deputy", "director", "head_of_department", "regional_manager", "regional_admin", "direction_admin", "finance", "accountant"].includes(role);
-  const showProductionRules = !["partner", "sales_manager", "head_of_sales"].includes(role);
+  const showProductionRules = !["partner", ...salesControlRoleIds].includes(role);
   const showControlPath = !["partner"].includes(role);
   const dashboardTitle = dashboardTitleForRole(role);
   const dashboardHint = dashboardHintForRole(role);
@@ -9195,15 +10195,22 @@ function DashboardModule({ visibleProjects, selectedProject, setSelectedId, role
         { label: "Партнёры", value: String(partners.length), hint: "по доступному контуру", tone: "blue", section: "partners" },
       ];
     }
-    if (["pm", "project_manager"].includes(role)) {
-      return [
-        { label: "Мои проекты", value: String(visibleProjects.length), hint: "только назначенные", tone: "blue", section: "projects" },
-        { label: "На проверке", value: String(reviewTasks.length), hint: reviewTasks[0]?.name || "проверок нет", tone: reviewTasks.length ? "yellow" : "green", section: "tasks" },
-        { label: "Без исполнителя", value: String(missingExecutorSections.length), hint: missingExecutorSections[0]?.section?.name || "все этапы закрыты", tone: missingExecutorSections.length ? "red" : "green", section: "projects" },
-        { label: "К выплате", value: money(executorPayable), hint: "после согласований", tone: executorPayable ? "orange" : "green", section: "tasks" },
-      ];
+    if (["pm", "gip", "project_manager"].includes(role)) {
+      return role === "gip"
+        ? [
+            { label: "Все проекты", value: String(visibleProjects.length), hint: "без финансовых показателей", tone: "blue", section: "projects" },
+            { label: "На проверке", value: String(reviewTasks.length), hint: reviewTasks[0]?.name || "проверок нет", tone: reviewTasks.length ? "yellow" : "green", section: "tasks" },
+            { label: "Без исполнителя", value: String(missingExecutorSections.length), hint: missingExecutorSections[0]?.section?.name || "все этапы закрыты", tone: missingExecutorSections.length ? "red" : "green", section: "projects" },
+            { label: "Красная зона", value: String(redProjects.length), hint: redProjects[0]?.title || "пожаров нет", tone: redProjects.length ? "red" : "green", project: redProjects[0] },
+          ]
+        : [
+            { label: "Мои проекты", value: String(visibleProjects.length), hint: "только назначенные", tone: "blue", section: "projects" },
+            { label: "На проверке", value: String(reviewTasks.length), hint: reviewTasks[0]?.name || "проверок нет", tone: reviewTasks.length ? "yellow" : "green", section: "tasks" },
+            { label: "Без исполнителя", value: String(missingExecutorSections.length), hint: missingExecutorSections[0]?.section?.name || "все этапы закрыты", tone: missingExecutorSections.length ? "red" : "green", section: "projects" },
+            { label: "К выплате", value: money(executorPayable), hint: "после согласований", tone: executorPayable ? "orange" : "green", section: "tasks" },
+          ];
     }
-    if (["sales_manager", "head_of_sales"].includes(role)) {
+    if (salesControlRoleIds.includes(role)) {
       return [
         { label: "Лиды Bitrix/SmetaGO", value: String(visibleSalesLeads.length), hint: "только доступный отдел продаж", tone: "blue", section: "sales" },
         { label: "SLA нарушен", value: String(leadStats.breached), hint: "нужно быстро реагировать", tone: leadStats.breached ? "red" : "green", section: "sales" },
@@ -9244,14 +10251,20 @@ function DashboardModule({ visibleProjects, selectedProject, setSelectedId, role
         { title: "Проблемы", text: "Открывать красные проекты сразу из панели и принимать управленческое решение.", section: "analytics" },
       ];
     }
-    if (["pm", "project_manager"].includes(role)) {
-      return [
-        { title: "Проект как центр", text: "Работать внутри своих проектов: этапы, задачи, файлы, чат, согласования и сроки.", section: "projects" },
-        { title: "Набор исполнителей", text: "Этапы без исполнителя нужно закрывать назначением или открытым набором специалистов.", section: "executors" },
-        { title: "Согласования оплат", text: "Исполнитель получает деньги только после результата, клиента и подтверждения ответственного.", section: "tasks" },
-      ];
+    if (["pm", "gip", "project_manager"].includes(role)) {
+      return role === "gip"
+        ? [
+            { title: "Все проекты", text: "Контролировать все существующие проекты: этапы, задачи, исполнителей, файлы, согласования и сроки без финансовых сумм.", section: "projects" },
+            { title: "Производственные риски", text: "Видеть красные зоны, просрочки, этапы без исполнителя и проекты, где нужна инженерная проверка.", section: "tasks" },
+            { title: "Согласования результата", text: "Проверять готовность разделов и качество выдачи без доступа к суммам договоров, бюджетам и выплатам.", section: "projects" },
+          ]
+        : [
+            { title: "Проект как центр", text: "Работать внутри своих проектов: этапы, задачи, файлы, чат, согласования и сроки.", section: "projects" },
+            { title: "Набор исполнителей", text: "Этапы без исполнителя нужно закрывать назначением или открытым набором специалистов.", section: "executors" },
+            { title: "Согласования оплат", text: "Исполнитель получает деньги только после результата, клиента и подтверждения ответственного.", section: "tasks" },
+          ];
     }
-    if (["sales_manager", "head_of_sales"].includes(role)) {
+    if (salesControlRoleIds.includes(role)) {
       return [
         { title: "Не вторая CRM", text: "SmetaOffice показывает только тёплые лиды и сделки, которые надо довести до проекта. Основная CRM остаётся Bitrix24.", section: "sales" },
         { title: "Hunter / Farmer", text: "Hunter реагирует быстро, Farmer доводит до договора, после аванса создаётся проект.", section: "sales" },
@@ -9278,13 +10291,13 @@ function DashboardModule({ visibleProjects, selectedProject, setSelectedId, role
     if (["finance", "accountant"].includes(role)) {
       return payoutRows.slice(0, 6).map((row) => ({ id: row.key, title: row.name, meta: `${row.projectCount} проектов · ${row.sectionsText || "разделы не указаны"}`, value: money(row.payable), tone: row.payable ? "yellow" : "green", executorRef: row.key }));
     }
-    if (["sales_manager", "head_of_sales"].includes(role)) {
+    if (salesControlRoleIds.includes(role)) {
       return visibleSalesLeads.slice(0, 6).map((lead) => ({ id: lead.id, title: `${lead.id} · ${lead.clientName}`, meta: `${lead.city || lead.region} · ${salesDirections[lead.direction] || lead.direction} · ${salesStageLabels[lead.stage] || lead.stage}`, value: slaText(leadSlaStatus(lead)), tone: slaTone(leadSlaStatus(lead)), section: "sales" }));
     }
     if (role === "partner") {
       return partnerTaskRows.map((task) => ({ id: task.id, title: task.name, meta: `${task.projectTitle} · срок: ${task.due || "не указан"}`, value: task.status, tone: statusClass(task.status) === "danger" ? "red" : statusClass(task.status) === "warning" ? "yellow" : "green", projectId: task.projectId }));
     }
-    if (["pm", "project_manager", "head_of_department", "director", "regional_manager", "regional_admin", "direction_admin"].includes(role)) {
+    if (["pm", "gip", "project_manager", "head_of_department", "director", "regional_manager", "regional_admin", "direction_admin"].includes(role)) {
       return visibleProjects.slice(0, 6).map((project) => {
         const signals = projectOperationalSignals(project);
         const economy = projectEconomy(project);
@@ -9711,7 +10724,7 @@ function DashboardModule({ visibleProjects, selectedProject, setSelectedId, role
             <span className="muted-chip">
               {["finance", "accountant"].includes(role)
                 ? "Выплаты"
-                : ["sales_manager", "head_of_sales"].includes(role)
+                : salesControlRoleIds.includes(role)
                 ? "Лиды"
                 : role === "partner"
                 ? "Мои работы"
@@ -9724,7 +10737,7 @@ function DashboardModule({ visibleProjects, selectedProject, setSelectedId, role
             <h3>
               {["finance", "accountant"].includes(role)
                 ? "Кому платить и что ждёт согласования"
-                : ["sales_manager", "head_of_sales"].includes(role)
+                : salesControlRoleIds.includes(role)
                 ? "Продажи, которые должны дойти до проекта"
                 : role === "partner"
                 ? "Работы партнёра"
@@ -10003,6 +11016,7 @@ function SmetaOfficePrototype() {
   const [executors, setExecutorsState] = useState(() => readStoredValue("smeta.executors", []));
   const [users, setUsersState] = useState(() => sanitizeUsersForClient(readStoredValue("smeta.users", demoUsers)).map(normalizeUserRecord));
   const [salesLeads, setSalesLeadsState] = useState(() => mergeSalesLeads(readStoredValue("smeta.salesLeads", [])));
+  const [salesControl, setSalesControl] = useState(() => readStoredValue("smeta.salesControl", { deals: [], activities: [], escalations: [], projectHandoffs: [], report: null }));
   const [partners, setPartnersState] = useState(() => readStoredValue("smeta.partners", partnerSeed).map(normalizePartnerRecord));
   const [financialPeriods, setFinancialPeriodsState] = useState(() => readStoredValue("smeta.financialPeriods", []));
   const [operationalExpenses, setOperationalExpensesState] = useState(() => readStoredValue("smeta.operationalExpenses", []));
@@ -10059,7 +11073,14 @@ function SmetaOfficePrototype() {
   useEffect(() => {
     let alive = true;
     async function restoreServerSession() {
-      if (!readAuthToken()) return;
+      if (!readAuthToken()) {
+        const health = await apiGet("/health", null);
+        if (alive && health?.authMode === "server" && session?.id) {
+          setSession(null);
+          writeStoredValue("smeta.session", null);
+        }
+        return;
+      }
       const auth = await apiGet("/auth/me", null);
       if (!alive) return;
       if (auth?.ok && auth.user) {
@@ -10068,6 +11089,8 @@ function SmetaOfficePrototype() {
         writeStoredValue("smeta.session", auth.user);
       } else {
         writeAuthToken("");
+        setSession(null);
+        writeStoredValue("smeta.session", null);
       }
     }
     restoreServerSession();
@@ -10080,12 +11103,13 @@ function SmetaOfficePrototype() {
     if (!session?.id && !readAuthToken()) return;
     let alive = true;
     async function loadServerState() {
-      const [serverProjects, serverExecutors, serverUsers, serverPartners, serverSalesLeads, serverAvailableWork, serverFinancialPeriods, serverOperationalExpenses, serverCashAccounts] = await Promise.all([
+      const [serverProjects, serverExecutors, serverUsers, serverPartners, serverSalesLeads, serverSalesControl, serverAvailableWork, serverFinancialPeriods, serverOperationalExpenses, serverCashAccounts] = await Promise.all([
         apiGet("/projects", null),
         apiGet("/executors", null),
         apiGet("/users", null),
         apiGet("/partners", null),
         apiGet("/sales-leads", null),
+        apiGet("/sales-control", null),
         apiGet("/available-work", []),
         apiGet("/financial-periods", null),
         apiGet("/operational-expenses", null),
@@ -10116,6 +11140,10 @@ function SmetaOfficePrototype() {
         setSalesLeadsState(nextSalesLeads);
         writeStoredValue("smeta.salesLeads", nextSalesLeads);
       }
+      if (serverSalesControl?.ok) {
+        setSalesControl(serverSalesControl);
+        writeStoredValue("smeta.salesControl", serverSalesControl);
+      }
       if (Array.isArray(serverAvailableWork)) {
         setAvailableWorkItems(serverAvailableWork);
         writeStoredValue("smeta.availableWork", serverAvailableWork);
@@ -10138,6 +11166,31 @@ function SmetaOfficePrototype() {
       alive = false;
     };
   }, [session?.id]);
+
+  useEffect(() => {
+    if (activeSection !== "sales" || !readAuthToken()) return;
+    let alive = true;
+    async function refreshSalesLeads() {
+      const [serverSalesLeads, serverSalesControl] = await Promise.all([
+        apiGet("/sales-leads", null),
+        apiGet("/sales-control", null),
+      ]);
+      if (!alive) return;
+      if (Array.isArray(serverSalesLeads)) {
+        const nextSalesLeads = mergeSalesLeads(serverSalesLeads);
+        setSalesLeadsState(nextSalesLeads);
+        writeStoredValue("smeta.salesLeads", nextSalesLeads);
+      }
+      if (serverSalesControl?.ok) {
+        setSalesControl(serverSalesControl);
+        writeStoredValue("smeta.salesControl", serverSalesControl);
+      }
+    }
+    refreshSalesLeads();
+    return () => {
+      alive = false;
+    };
+  }, [activeSection, session?.id]);
 
   useEffect(() => {
     if (!session?.login) return;
@@ -10388,6 +11441,7 @@ function SmetaOfficePrototype() {
     const source = projectSourceLabel(projectForm.creationMode);
     const directorName = userNameById(users, projectForm.directorUserId, "Руководитель не назначен");
     const pmName = userNameById(users, projectForm.pmUserId, "РП не назначен");
+    const gipName = userNameById(users, projectForm.gipUserId, "");
     const projectManagerName = userNameById(users, projectForm.projectManagerId, "");
     const salesManagerName = userNameById(users, projectForm.salesManagerId, "");
     const registryPartner = partners.find((partner) => (partner.id || partner.name) === projectForm.partnerRegistryId);
@@ -10411,9 +11465,11 @@ function SmetaOfficePrototype() {
       manager: pmName,
       directorName,
       projectManager: projectManagerName,
+      gipName,
       salesManager: salesManagerName,
       directorUserId: projectForm.directorUserId,
       pmUserId: projectForm.pmUserId,
+      gipUserId: projectForm.gipUserId,
       projectManagerId: projectForm.projectManagerId,
       salesManagerId: projectForm.salesManagerId,
       partnerUserId: projectForm.partnerUserId,
@@ -10439,7 +11495,7 @@ function SmetaOfficePrototype() {
         source,
       },
       yandexFolder: projectForm.yandexFolder.trim() || "не привязан",
-      visibleFor: ["owner", "admin", "deputy", "director", "regional_manager", "pm", "project_manager", "finance", "accountant"],
+      visibleFor: ["owner", "admin", "deputy", "director", "regional_manager", "pm", "gip", "project_manager", "finance", "accountant"],
       clientStatus: status === "В работе" ? `Проект в работе. Текущий этап: ${projectForm.stage}.` : "Проект внесён в систему. Команда уточняет детали.",
       contractAmount,
       paidByClient,
@@ -10558,6 +11614,7 @@ function SmetaOfficePrototype() {
           budget: money(economy.contractAmount),
           margin: money(economy.contractProfit),
           manager: userNameById(users, next.pmUserId, next.manager || "РП не назначен"),
+          gipName: userNameById(users, next.gipUserId, next.gipName || ""),
           projectManager: userNameById(users, next.projectManagerId, next.projectManager || ""),
           salesManager: userNameById(users, next.salesManagerId, next.salesManager || ""),
           objectRegion: next.region,
@@ -11126,6 +12183,9 @@ function SmetaOfficePrototype() {
               users={users}
               role={role}
               session={effectiveAccessUser}
+              salesControl={salesControl}
+              setSalesControl={setSalesControl}
+              onGoSection={setActiveSection}
             />
           ) : null}
 

@@ -11,7 +11,8 @@ const dbPath = path.join(dataDir, "database.json");
 const distDir = path.join(__dirname, "dist");
 const port = Number(process.env.PORT || process.env.SMETA_API_PORT || 8787);
 const host = process.env.HOST || "0.0.0.0";
-const authMode = process.env.SMETA_AUTH_MODE || "demo";
+const defaultAuthMode = process.env.NODE_ENV === "production" || process.env.RENDER || process.env.RENDER_SERVICE_ID ? "server" : "demo";
+const authMode = process.env.SMETA_AUTH_MODE || defaultAuthMode;
 const sessionTtlMs = Number(process.env.SMETA_SESSION_TTL_HOURS || 24) * 60 * 60 * 1000;
 
 const defaultDb = {
@@ -20,6 +21,11 @@ const defaultDb = {
   users: [],
   partners: [],
   salesLeads: [],
+  salesDeals: [],
+  salesActivities: [],
+  salesEscalations: [],
+  projectHandoffs: [],
+  salesKpiSnapshots: [],
   financialPeriods: [],
   operationalExpenses: [],
   cashAccounts: [],
@@ -132,7 +138,7 @@ const ALL_REGIONS = "Все регионы";
 const ALL_DIRECTIONS = "Все направления";
 const fullUserAdminRoles = ["owner", "admin"];
 const scopedUserAdminRoles = ["regional_admin", "direction_admin"];
-const scopedAdminManageableRoleIds = ["director", "head_of_department", "regional_manager", "pm", "project_manager", "sales_manager", "head_of_sales", "executor", "partner"];
+const scopedAdminManageableRoleIds = ["director", "head_of_department", "regional_manager", "pm", "gip", "project_manager", "sales_manager", "senior_sales_manager", "head_of_sales", "ecp_manager", "executor", "partner"];
 
 function normalizeRegionName(region) {
   const value = String(region || "").trim();
@@ -302,6 +308,8 @@ function canAccessProject(user, project) {
     return [...(project.tasks || []), ...projectSections(project)].some((task) => taskAssignedToUser(user, task));
   }
 
+  if (user.role === "gip") return true;
+
   if (!canAccessRegion(user, project)) return false;
   if (user.role === "regional_admin" || user.role === "regional_manager") return true;
   if (user.role === "direction_admin") return user.direction === ALL_DIRECTIONS || normalizeDirectionName(project.direction) === normalizeDirectionName(user.direction);
@@ -442,15 +450,48 @@ function leadDirectionMatches(user, lead) {
   return leadDirection === userDirection || userDirection === "Единый центр продаж";
 }
 
+function userSalesIdentityIds(user = {}) {
+  return new Set([
+    user.id,
+    user.bitrixUserId ? `B24-${user.bitrixUserId}` : "",
+    user.bitrixId ? `B24-${user.bitrixId}` : "",
+    user.externalUserId || "",
+    user.crmUserId || "",
+  ].filter(Boolean).map(String));
+}
+
+function salesAssignedIds(item = {}) {
+  return [
+    item.salesManagerId,
+    item.hunterId,
+    item.farmerId,
+    item.seniorManagerId,
+    item.salesHeadId,
+    item.headOfSalesId,
+    item.ecpManagerId,
+    item.regionOwnerId,
+    item.partnerId,
+    item.projectManagerId,
+    item.productionOwnerId,
+  ].filter(Boolean).map(String);
+}
+
+function salesRecordAssignedTo(user, item = {}, fields = []) {
+  const identities = userSalesIdentityIds(user);
+  const assigned = fields.length ? fields.map((field) => item[field]).filter(Boolean).map(String) : salesAssignedIds(item);
+  return assigned.some((id) => identities.has(id));
+}
+
 function canAccessSalesLead(user, lead) {
   if (!user || !lead) return false;
   if (["owner", "admin", "deputy", "finance", "accountant"].includes(user.role)) return true;
   if (user.role === "regional_admin") return canAccessRegion(user, lead);
   if (user.role === "direction_admin") return canAccessRegion(user, lead) && leadDirectionMatches(user, lead);
-  if (user.role === "head_of_sales") return canAccessRegion(user, lead);
-  if (user.role === "sales_manager") return lead.hunterId === user.id || lead.farmerId === user.id;
-  if (user.role === "partner") return lead.partnerId === user.id || lead.farmerId === user.id;
-  if (user.role === "pm" || user.role === "project_manager") return lead.farmerId === user.id || Boolean(lead.projectId);
+  if (user.role === "head_of_sales" || user.role === "ecp_manager") return canAccessRegion(user, lead);
+  if (user.role === "senior_sales_manager") return canAccessRegion(user, lead) || salesRecordAssignedTo(user, lead, ["seniorManagerId", "salesHeadId", "headOfSalesId"]);
+  if (user.role === "sales_manager") return salesRecordAssignedTo(user, lead, ["salesManagerId", "hunterId", "farmerId"]);
+  if (user.role === "partner") return salesRecordAssignedTo(user, lead, ["partnerId", "farmerId"]);
+  if (user.role === "pm" || user.role === "project_manager") return salesRecordAssignedTo(user, lead, ["farmerId", "projectManagerId", "productionOwnerId"]) || Boolean(lead.projectId);
   if (user.role === "director") return canAccessRegion(user, lead) && leadDirectionMatches(user, lead);
   if (user.role === "regional_manager") return canAccessRegion(user, lead);
   return false;
@@ -493,6 +534,386 @@ function safeMoney(value) {
   const number = Number(value);
   if (!Number.isFinite(number)) return 0;
   return Math.max(-1_000_000_000_000, Math.min(Math.round(number), 1_000_000_000_000));
+}
+
+const salesClosedStages = new Set(["proposal_sent", "contract_and_advance", "contract_advance", "deposit", "project_handoff", "transferred_to_project", "won", "archive"]);
+const salesHandoffStages = new Set(["contract_and_advance", "contract_advance", "deposit", "project_handoff", "transferred_to_project"]);
+const handoffCheckLabels = {
+  client: "Клиент",
+  contact: "Контакт",
+  region: "Регион",
+  direction: "Направление",
+  object: "Объект / что продано",
+  sold_scope: "Состав услуги",
+  amount: "Сумма КП / договора",
+  advance: "Оплата / аванс",
+  sales_owner: "Ответственный продаж",
+  production_owner: "Ответственный производства",
+  files_or_comment: "Файлы / комментарий",
+  production_next_step: "Следующий шаг",
+};
+
+function isoOrNow(value) {
+  const date = value ? new Date(value) : new Date();
+  return Number.isFinite(date.getTime()) ? date.toISOString() : new Date().toISOString();
+}
+
+function salesStageFromLead(lead = {}) {
+  if (lead.salesStage) return safeText(lead.salesStage, 80);
+  if (lead.stage === "contract_advance") return "contract_and_advance";
+  if (lead.stage === "deposit") return "contract_and_advance";
+  if (lead.projectId) return "transferred_to_project";
+  return safeText(lead.stage, 80) || "qualified";
+}
+
+function salesSlaStatus(deal = {}, now = new Date()) {
+  if (deal.firstResponseAt || salesClosedStages.has(deal.salesStage || deal.stage) || deal.projectId) return "closed";
+  const createdAt = deal.createdAt || new Date().toISOString();
+  const deadline = deal.slaDeadlineAt || new Date(Date.parse(createdAt) + 5 * 60 * 1000).toISOString();
+  const diff = Date.parse(deadline) - now.getTime();
+  if (!Number.isFinite(diff)) return "unknown";
+  if (diff <= 0) return "breached";
+  if (diff <= 2 * 60 * 1000) return "warning";
+  return "ok";
+}
+
+function daysBetween(start, end = new Date()) {
+  const started = Date.parse(start || "");
+  if (!Number.isFinite(started)) return 0;
+  return Math.max(0, Math.floor((end.getTime() - started) / (24 * 60 * 60 * 1000)));
+}
+
+function salesDealRisk(deal = {}, now = new Date()) {
+  if (salesSlaStatus(deal, now) === "breached") return { riskLevel: "red", riskReason: "sla_breached" };
+  if (!deal.nextStep && !salesClosedStages.has(deal.salesStage)) return { riskLevel: "yellow", riskReason: "no_next_step" };
+  if (deal.nextStepDueAt && Date.parse(deal.nextStepDueAt) < now.getTime()) return { riskLevel: "red", riskReason: "next_step_overdue" };
+  if (daysBetween(deal.lastContactAt || deal.updatedAt || deal.createdAt, now) >= 3 && !salesClosedStages.has(deal.salesStage)) return { riskLevel: "yellow", riskReason: "no_movement_3_days" };
+  return { riskLevel: "green", riskReason: "" };
+}
+
+function salesDealFromLead(lead = {}) {
+  const createdAt = isoOrNow(lead.createdAt);
+  const salesStage = salesStageFromLead(lead);
+  const contractAmount = safeMoney(lead.contractAmount || lead.amount || lead.budget || 0);
+  const paidAmount = safeMoney(lead.paidAmount || lead.paid || 0);
+  const base = {
+    id: lead.salesDealId || lead.id || `SD-${Date.now()}`,
+    sourceSystem: lead.bitrixDealId ? "Bitrix24" : safeText(lead.sourceSystem || lead.source || "manual", 80),
+    sourceId: safeText(lead.bitrixDealId || lead.sourceId || lead.id, 120),
+    leadId: lead.id || "",
+    bitrixDealId: lead.bitrixDealId || "",
+    createdAt,
+    updatedAt: isoOrNow(lead.updatedAt || lead.lastBitrixSyncAt || lead.lastActivityAt || createdAt),
+    clientName: safeText(lead.clientName || lead.title || "Client", 200),
+    phone: safeText(lead.clientPhone || lead.phone, 80),
+    email: safeText(lead.clientEmail || lead.email, 140),
+    region: normalizeRegionName(lead.region || ALL_REGIONS),
+    direction: safeText(lead.direction || "design", 100),
+    objectName: safeText(lead.objectName || lead.objectType || lead.city, 200),
+    clientNeed: safeText(lead.clientNeed || lead.requestText || lead.comment, 1000),
+    source: safeText(lead.source || "Bitrix24", 120),
+    channel: safeText(lead.channel || "", 120),
+    bitrixStage: safeText(lead.rawStage || lead.bitrixStage || lead.stage, 120),
+    salesStage,
+    status: safeText(lead.status || "active", 80),
+    hunterId: safeText(lead.hunterId || lead.salesManagerId, 120),
+    farmerId: safeText(lead.farmerId || "", 120),
+    partnerId: safeText(lead.partnerId || "", 120),
+    salesManagerId: safeText(lead.salesManagerId || lead.hunterId || lead.farmerId, 120),
+    seniorManagerId: safeText(lead.seniorManagerId || "", 120),
+    salesHeadId: safeText(lead.salesHeadId || lead.headOfSalesId || "", 120),
+    ecpManagerId: safeText(lead.ecpManagerId || "", 120),
+    regionOwnerId: safeText(lead.regionOwnerId || "", 120),
+    productionOwnerId: safeText(lead.productionOwnerId || "", 120),
+    projectManagerId: safeText(lead.projectManagerId || "", 120),
+    amountPotential: safeMoney(lead.amountPotential || lead.amount || lead.budget || 0),
+    quoteAmount: safeMoney(lead.quoteAmount || 0),
+    contractAmount,
+    paidAmount,
+    expectedPayment: Math.max(0, contractAmount - paidAmount),
+    probability: Math.max(0, Math.min(Number(lead.probability || (contractAmount ? 80 : 50)), 100)),
+    firstResponseAt: lead.firstResponseAt || "",
+    lastContactAt: lead.lastContactAt || lead.lastActivityAt || lead.updatedAt || createdAt,
+    nextStep: safeText(lead.nextStep || "", 240),
+    nextStepDueAt: safeText(lead.nextStepDueAt || "", 40),
+    lostReason: safeText(lead.lostReason || lead.refusalReason || "", 300),
+    projectHandoffStatus: safeText(lead.projectHandoffStatus || (lead.projectId ? "transferred" : ""), 80),
+    projectId: safeText(lead.projectId || "", 120),
+    smetaOfficeProjectLink: safeText(lead.smetaOfficeProjectLink || "", 300),
+    yandexDiskUrl: safeText(lead.yandexDiskUrl || lead.diskUrl || "", 300),
+    objectAddress: safeText(lead.objectAddress || lead.address || "", 300),
+    comment: safeText(lead.comment || "", 1000),
+    rawLeadId: lead.id || "",
+  };
+  const risk = salesDealRisk(base);
+  return {
+    ...base,
+    weightedForecast: Math.round(base.amountPotential * (base.probability / 100)),
+    slaStatus: salesSlaStatus(base),
+    responseMinutes: base.firstResponseAt ? Math.max(0, Math.round((Date.parse(base.firstResponseAt) - Date.parse(base.createdAt)) / 60000)) : null,
+    daysWithoutMovement: daysBetween(base.lastContactAt || base.updatedAt || base.createdAt),
+    overdue: risk.riskLevel === "red",
+    riskLevel: risk.riskLevel,
+    riskReason: risk.riskReason,
+    crmQualityScore: salesCrmQuality(base),
+    missingFields: salesMissingFields(base),
+  };
+}
+
+function salesMissingFields(deal = {}) {
+  const required = [
+    ["clientName", deal.clientName],
+    ["region", deal.region],
+    ["direction", deal.direction],
+    ["objectName", deal.objectName],
+    ["contractAmount", deal.contractAmount || deal.quoteAmount || deal.amountPotential],
+    ["paidAmount", deal.paidAmount],
+    ["salesManagerId", deal.salesManagerId],
+    ["nextStep", deal.nextStep],
+  ];
+  return required.filter(([, value]) => value === undefined || value === null || String(value).trim() === "").map(([field]) => field);
+}
+
+function salesCrmQuality(deal = {}) {
+  const total = 8;
+  const missing = salesMissingFields(deal).length;
+  return Math.max(0, Math.round(((total - missing) / total) * 100));
+}
+
+function normalizeSalesDeal(item = {}) {
+  const normalized = salesDealFromLead({
+    ...item,
+    id: item.id || `SD-${Date.now()}`,
+    stage: item.salesStage || item.stage,
+    amount: item.amountPotential,
+    budget: item.amountPotential,
+    hunterId: item.hunterId || item.salesManagerId,
+    headOfSalesId: item.salesHeadId,
+  });
+  return {
+    ...normalized,
+    sourceSystem: safeText(item.sourceSystem || normalized.sourceSystem, 80),
+    sourceId: safeText(item.sourceId || normalized.sourceId, 120),
+    salesStage: salesStageFromLead(item),
+    escalationLevel: safeText(item.escalationLevel || "", 80),
+    escalationTargetUserId: safeText(item.escalationTargetUserId || "", 120),
+    escalationNote: safeText(item.escalationNote || "", 700),
+  };
+}
+
+function allSalesDeals(db = {}) {
+  const explicit = (db.salesDeals || []).map(normalizeSalesDeal);
+  const fromLeads = (db.salesLeads || []).map(salesDealFromLead);
+  const map = new Map();
+  [...fromLeads, ...explicit].forEach((deal) => {
+    const key = deal.sourceSystem && deal.sourceId ? `${deal.sourceSystem}:${deal.sourceId}` : deal.id;
+    map.set(key, { ...(map.get(key) || {}), ...deal });
+  });
+  return Array.from(map.values()).map(normalizeSalesDeal);
+}
+
+function canAccessSalesDeal(user, deal) {
+  if (!user || !deal) return false;
+  if (["owner", "admin", "deputy", "finance", "accountant"].includes(user.role)) return true;
+  if (["regional_admin", "regional_manager"].includes(user.role)) return canAccessRegion(user, deal);
+  if (["direction_admin", "director", "head_of_department"].includes(user.role)) return canAccessRegion(user, deal) && leadDirectionMatches(user, deal);
+  if (user.role === "head_of_sales" || user.role === "ecp_manager") return canAccessRegion(user, deal);
+  if (user.role === "senior_sales_manager") return canAccessRegion(user, deal) || salesRecordAssignedTo(user, deal, ["seniorManagerId", "salesHeadId", "headOfSalesId"]);
+  if (user.role === "sales_manager") return salesRecordAssignedTo(user, deal, ["salesManagerId", "hunterId", "farmerId"]);
+  if (["pm", "project_manager", "gip"].includes(user.role)) return Boolean(deal.projectId || deal.projectHandoffStatus);
+  if (user.role === "partner") return salesRecordAssignedTo(user, deal, ["partnerId", "farmerId"]);
+  return false;
+}
+
+function visibleSalesDealsFor(user, db = {}) {
+  return allSalesDeals(db).filter((deal) => canAccessSalesDeal(user, deal));
+}
+
+function canAccessSalesKpiSnapshot(user, item = {}) {
+  if (!user || !item) return false;
+  if (["owner", "admin", "deputy", "finance", "accountant"].includes(user.role)) return true;
+  if (["regional_admin", "regional_manager", "head_of_sales", "ecp_manager"].includes(user.role)) return canAccessRegion(user, item);
+  if (["direction_admin", "director", "head_of_department"].includes(user.role)) return canAccessRegion(user, item) && leadDirectionMatches(user, item);
+  if (user.role === "senior_sales_manager") return canAccessRegion(user, item) || salesRecordAssignedTo(user, item, ["seniorManagerId", "salesHeadId", "headOfSalesId", "managerId", "userId"]);
+  if (user.role === "sales_manager") return salesRecordAssignedTo(user, item, ["salesManagerId", "hunterId", "farmerId", "managerId", "userId"]);
+  return false;
+}
+
+function visibleSalesKpiSnapshotsFor(user, items = []) {
+  return items.filter((item) => canAccessSalesKpiSnapshot(user, item));
+}
+
+function canAccessSalesChild(user, item = {}, db = {}) {
+  const dealId = item.dealId || item.salesDealId || item.sourceId || item.leadId;
+  const deal = allSalesDeals(db).find((entry) => entry.id === dealId || entry.sourceId === dealId || entry.leadId === dealId);
+  return deal ? canAccessSalesDeal(user, deal) : ["owner", "admin", "deputy"].includes(user?.role);
+}
+
+function visibleSalesChildrenFor(user, items = [], db = {}) {
+  return items.filter((item) => canAccessSalesChild(user, item, db));
+}
+
+function handoffChecklist(deal = {}) {
+  const checks = [
+    ["client", Boolean(deal.clientName)],
+    ["contact", Boolean(deal.phone || deal.email)],
+    ["region", Boolean(deal.region)],
+    ["direction", Boolean(deal.direction)],
+    ["object", Boolean(deal.objectName)],
+    ["sold_scope", Boolean(deal.clientNeed || deal.objectName)],
+    ["amount", Boolean(deal.contractAmount || deal.quoteAmount)],
+    ["advance", Number(deal.paidAmount) > 0],
+    ["sales_owner", Boolean(deal.salesManagerId)],
+    ["production_owner", Boolean(deal.productionOwnerId || deal.projectManagerId)],
+    ["files_or_comment", Boolean(deal.smetaOfficeProjectLink || deal.comment || deal.clientNeed)],
+    ["production_next_step", Boolean(deal.nextStep)],
+  ];
+  return checks.map(([id, ok]) => ({ id, label: handoffCheckLabels[id] || id, ok }));
+}
+
+function isProjectHandoffEligibleDeal(deal = {}) {
+  return Boolean(
+    deal.projectId ||
+    salesHandoffStages.has(deal.salesStage) ||
+    ["draft", "ready", "accepted", "transferred"].includes(deal.projectHandoffStatus)
+  );
+}
+
+function normalizeProjectHandoff(item = {}, db = {}) {
+  const deal = allSalesDeals(db).find((entry) => entry.id === item.salesDealId || entry.sourceId === item.salesDealId || entry.leadId === item.salesDealId) || {};
+  const checklist = Array.isArray(item.checklist) ? item.checklist : handoffChecklist(deal);
+  const status = item.status || (item.projectId || deal.projectId ? "transferred" : checklist.every((row) => row.ok) ? "ready" : "draft");
+  return {
+    id: safeText(item.id, 100) || `PH-${Date.now()}`,
+    salesDealId: safeText(item.salesDealId || deal.id || "", 120),
+    projectId: safeText(item.projectId || deal.projectId || "", 120),
+    status: safeText(status, 80),
+    checklist,
+    missingData: checklist.filter((row) => !row.ok).map((row) => row.id),
+    createdBy: safeText(item.createdBy || "", 120),
+    acceptedBy: safeText(item.acceptedBy || "", 120),
+    createdAt: isoOrNow(item.createdAt),
+    acceptedAt: item.acceptedAt || "",
+    transferredAt: item.transferredAt || "",
+    comment: safeText(item.comment || "", 700),
+  };
+}
+
+function allProjectHandoffs(db = {}, deals = allSalesDeals(db)) {
+  const explicit = (db.projectHandoffs || []).map((item) => normalizeProjectHandoff(item, db));
+  const map = new Map();
+  explicit.forEach((handoff) => {
+    const key = handoff.salesDealId || handoff.projectId || handoff.id;
+    map.set(key, handoff);
+  });
+
+  const dbWithDeals = { ...db, salesDeals: deals };
+  deals.filter(isProjectHandoffEligibleDeal).forEach((deal) => {
+    const key = deal.id;
+    if (map.has(key)) return;
+    map.set(key, normalizeProjectHandoff({
+      id: `PH-AUTO-${deal.id}`,
+      salesDealId: deal.id,
+      projectId: deal.projectId || "",
+      status: deal.projectId || deal.projectHandoffStatus === "transferred" ? "transferred" : deal.projectHandoffStatus === "accepted" ? "accepted" : "",
+      createdAt: deal.updatedAt || deal.createdAt,
+      comment: "Системный чек-лист передачи из продаж в проект",
+    }, dbWithDeals));
+  });
+
+  return Array.from(map.values()).map((item) => normalizeProjectHandoff(item, dbWithDeals));
+}
+
+function normalizeSalesActivity(item = {}) {
+  return {
+    id: safeText(item.id, 100) || `SA-${Date.now()}`,
+    dealId: safeText(item.dealId || item.salesDealId || "", 120),
+    type: safeText(item.type || "note", 80),
+    createdAt: isoOrNow(item.createdAt),
+    createdBy: safeText(item.createdBy || "", 120),
+    result: safeText(item.result || "", 700),
+    nextStep: safeText(item.nextStep || "", 240),
+    nextStepDueAt: safeText(item.nextStepDueAt || item.nextStepDue || "", 40),
+    sourceSystem: safeText(item.sourceSystem || "SmetaOffice", 80),
+    sourceId: safeText(item.sourceId || "", 120),
+  };
+}
+
+function normalizeSalesEscalation(item = {}) {
+  return {
+    id: safeText(item.id, 100) || `SE-${Date.now()}`,
+    dealId: safeText(item.dealId || item.salesDealId || "", 120),
+    fromUserId: safeText(item.fromUserId || "", 120),
+    toUserId: safeText(item.toUserId || "", 120),
+    level: safeText(item.level || "manager", 80),
+    reason: safeText(item.reason || "", 300),
+    status: safeText(item.status || "open", 80),
+    createdAt: isoOrNow(item.createdAt),
+    resolvedAt: item.resolvedAt || "",
+    comment: safeText(item.comment || "", 700),
+  };
+}
+
+function salesEscalationLevel(deal = {}) {
+  if (deal.riskLevel === "red") return "head_of_sales";
+  if (deal.riskLevel === "yellow") return "senior_sales_manager";
+  return "manager";
+}
+
+function allSalesEscalations(db = {}, deals = allSalesDeals(db)) {
+  const explicit = (db.salesEscalations || []).map(normalizeSalesEscalation);
+  const map = new Map();
+  explicit.forEach((item) => {
+    const key = `${item.dealId || item.salesDealId}:${item.reason}:${item.status}`;
+    map.set(key, item);
+  });
+
+  deals
+    .filter((deal) => deal.riskLevel && deal.riskLevel !== "green" && !["archive", "won"].includes(deal.salesStage))
+    .forEach((deal) => {
+      const reason = safeText(deal.riskReason || deal.riskLevel, 300);
+      const key = `${deal.id}:${reason}:open`;
+      if (map.has(key)) return;
+      map.set(key, normalizeSalesEscalation({
+        id: `SE-AUTO-${deal.id}-${reason}`,
+        dealId: deal.id,
+        fromUserId: deal.salesManagerId || "",
+        toUserId: deal.salesHeadId || deal.seniorManagerId || deal.ecpManagerId || deal.regionOwnerId || "",
+        level: salesEscalationLevel(deal),
+        reason,
+        status: "open",
+        createdAt: deal.nextStepDueAt || deal.updatedAt || deal.createdAt,
+        comment: "Системная эскалация по риску сделки",
+      }));
+    });
+
+  return Array.from(map.values()).map(normalizeSalesEscalation);
+}
+
+function salesControlReport(deals = [], activities = [], escalations = [], handoffs = []) {
+  const activeDeals = deals.filter((deal) => !["archive", "won"].includes(deal.salesStage));
+  const contractDeals = deals.filter((deal) => ["contract_and_advance", "contract_advance", "deposit"].includes(deal.salesStage));
+  const quoteDeals = deals.filter((deal) => deal.salesStage === "proposal_sent");
+  const transferredDealIds = new Set(handoffs.filter((item) => item.projectId || item.status === "transferred").map((item) => item.salesDealId));
+  const transferredDeals = deals.filter((deal) => deal.projectId || deal.projectHandoffStatus === "transferred" || transferredDealIds.has(deal.id));
+  const contractAmount = deals.reduce((sum, deal) => sum + (Number(deal.contractAmount) || 0), 0);
+  const paidAmount = deals.reduce((sum, deal) => sum + (Number(deal.paidAmount) || 0), 0);
+  return {
+    dealsCount: deals.length,
+    activeDealsCount: activeDeals.length,
+    quoteCount: quoteDeals.length,
+    contractCount: contractDeals.length,
+    transferredCount: transferredDeals.length,
+    contractAmount,
+    paidAmount,
+    expectedPayment: Math.max(0, contractAmount - paidAmount),
+    slaViolations: deals.filter((deal) => deal.slaStatus === "breached").length,
+    overdueCount: deals.filter((deal) => deal.overdue).length,
+    openEscalations: escalations.filter((item) => item.status !== "closed").length,
+    readyHandoffs: handoffs.filter((item) => item.status === "ready").length,
+    acceptedHandoffs: handoffs.filter((item) => item.status === "accepted").length,
+    crmQualityAverage: deals.length ? Math.round(deals.reduce((sum, deal) => sum + (Number(deal.crmQualityScore) || 0), 0) / deals.length) : 0,
+  };
 }
 
 function normalizeFinancialPeriod(item = {}) {
@@ -627,7 +1048,24 @@ function bitrixValue(deal = {}, ...keys) {
 }
 
 function mapBitrixDealStage(stageId = "") {
-  const value = String(stageId || "").toLowerCase();
+  const normalized = String(stageId || "").trim().toUpperCase();
+  const knownWarmStages = {
+    UC_EZ8IDH: "contract_and_advance",
+    UC_J653IR: "contract_and_advance",
+    FINAL_INVOICE: "proposal_sent",
+    "C13:PREPAYMENT_INVOIC": "contract_and_advance",
+    "C13:UC_TCR24Q": "contract_and_advance",
+    "C18:PREPAYMENT_INVOICE": "proposal_sent",
+    "C18:FINAL_INVOICE": "contract_and_advance",
+    "C21:FINAL_INVOICE": "contract_and_advance",
+    "C22:FINAL_INVOICE": "contract_and_advance",
+    "C22:UC_I52BY0": "contract_and_advance",
+    "C24:FINAL_INVOICE": "proposal_sent",
+    "C24:UC_9SQU4E": "contract_and_advance",
+    "C24:UC_KMQIW1": "contract_and_advance",
+  };
+  if (knownWarmStages[normalized]) return knownWarmStages[normalized];
+  const value = normalized.toLowerCase();
   if (value.includes("won") || value.includes("advance") || value.includes("аванс") || value.includes("contract")) return "contract_and_advance";
   if (value.includes("proposal") || value.includes("quote") || value.includes("кп")) return "proposal_sent";
   if (value.includes("measure") || value.includes("замер")) return "site_visit";
@@ -882,7 +1320,7 @@ function canAccessExecutor(user, executor) {
   if (user.role === "executor" || user.role === "partner") return executor.id === user.executorId || executor.userId === user.id || executor.name === user.name;
   const hasRegion = !executor.region && !executor.city ? true : canAccessRegion(user, executor);
   if (!hasRegion) return false;
-  if (user.role === "regional_admin" || user.role === "regional_manager" || user.role === "pm" || user.role === "project_manager") return true;
+  if (user.role === "regional_admin" || user.role === "regional_manager" || user.role === "pm" || user.role === "gip" || user.role === "project_manager") return true;
   if (user.role === "direction_admin" || user.role === "director" || user.role === "head_of_department") {
     const direction = normalizeDirectionName(executor.direction || ALL_DIRECTIONS);
     return direction === ALL_DIRECTIONS || user.direction === ALL_DIRECTIONS || direction === normalizeDirectionName(user.direction);
@@ -906,6 +1344,38 @@ function mergeManagedCollection(existingItems = [], incomingItems = [], manager,
     if (!canAccessItem(manager, incomingItem)) return;
     const key = itemKey(incomingItem);
     const existingIndex = merged.findIndex((item) => itemKey(item) === key);
+    if (existingIndex >= 0) merged[existingIndex] = { ...merged[existingIndex], ...incomingItem };
+    else merged.unshift(incomingItem);
+  });
+
+  return merged;
+}
+
+function salesRecordKey(item = {}) {
+  return item.sourceSystem && item.sourceId ? `${item.sourceSystem}:${item.sourceId}` : item.id || item.leadId || item.sourceId || itemKey(item);
+}
+
+function salesRecordMatches(a = {}, b = {}) {
+  const aKey = salesRecordKey(a);
+  const bKey = salesRecordKey(b);
+  return Boolean(
+    aKey && bKey && aKey === bKey ||
+    a.id && b.id && a.id === b.id ||
+    a.sourceId && b.sourceId && a.sourceId === b.sourceId ||
+    a.leadId && b.leadId && a.leadId === b.leadId
+  );
+}
+
+function mergeManagedSalesRecords(existingItems = [], incomingItems = [], manager, canAccessItem, allExistingItems = existingItems) {
+  if (["owner", "admin", "deputy"].includes(manager?.role)) return incomingItems;
+  const merged = [...existingItems];
+
+  incomingItems.forEach((incomingItem) => {
+    const existingRecord = allExistingItems.find((item) => salesRecordMatches(item, incomingItem));
+    if (existingRecord && !canAccessItem(manager, existingRecord)) return;
+    if (!canAccessItem(manager, incomingItem)) return;
+
+    const existingIndex = merged.findIndex((item) => salesRecordMatches(item, incomingItem));
     if (existingIndex >= 0) merged[existingIndex] = { ...merged[existingIndex], ...incomingItem };
     else merged.unshift(incomingItem);
   });
@@ -981,7 +1451,9 @@ function canWriteCollection(user, route) {
   if (route === "/api/projects") return ["regional_admin", "direction_admin", "director", "head_of_department", "regional_manager", "pm", "project_manager"].includes(user.role);
   if (route === "/api/executors") return ["regional_admin", "direction_admin", "director", "head_of_department", "regional_manager", "pm"].includes(user.role);
   if (route === "/api/partners") return ["regional_admin", "direction_admin", "director", "head_of_department", "regional_manager"].includes(user.role);
-  if (route === "/api/sales-leads") return ["head_of_sales", "sales_manager"].includes(user.role);
+  if (["/api/sales-leads", "/api/sales-deals", "/api/sales-activities", "/api/sales-escalations", "/api/project-handoffs"].includes(route)) {
+    return ["owner", "admin", "deputy", "regional_admin", "direction_admin", "head_of_sales", "senior_sales_manager", "ecp_manager", "sales_manager"].includes(user.role);
+  }
   if (route === "/api/integration-settings") return ["owner", "admin", "deputy"].includes(user.role);
   if (route === "/api/users") return [...fullUserAdminRoles, ...scopedUserAdminRoles].includes(user.role);
   if (route === "/api/directories") return ["owner", "admin"].includes(user.role);
@@ -1092,6 +1564,10 @@ const server = http.createServer(async (req, res) => {
           users: (db.users || []).length,
           partners: (db.partners || []).length,
           salesLeads: (db.salesLeads || []).length,
+          salesDeals: allSalesDeals(db).length,
+          salesActivities: (db.salesActivities || []).length,
+          salesEscalations: allSalesEscalations(db).length,
+          projectHandoffs: allProjectHandoffs(db).length,
           financialPeriods: (db.financialPeriods || []).length,
           operationalExpenses: (db.operationalExpenses || []).length,
           cashAccounts: (db.cashAccounts || []).length,
@@ -1216,6 +1692,11 @@ const server = http.createServer(async (req, res) => {
             users: publicUsers(visibleUsers),
             partners: visiblePartnersFor(auth.user, db.partners || []),
             salesLeads: visibleSalesLeadsFor(auth.user, db.salesLeads || []),
+            salesDeals: visibleSalesDealsFor(auth.user, db),
+            salesActivities: visibleSalesChildrenFor(auth.user, db.salesActivities || [], db),
+            salesEscalations: visibleSalesChildrenFor(auth.user, allSalesEscalations(db), db),
+            projectHandoffs: visibleSalesChildrenFor(auth.user, allProjectHandoffs(db), db),
+            salesKpiSnapshots: visibleSalesKpiSnapshotsFor(auth.user, db.salesKpiSnapshots || []),
             integrationSettings: visibleIntegrationSettingsFor(auth.user, db.integrationSettings),
             authSessions: {},
             accessRequests: publicUsers(visibleUsersFor(auth.user, db.accessRequests || [])),
@@ -1434,10 +1915,109 @@ const server = http.createServer(async (req, res) => {
       const auth = requireWriteAccess(req, res, db, route);
       if (!auth) return;
       const salesLeads = await readJsonBody(req);
-      const nextSalesLeads = authMode === "server" ? mergeManagedCollection(db.salesLeads || [], salesLeads, auth.user, canAccessSalesLead) : salesLeads;
+      const nextSalesLeads = authMode === "server" ? mergeManagedSalesRecords(db.salesLeads || [], salesLeads, auth.user, canAccessSalesLead, db.salesLeads || []) : salesLeads;
       const nextDb = { ...db, salesLeads: nextSalesLeads };
       await writeDb(nextDb);
       sendJson(res, 200, authMode === "server" ? visibleSalesLeadsFor(auth.user, nextDb.salesLeads) : nextDb.salesLeads);
+      return;
+    }
+
+    if (req.method === "GET" && route === "/api/sales-control") {
+      const auth = requireAuth(req, res, db);
+      if (!auth) return;
+      const deals = authMode === "server" ? visibleSalesDealsFor(auth.user, db) : allSalesDeals(db);
+      const activities = authMode === "server" ? visibleSalesChildrenFor(auth.user, (db.salesActivities || []).map(normalizeSalesActivity), db) : (db.salesActivities || []).map(normalizeSalesActivity);
+      const allEscalations = allSalesEscalations(db, deals);
+      const escalations = authMode === "server" ? visibleSalesChildrenFor(auth.user, allEscalations, db) : allEscalations;
+      const handoffs = allProjectHandoffs(db, deals);
+      const visibleHandoffs = authMode === "server" ? visibleSalesChildrenFor(auth.user, handoffs, db) : handoffs;
+      sendJson(res, 200, {
+        ok: true,
+        deals,
+        activities,
+        escalations,
+        projectHandoffs: visibleHandoffs,
+        report: salesControlReport(deals, activities, escalations, visibleHandoffs),
+      });
+      return;
+    }
+
+    if (req.method === "GET" && route === "/api/sales-deals") {
+      const auth = requireAuth(req, res, db);
+      if (!auth) return;
+      sendJson(res, 200, authMode === "server" ? visibleSalesDealsFor(auth.user, db) : allSalesDeals(db));
+      return;
+    }
+
+    if (req.method === "PUT" && route === "/api/sales-deals") {
+      const auth = requireWriteAccess(req, res, db, route);
+      if (!auth) return;
+      const body = await readJsonBody(req);
+      const incoming = Array.isArray(body) ? body.map(normalizeSalesDeal) : [];
+      const nextSalesDeals = authMode === "server" ? mergeManagedSalesRecords(db.salesDeals || [], incoming, auth.user, canAccessSalesDeal, allSalesDeals(db)) : incoming;
+      const nextDb = { ...db, salesDeals: nextSalesDeals };
+      await writeDb(nextDb);
+      sendJson(res, 200, authMode === "server" ? visibleSalesDealsFor(auth.user, nextDb) : allSalesDeals(nextDb));
+      return;
+    }
+
+    if (req.method === "GET" && route === "/api/sales-activities") {
+      const auth = requireAuth(req, res, db);
+      if (!auth) return;
+      const activities = (db.salesActivities || []).map(normalizeSalesActivity);
+      sendJson(res, 200, authMode === "server" ? visibleSalesChildrenFor(auth.user, activities, db) : activities);
+      return;
+    }
+
+    if (req.method === "PUT" && route === "/api/sales-activities") {
+      const auth = requireWriteAccess(req, res, db, route);
+      if (!auth) return;
+      const body = await readJsonBody(req);
+      const incoming = Array.isArray(body) ? body.map(normalizeSalesActivity) : [];
+      const nextItems = authMode === "server" ? mergeManagedCollection(db.salesActivities || [], incoming, auth.user, (user, item) => canAccessSalesChild(user, item, db)) : incoming;
+      const nextDb = { ...db, salesActivities: nextItems };
+      await writeDb(nextDb);
+      sendJson(res, 200, authMode === "server" ? visibleSalesChildrenFor(auth.user, nextDb.salesActivities, nextDb) : nextDb.salesActivities);
+      return;
+    }
+
+    if (req.method === "GET" && route === "/api/sales-escalations") {
+      const auth = requireAuth(req, res, db);
+      if (!auth) return;
+      const escalations = allSalesEscalations(db);
+      sendJson(res, 200, authMode === "server" ? visibleSalesChildrenFor(auth.user, escalations, db) : escalations);
+      return;
+    }
+
+    if (req.method === "PUT" && route === "/api/sales-escalations") {
+      const auth = requireWriteAccess(req, res, db, route);
+      if (!auth) return;
+      const body = await readJsonBody(req);
+      const incoming = Array.isArray(body) ? body.map(normalizeSalesEscalation) : [];
+      const nextItems = authMode === "server" ? mergeManagedCollection(db.salesEscalations || [], incoming, auth.user, (user, item) => canAccessSalesChild(user, item, db)) : incoming;
+      const nextDb = { ...db, salesEscalations: nextItems };
+      await writeDb(nextDb);
+      sendJson(res, 200, authMode === "server" ? visibleSalesChildrenFor(auth.user, nextDb.salesEscalations, nextDb) : nextDb.salesEscalations);
+      return;
+    }
+
+    if (req.method === "GET" && route === "/api/project-handoffs") {
+      const auth = requireAuth(req, res, db);
+      if (!auth) return;
+      const handoffs = allProjectHandoffs(db);
+      sendJson(res, 200, authMode === "server" ? visibleSalesChildrenFor(auth.user, handoffs, db) : handoffs);
+      return;
+    }
+
+    if (req.method === "PUT" && route === "/api/project-handoffs") {
+      const auth = requireWriteAccess(req, res, db, route);
+      if (!auth) return;
+      const body = await readJsonBody(req);
+      const incoming = Array.isArray(body) ? body.map((item) => normalizeProjectHandoff(item, db)) : [];
+      const nextItems = authMode === "server" ? mergeManagedCollection(db.projectHandoffs || [], incoming, auth.user, (user, item) => canAccessSalesChild(user, item, db)) : incoming;
+      const nextDb = { ...db, projectHandoffs: nextItems };
+      await writeDb(nextDb);
+      sendJson(res, 200, authMode === "server" ? visibleSalesChildrenFor(auth.user, nextDb.projectHandoffs.map((item) => normalizeProjectHandoff(item, nextDb)), nextDb) : nextDb.projectHandoffs);
       return;
     }
 

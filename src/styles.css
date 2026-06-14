@@ -171,7 +171,13 @@ input.invalid, select.invalid {
   color: #dbeafe;
 }
 
-.office-main { padding-left: 288px; }
+.office-main {
+  width: calc(100% - 288px);
+  margin-left: 288px;
+}
+.office-content > * {
+  min-width: 0;
+}
 .office-header {
   position: sticky;
   top: 0;
@@ -315,11 +321,15 @@ input.invalid, select.invalid {
 }
 .workspace-head h2 { margin: 0; font-size: 24px; letter-spacing: -.03em; }
 .workspace-head p { margin: 6px 0 0; color: #64748b; }
-.filters { display: flex; gap: 10px; }
+.filters { display: flex; flex-wrap: wrap; gap: 10px; }
 .filters input { width: 230px; }
 .filters select { width: 170px; }
 .filters .primary { white-space: nowrap; }
-.sales-filters select { min-width: 210px; width: auto; }
+.sales-filters select {
+  flex: 1 1 180px;
+  min-width: 0;
+  width: auto;
+}
 .client-filter-strip,
 .client-project-summary {
   display: grid;
@@ -1561,6 +1571,377 @@ h3 { margin: 0; }
   grid-template-columns: minmax(0, 1.4fr) minmax(360px, .6fr);
   gap: 18px;
 }
+.sales-control-tabs {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin: 14px 0 18px;
+}
+.sales-control-tabs button {
+  border: 1px solid #dbe5ef;
+  border-radius: 12px;
+  background: #fff;
+  color: #0f172a;
+  padding: 10px 14px;
+  font-weight: 800;
+  cursor: pointer;
+}
+.sales-control-tabs button.active {
+  border-color: #2563eb;
+  background: #eaf1ff;
+  color: #1d4ed8;
+}
+.sales-control-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(360px, .8fr);
+  gap: 18px;
+  margin-bottom: 18px;
+}
+.sales-report-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 14px;
+}
+.sales-issue-list,
+.sales-escalation-grid,
+.handoff-list {
+  display: grid;
+  gap: 10px;
+  margin-top: 12px;
+}
+.sales-issue-list button,
+.sales-escalation-card,
+.handoff-card {
+  border: 1px solid #dbe5ef;
+  border-radius: 14px;
+  background: #f8fafc;
+  padding: 12px;
+}
+.sales-issue-list button {
+  display: grid;
+  gap: 6px;
+  text-align: left;
+  cursor: pointer;
+}
+.sales-escalation-card {
+  display: grid;
+  gap: 8px;
+}
+.sales-escalation-card p {
+  margin: 0;
+  color: #475569;
+}
+.sales-report-table {
+  display: grid;
+  gap: 8px;
+  margin-top: 14px;
+}
+.sales-report-table > div {
+  display: grid;
+  grid-template-columns: minmax(180px, 1.4fr) repeat(5, minmax(90px, .7fr));
+  gap: 10px;
+  align-items: center;
+  border: 1px solid #dbe5ef;
+  border-radius: 12px;
+  background: #f8fafc;
+  padding: 10px 12px;
+}
+.sales-report-table .sales-report-head {
+  background: #eef6ff;
+  color: #37516d;
+  font-size: 12px;
+  font-weight: 800;
+}
+.gamification-focus-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 14px;
+}
+.gamification-money-card {
+  display: grid;
+  gap: 9px;
+  min-width: 0;
+  border: 1px solid #dbe5ef;
+  border-radius: 16px;
+  background: #f8fafc;
+  padding: 14px;
+}
+.gamification-money-card span,
+.gamification-money-card small {
+  color: #64748b;
+  line-height: 1.35;
+}
+.gamification-money-card b {
+  color: #020617;
+  font-size: 24px;
+  line-height: 1.15;
+}
+.gamification-money-card p {
+  margin: 0;
+  color: #334155;
+  line-height: 1.45;
+}
+.gamification-rule-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 14px;
+}
+.gamification-rule-grid > div {
+  display: grid;
+  gap: 8px;
+  border: 1px solid #dbe5ef;
+  border-radius: 14px;
+  background: #f8fafc;
+  padding: 14px;
+}
+.gamification-rule-grid span {
+  width: 28px;
+  height: 28px;
+  display: inline-grid;
+  place-items: center;
+  border-radius: 999px;
+  background: #eaf1ff;
+  color: #1d4ed8;
+  font-weight: 900;
+}
+.gamification-rule-grid b {
+  color: #020617;
+}
+.gamification-rule-grid p {
+  margin: 0;
+  color: #475569;
+  line-height: 1.45;
+}
+.gamification-rule-grid em {
+  color: #64748b;
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 800;
+}
+.gamification-table {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: auto;
+  margin-top: 16px;
+}
+.gamification-table > div {
+  display: grid;
+  grid-template-columns: 170px 118px 144px 155px 106px 140px 155px;
+  min-width: 1040px;
+  gap: 10px;
+  align-items: center;
+  border: 1px solid #dbe5ef;
+  border-radius: 14px;
+  background: #fff;
+  padding: 12px;
+}
+.gamification-head {
+  background: #eef6ff !important;
+  color: #37516d;
+  font-size: 12px;
+  font-weight: 900;
+}
+.gamification-row.locked {
+  border-color: #fecaca;
+  background: #fff7f7;
+}
+.gamification-row span {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+.gamification-row small {
+  color: #64748b;
+  font-size: 12px;
+  line-height: 1.3;
+}
+.gamification-row strong {
+  font-size: 16px;
+}
+.gamification-row i {
+  display: block;
+  max-width: 100%;
+  height: 6px;
+  border-radius: 999px;
+  background: #2563eb;
+}
+.gamification-row.locked i {
+  background: #ef4444;
+}
+.gamification-card-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 16px;
+}
+.gamification-profile-card {
+  display: grid;
+  gap: 10px;
+  border: 1px solid #dbe5ef;
+  border-radius: 16px;
+  background: #f8fafc;
+  padding: 14px;
+}
+.gamification-profile-card > div {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  justify-content: space-between;
+}
+.gamification-profile-card p {
+  margin: 0;
+  color: #475569;
+  line-height: 1.45;
+}
+.gamification-profile-card small {
+  color: #64748b;
+}
+.gamification-profile-card.locked {
+  border-color: #fecaca;
+  background: #fff7f7;
+}
+.gamification-profile-card.ready {
+  border-color: #bbf7d0;
+  background: #f7fffb;
+}
+.sales-level-roadmap {
+  display: grid;
+  gap: 12px;
+  margin-top: 18px;
+  border: 1px solid #dbe5ef;
+  border-radius: 16px;
+  background: #f8fafc;
+  padding: 16px;
+}
+.sales-level-roadmap h4 {
+  margin: 0 0 4px;
+  color: #020617;
+}
+.sales-level-roadmap p {
+  margin: 0;
+  color: #475569;
+  line-height: 1.45;
+}
+.sales-level-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+.sales-level-card {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  border: 1px solid #dbe5ef;
+  border-radius: 14px;
+  background: #fff;
+  padding: 12px;
+}
+.sales-level-card b {
+  color: #020617;
+}
+.sales-level-card small {
+  color: #64748b;
+}
+.sales-level-card p {
+  font-size: 13px;
+}
+.handoff-flow,
+.handoff-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 14px;
+}
+.handoff-flow {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+.handoff-flow > div {
+  display: grid;
+  gap: 7px;
+  border: 1px solid #dbe5ef;
+  border-radius: 14px;
+  background: #f8fafc;
+  padding: 12px;
+}
+.handoff-flow span {
+  display: inline-grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  background: #eaf1ff;
+  color: #1d4ed8;
+  font-weight: 900;
+}
+.handoff-flow b {
+  color: #020617;
+}
+.handoff-flow small {
+  color: #64748b;
+  line-height: 1.35;
+}
+.handoff-card {
+  display: grid;
+  gap: 10px;
+}
+.handoff-card > div:first-child {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+}
+.handoff-checks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.handoff-checks span {
+  border-radius: 999px;
+  padding: 5px 8px;
+  font-size: 12px;
+  font-weight: 800;
+}
+.handoff-checks .ok {
+  background: #dcfce7;
+  color: #047857;
+}
+.handoff-checks .fail {
+  background: #fff7ed;
+  color: #b45309;
+}
+.handoff-gate-meta,
+.handoff-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.handoff-gate-meta span {
+  border-radius: 10px;
+  background: #fff;
+  color: #475569;
+  padding: 7px 10px;
+  font-size: 12px;
+  font-weight: 800;
+}
+.handoff-actions {
+  justify-content: space-between;
+  border-top: 1px solid #dbe5ef;
+  padding-top: 10px;
+}
+.handoff-actions button {
+  min-height: 38px;
+}
+.handoff-actions > span {
+  color: #64748b;
+  font-size: 13px;
+  line-height: 1.35;
+}
 .sales-board {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -1568,6 +1949,9 @@ h3 { margin: 0; }
 }
 .sales-column {
   min-height: 180px;
+  max-height: 430px;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
   border: 1px solid #dbe5ef;
   border-radius: 16px;
   background: #f8fafc;
@@ -1998,12 +2382,31 @@ h3 { margin: 0; }
   gap: 10px;
   align-items: center;
 }
+.stage-compact-head.no-finance,
+.stage-compact-row.no-finance {
+  grid-template-columns: minmax(180px, 1.5fr) minmax(160px, 1fr) 110px 120px minmax(150px, 1fr) 140px;
+}
 .stage-compact-head {
   padding: 0 12px;
   color: #64748b;
   font-size: 11px;
   font-weight: 900;
   text-transform: uppercase;
+}
+.stage-compact-list {
+  display: grid;
+  gap: 10px;
+}
+.stage-section-card {
+  display: grid;
+  gap: 0;
+  border: 1px solid transparent;
+  border-radius: 18px;
+}
+.stage-section-card.active {
+  border-color: #93c5fd;
+  background: #ffffff;
+  box-shadow: 0 16px 38px rgba(37, 99, 235, .10);
 }
 .stage-compact-row {
   border: 1px solid #dbe5ef;
@@ -2012,9 +2415,11 @@ h3 { margin: 0; }
   padding: 12px;
 }
 .stage-compact-row.active {
-  border-color: #2563eb;
-  background: white;
-  box-shadow: 0 0 0 3px #dbeafe;
+  border-color: transparent;
+  border-bottom-color: #dbeafe;
+  border-radius: 16px 16px 0 0;
+  background: #ffffff;
+  box-shadow: none;
 }
 .stage-compact-row b,
 .stage-compact-row span,
@@ -2072,10 +2477,49 @@ h3 { margin: 0; }
   box-shadow: 0 18px 42px rgba(15, 23, 42, .10);
   padding: 18px;
 }
+.stage-editor-panel.inline {
+  border: 0;
+  border-top: 1px solid #dbeafe;
+  border-radius: 0 0 18px 18px;
+  box-shadow: none;
+  padding: 16px;
+}
+.stage-editor-title-row {
+  align-items: flex-start;
+}
+.stage-editor-groups {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+.stage-editor-group {
+  display: grid;
+  align-content: start;
+  gap: 12px;
+  border: 1px solid #dbe5ef;
+  border-radius: 16px;
+  background: #f8fafc;
+  padding: 14px;
+  min-width: 0;
+}
+.stage-editor-group h4 {
+  margin: 0;
+  color: #020617;
+  font-size: 14px;
+  font-weight: 900;
+}
 .stage-editor-form {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 12px;
+}
+.stage-editor-form.compact {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+.stage-editor-form.compact.finance,
+.stage-editor-form.compact.one-column {
+  grid-template-columns: 1fr;
 }
 .stage-editor-form label {
   display: grid;
@@ -2083,6 +2527,7 @@ h3 { margin: 0; }
   color: #64748b;
   font-size: 12px;
   font-weight: 800;
+  min-width: 0;
 }
 .stage-editor-form .wide { grid-column: 1 / -1; }
 .stage-editor-meta,
@@ -2094,6 +2539,13 @@ h3 { margin: 0; }
 }
 .stage-editor-danger {
   justify-content: flex-end;
+}
+.stage-editor-footer {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  justify-content: space-between;
 }
 .stage-approval-actions {
   grid-column: span 3;
@@ -4548,7 +5000,7 @@ h3 { margin: 0; }
 }
 
 @media (max-width: 1280px) {
-  .workspace-grid, .projects-layout, .details-grid, .project-chat-layout, .executors-layout, .executor-profile-layout, .account-layout, .integration-grid, .client-app-grid, .task-detail-grid, .bitrix-bridge-grid, .safe-sync-grid { grid-template-columns: 1fr; }
+  .workspace-grid, .projects-layout, .details-grid, .project-chat-layout, .executors-layout, .executor-profile-layout, .account-layout, .integration-grid, .client-app-grid, .task-detail-grid, .bitrix-bridge-grid, .safe-sync-grid, .sales-control-grid { grid-template-columns: 1fr; }
   .projects-list, .drill-card-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .executor-list { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .owner-two-grid, .owner-project-grid, .role-command-grid, .owner-holding-map { grid-template-columns: 1fr; }
@@ -4559,7 +5011,10 @@ h3 { margin: 0; }
   .office-sidebar { position: static; width: auto; min-height: auto; }
   .office-sidebar nav { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .office-rule { margin-top: 18px; }
-  .office-main { padding-left: 0; }
+  .office-main {
+    width: auto;
+    margin-left: 0;
+  }
   .office-header {
     position: static;
     grid-template-columns: 1fr;
@@ -4567,7 +5022,7 @@ h3 { margin: 0; }
     backdrop-filter: none;
   }
   .workspace-head, .details-head, .account-hero, .project-open-head { align-items: stretch; flex-direction: column; }
-  .stats-grid, .info-grid, .bottom-panels, .pipeline, .summary-grid, .executor-groups, .executor-form, .executor-two-cols, .mvp-days, .integration-form, .client-app-grid, .economy-summary, .production-budget-card, .login-card, .finance-grid, .finance-kpi-list, .finance-plain-grid, .finance-entry-form, .plan-grid, .focus-grid, .risk-project-strip, .task-kanban, .executor-process-grid, .bitrix-bridge-grid, .stage-editor-row, .stage-editor-head, .stage-compact-head, .stage-compact-row, .stage-editor-form, .admin-directory-grid, .admin-create-user-form, .admin-executor-create-panel, .empty-start-card, .role-scope-card, .role-kpi-grid, .task-meaning-grid, .partner-filter-row, .partner-detail-grid, .analytics-grid, .deadline-bars, .account-progress-grid, .executor-pay-card, .executor-guide-grid, .executor-project-kpis, .available-work-list > div, .executor-payout-table > div, .launch-readiness-grid, .executor-edit-panel { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .stats-grid, .info-grid, .bottom-panels, .pipeline, .summary-grid, .executor-groups, .executor-form, .executor-two-cols, .mvp-days, .integration-form, .client-app-grid, .economy-summary, .production-budget-card, .login-card, .finance-grid, .finance-kpi-list, .finance-plain-grid, .finance-entry-form, .plan-grid, .focus-grid, .risk-project-strip, .task-kanban, .executor-process-grid, .bitrix-bridge-grid, .sales-report-grid, .gamification-focus-grid, .gamification-rule-grid, .gamification-card-grid, .sales-level-grid, .handoff-flow, .handoff-summary-grid, .stage-editor-row, .stage-editor-head, .stage-compact-head, .stage-compact-row, .stage-editor-form, .admin-directory-grid, .admin-create-user-form, .admin-executor-create-panel, .empty-start-card, .role-scope-card, .role-kpi-grid, .task-meaning-grid, .partner-filter-row, .partner-detail-grid, .analytics-grid, .deadline-bars, .account-progress-grid, .executor-pay-card, .executor-guide-grid, .executor-project-kpis, .available-work-list > div, .executor-payout-table > div, .launch-readiness-grid, .executor-edit-panel { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .executor-stage-table > div { grid-template-columns: 1fr; }
   .dashboard-grid, .dashboard-grid.wide { grid-template-columns: 1fr; }
   .owner-direction-strip, .owner-money-grid, .owner-meta-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -4579,7 +5034,7 @@ h3 { margin: 0; }
   .office-header h1 { font-size: 24px; }
   .header-actions, .filters, .module-head { flex-direction: column; align-items: stretch; }
   .header-actions label, .moscow-clock, .filters input, .filters select { width: 100%; min-width: 0; }
-  .stats-grid, .projects-list, .drill-card-grid, .card-money-row, .drill-metrics, .info-grid, .bottom-panels, .pipeline, .summary-grid, .executor-groups, .executor-list, .executor-form, .executor-two-cols, .chat-input, .project-chat-input, .mvp-days, .integration-form, .quick-form, .task-create-form, .economy-summary, .production-budget-card, .login-card, .finance-grid, .finance-kpi-list, .finance-plain-grid, .finance-entry-form, .org-detail-grid, .mini-kpi-grid, .client-filter-strip, .client-summary-money, .plan-grid, .focus-grid, .risk-project-strip, .task-command-bar, .task-kanban, .executor-process-grid, .task-inspector-actions, .client-participant-form, .sales-grid, .sales-board, .stage-editor-row, .stage-editor-head, .stage-compact-head, .stage-compact-row, .stage-editor-form, .admin-directory-grid, .admin-create-user-form, .admin-executor-create-panel, .empty-start-card, .role-scope-card, .role-scope-meta, .role-command-grid, .role-kpi-grid, .role-work-list > button, .quick-action-grid, .task-meaning-grid, .partner-filter-row, .partner-detail-grid, .analytics-grid, .specialization-add, .deadline-bars, .account-progress-grid, .executor-pay-card, .executor-guide-grid, .executor-project-kpis, .executor-stage-table > div, .available-work-list > div, .executor-payout-table > div, .launch-readiness-grid, .executor-edit-panel { grid-template-columns: 1fr; }
+  .stats-grid, .projects-list, .drill-card-grid, .card-money-row, .drill-metrics, .info-grid, .bottom-panels, .pipeline, .summary-grid, .executor-groups, .executor-list, .executor-form, .executor-two-cols, .chat-input, .project-chat-input, .mvp-days, .integration-form, .quick-form, .task-create-form, .economy-summary, .production-budget-card, .login-card, .finance-grid, .finance-kpi-list, .finance-plain-grid, .finance-entry-form, .org-detail-grid, .mini-kpi-grid, .client-filter-strip, .client-summary-money, .plan-grid, .focus-grid, .risk-project-strip, .task-command-bar, .task-kanban, .executor-process-grid, .task-inspector-actions, .client-participant-form, .sales-grid, .sales-board, .sales-control-grid, .sales-report-grid, .sales-report-table > div, .gamification-focus-grid, .gamification-rule-grid, .gamification-table > div, .gamification-card-grid, .sales-level-grid, .handoff-flow, .handoff-summary-grid, .stage-editor-row, .stage-editor-head, .stage-compact-head, .stage-compact-row, .stage-editor-groups, .stage-editor-form, .admin-directory-grid, .admin-create-user-form, .admin-executor-create-panel, .empty-start-card, .role-scope-card, .role-scope-meta, .role-command-grid, .role-kpi-grid, .role-work-list > button, .quick-action-grid, .task-meaning-grid, .partner-filter-row, .partner-detail-grid, .analytics-grid, .specialization-add, .deadline-bars, .account-progress-grid, .executor-pay-card, .executor-guide-grid, .executor-project-kpis, .executor-stage-table > div, .available-work-list > div, .executor-payout-table > div, .launch-readiness-grid, .executor-edit-panel { grid-template-columns: 1fr; }
   .owner-kpi-grid, .owner-region-grid, .owner-direction-strip, .owner-project-grid, .owner-two-grid, .owner-money-grid, .owner-meta-grid, .owner-approval-strip, .owner-people-grid, .owner-risk-project-grid, .owner-payment-table > div, .owner-payment-table > button { grid-template-columns: 1fr; }
   .owner-project-head, .owner-people-grid > button { flex-direction: column; align-items: stretch; }
   .owner-risk-list > button, .owner-stage-timeline > button { grid-template-columns: 1fr; }
