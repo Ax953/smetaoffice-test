@@ -4999,8 +4999,234 @@ h3 { margin: 0; }
   font-size: 18px;
 }
 
+.agent-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 12px;
+}
+.agent-summary-grid > div {
+  display: grid;
+  gap: 7px;
+  min-width: 0;
+  border: 1px solid #dbe5ef;
+  border-radius: 18px;
+  background: white;
+  padding: 16px;
+  box-shadow: 0 10px 28px rgba(15, 23, 42, .055);
+}
+.agent-summary-grid span,
+.agent-summary-grid small { color: #64748b; }
+.agent-summary-grid span { font-size: 12px; font-weight: 800; }
+.agent-summary-grid b { font-size: 28px; line-height: 1; }
+.agent-summary-grid small { font-size: 11px; line-height: 1.35; }
+.agent-summary-grid .running { border-color: #86efac; background: #f0fdf4; }
+.agent-summary-grid .mvp { border-color: #93c5fd; background: #eff6ff; }
+.agent-summary-grid .code { border-color: #fde68a; background: #fffbeb; }
+.agent-summary-grid .priority { border-color: #fecaca; background: #fef2f2; }
+
+.agent-training-card,
+.agent-phase-card,
+.agent-registry-card,
+.agent-detail-card { padding: 20px; }
+.agent-training-head,
+.agent-card-heading,
+.agent-detail-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+.agent-training-head h3,
+.agent-card-heading h3,
+.agent-detail-card h3 { margin: 0; }
+.agent-training-head p,
+.agent-card-heading p,
+.agent-detail-card > p {
+  margin: 7px 0 0;
+  color: #64748b;
+  line-height: 1.5;
+}
+.agent-eyebrow {
+  display: block;
+  margin-bottom: 8px;
+  color: #1d4ed8;
+  font-size: 12px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+.agent-training-head > strong {
+  flex: 0 0 auto;
+  border-radius: 999px;
+  background: #eff6ff;
+  color: #1d4ed8;
+  padding: 8px 12px;
+  font-size: 13px;
+}
+.agent-training-progress {
+  height: 9px;
+  overflow: hidden;
+  margin-top: 18px;
+  border-radius: 999px;
+  background: #e2e8f0;
+}
+.agent-training-progress i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: #2563eb;
+}
+.agent-training-stats {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 10px;
+  margin: 16px 0 0;
+}
+.agent-training-stats > div {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  border-radius: 14px;
+  background: #f8fafc;
+  padding: 12px;
+}
+.agent-training-stats dt { color: #64748b; font-size: 11px; }
+.agent-training-stats dd { margin: 0; font-size: 20px; font-weight: 900; }
+.agent-training-note { margin: 14px 0 0; color: #475569; font-size: 13px; line-height: 1.5; }
+
+.agent-card-heading > button {
+  flex: 0 0 auto;
+  min-height: 38px;
+  border: 1px solid #dbe5ef;
+  border-radius: 12px;
+  background: #f8fafc;
+  color: #334155;
+  padding: 0 14px;
+  font-weight: 800;
+}
+.agent-card-heading > button.active { border-color: #2563eb; background: #eff6ff; color: #1d4ed8; }
+.agent-phase-flow {
+  display: grid;
+  grid-template-columns: repeat(8, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 16px;
+}
+.agent-phase-flow button {
+  display: grid;
+  align-content: start;
+  gap: 7px;
+  min-height: 132px;
+  border: 1px solid #dbe5ef;
+  border-radius: 14px;
+  background: #f8fafc;
+  color: #0f172a;
+  padding: 12px;
+  text-align: left;
+}
+.agent-phase-flow button.active { border-color: #2563eb; background: #eff6ff; }
+.agent-phase-flow b {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 9px;
+  background: #0f172a;
+  color: white;
+  font-size: 12px;
+}
+.agent-phase-flow span { font-size: 13px; font-weight: 900; }
+.agent-phase-flow small { color: #64748b; font-size: 10px; line-height: 1.4; }
+
+.agent-registry-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 350px;
+  gap: 18px;
+  align-items: start;
+}
+.agent-registry-card,
+.agent-table { min-width: 0; }
+.agent-registry-filters {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) minmax(180px, 260px);
+  gap: 10px;
+  margin: 16px 0;
+}
+.agent-registry-filters label { display: grid; gap: 6px; color: #64748b; font-size: 12px; font-weight: 800; }
+.agent-registry-filters input,
+.agent-registry-filters select { width: 100%; }
+.agent-table { display: grid; gap: 7px; }
+.agent-table-row {
+  display: grid;
+  grid-template-columns: minmax(190px, 1.45fr) minmax(70px, .55fr) minmax(105px, .7fr) minmax(100px, .7fr) 55px;
+  gap: 10px;
+  align-items: center;
+  width: 100%;
+  min-height: 58px;
+  border: 1px solid #dbe5ef;
+  border-radius: 12px;
+  background: white;
+  color: #334155;
+  padding: 10px 12px;
+  text-align: left;
+}
+button.agent-table-row:hover,
+.agent-table-row.selected { border-color: #2563eb; background: #f8fbff; }
+.agent-table-head {
+  min-height: 38px;
+  background: #f8fafc;
+  color: #64748b;
+  font-size: 10px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+.agent-table-row > span { min-width: 0; }
+.agent-table-row > span:first-child { display: grid; gap: 4px; }
+.agent-table-row b,
+.agent-table-row small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.agent-table-row small { color: #64748b; font-size: 11px; font-weight: 500; }
+.agent-readiness {
+  display: inline-flex;
+  max-width: 100%;
+  overflow: hidden;
+  border: 1px solid;
+  border-radius: 999px;
+  padding: 5px 8px;
+  font-size: 10px;
+  font-style: normal;
+  font-weight: 900;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.agent-readiness.running_local { border-color: #86efac; background: #dcfce7; color: #166534; }
+.agent-readiness.mvp_ready { border-color: #93c5fd; background: #dbeafe; color: #1d4ed8; }
+.agent-readiness.code_ready { border-color: #fde047; background: #fef9c3; color: #854d0e; }
+.agent-readiness.designed { border-color: #cbd5e1; background: #f1f5f9; color: #475569; }
+.agent-detail-card { position: sticky; top: 116px; }
+.agent-detail-head > span {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 11px;
+  background: #0f172a;
+  color: white;
+  font-weight: 900;
+}
+.agent-detail-card h3 { margin-top: 16px; }
+.agent-detail-card dl { display: grid; gap: 12px; margin: 18px 0 0; }
+.agent-detail-card dl > div { display: grid; gap: 5px; border-top: 1px solid #e2e8f0; padding-top: 12px; }
+.agent-detail-card dt { color: #0f172a; font-size: 10px; font-weight: 900; text-transform: uppercase; }
+.agent-detail-card dd { margin: 0; color: #475569; font-size: 12px; line-height: 1.5; }
+
 @media (max-width: 1280px) {
   .workspace-grid, .projects-layout, .details-grid, .project-chat-layout, .executors-layout, .executor-profile-layout, .account-layout, .integration-grid, .client-app-grid, .task-detail-grid, .bitrix-bridge-grid, .safe-sync-grid, .sales-control-grid { grid-template-columns: 1fr; }
+  .agent-summary-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .agent-phase-flow { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .agent-registry-layout { grid-template-columns: 1fr; }
+  .agent-detail-card { position: static; }
   .projects-list, .drill-card-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .executor-list { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .owner-two-grid, .owner-project-grid, .role-command-grid, .owner-holding-map { grid-template-columns: 1fr; }
@@ -5027,6 +5253,7 @@ h3 { margin: 0; }
   .dashboard-grid, .dashboard-grid.wide { grid-template-columns: 1fr; }
   .owner-direction-strip, .owner-money-grid, .owner-meta-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .client-type-tabs { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .agent-training-stats { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
 
 @media (max-width: 680px) {
@@ -5046,6 +5273,27 @@ h3 { margin: 0; }
   .task-table > div, .partner-table > div, .partner-table > button, .project-account-meta, .mapping-table > div, .sync-log > div, .task-board > div, .analytics-list > div, .analytics-period-table > div, .sections-table > div:not(.empty), .admin-users-table > div, .finance-table > div, .finance-period-table > div, .finance-period-table > button, .finance-mini-list > div, .dashboard-table > div, .dashboard-table > button, .task-status-chart > div, .bitrix-map-table > div, .client-participants-list > div, .approval-list > div { grid-template-columns: 1fr; }
   .finance-table > div { min-width: 0; }
   .analytics-list strong, .analytics-period-table strong { justify-self: start; text-align: left; }
+  .agent-summary-grid,
+  .agent-training-stats,
+  .agent-phase-flow,
+  .agent-registry-filters,
+  .agent-table-row { grid-template-columns: 1fr; }
+  .agent-training-head,
+  .agent-card-heading { flex-direction: column; align-items: stretch; }
+  .agent-training-head > strong,
+  .agent-card-heading > button { align-self: flex-start; }
+  .agent-phase-flow button { min-height: auto; }
+  .agent-table-head { display: none; }
+  .agent-table-row { gap: 6px; }
+  .agent-table-row > span:not(:first-child) { display: flex; align-items: center; gap: 8px; }
+  .agent-table-row > span[data-label]::before {
+    content: attr(data-label);
+    flex: 0 0 58px;
+    color: #94a3b8;
+    font-size: 10px;
+    font-weight: 900;
+    text-transform: uppercase;
+  }
 }
 
 @media (max-width: 1280px) {
