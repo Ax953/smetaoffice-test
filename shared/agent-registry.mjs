@@ -186,7 +186,7 @@ const definitions = [
     purpose: "Контролирует роли, журналы, секреты и критичные действия агентов.",
     humanApproval: "Обязателен для блокировок, доступов и критичных действий",
     systems: ["RBAC", "AuditLog", "Secret Store"], dependsOn: [], kpi: "Инциденты и доля аудируемых критичных действий",
-    currentState: "Роль ai_agent и read-only API SmetaOffice готовы локально; production deploy не выполнен.", nextStep: "Развернуть read-only роль и централизованный secret store после проверки владельцем.",
+    currentState: "Роль ai_agent и read-only API SmetaOffice развернуты в production; доступ Hermes ограничен чтением и журналируется.", nextStep: "Подключить централизованный secret store и оповещения по аномалиям доступа.",
   },
 ];
 
