@@ -4,6 +4,7 @@ import { existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { randomBytes, timingSafeEqual, pbkdf2Sync } from "node:crypto";
+import { buildAgentRegistry } from "./shared/agent-registry.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const dataDir = process.env.SMETA_DATA_DIR ? path.resolve(process.env.SMETA_DATA_DIR) : path.join(__dirname, "data");
@@ -143,9 +144,14 @@ function publicUsers(users = []) {
 
 const ALL_REGIONS = "Все регионы";
 const ALL_DIRECTIONS = "Все направления";
+const READ_ONLY_AI_ROLE = "ai_agent";
 const fullUserAdminRoles = ["owner", "admin"];
 const scopedUserAdminRoles = ["regional_admin", "direction_admin"];
 const scopedAdminManageableRoleIds = ["director", "head_of_department", "regional_manager", "pm", "gip", "project_manager", "sales_manager", "senior_sales_manager", "head_of_sales", "ecp_manager", "executor", "partner"];
+
+function isReadOnlyAi(user) {
+  return user?.role === READ_ONLY_AI_ROLE;
+}
 
 function normalizeRegionName(region) {
   const value = String(region || "").trim();
@@ -269,7 +275,7 @@ function canManageUserRecord(manager, target) {
 
 function visibleUsersFor(manager, users = []) {
   if (!manager) return [];
-  if (fullUserAdminRoles.includes(manager.role) || manager.role === "deputy") return users;
+  if (fullUserAdminRoles.includes(manager.role) || manager.role === "deputy" || isReadOnlyAi(manager)) return users;
   return users.filter((user) => user.id === manager.id || canManageUserRecord(manager, user));
 }
 
@@ -287,6 +293,7 @@ function visibleIntegrationSettingsFor(user, settings = defaultDb.integrationSet
 
 function canAccessRegion(user, item) {
   if (!user) return false;
+  if (isReadOnlyAi(user)) return true;
   if (["owner", "admin", "deputy", "finance", "accountant"].includes(user.role)) return true;
   const userRegions = userRegionList(user);
   return userRegions.includes(ALL_REGIONS) || userRegions.includes(normalizeRegionName(item?.region || item?.city));
@@ -308,6 +315,7 @@ function taskAssignedToUser(user, task) {
 
 function canAccessProject(user, project) {
   if (!user || !project) return false;
+  if (isReadOnlyAi(user)) return true;
   if (["owner", "admin", "deputy", "finance", "accountant"].includes(user.role)) return true;
 
   if (user.role === "executor" || user.role === "partner") {
@@ -383,7 +391,7 @@ function omitFields(item, fields) {
 
 function projectFinanceAccessLevel(user) {
   if (!user) return "none";
-  if (["owner", "admin", "deputy", "finance", "accountant", "regional_admin", "direction_admin", "director", "head_of_department", "regional_manager", "pm", "project_manager"].includes(user.role)) return "full";
+  if (isReadOnlyAi(user) || ["owner", "admin", "deputy", "finance", "accountant", "regional_admin", "direction_admin", "director", "head_of_department", "regional_manager", "pm", "project_manager"].includes(user.role)) return "full";
   if (["sales_manager", "head_of_sales"].includes(user.role)) return "sales";
   if (["executor", "partner"].includes(user.role)) return "ownPayout";
   return "none";
@@ -422,6 +430,7 @@ function visibleProjectsFor(user, projects = []) {
 function canAccessPartner(user, partner) {
   if (!user || !partner) return false;
   const normalizedPartner = normalizePartnerRecord(partner);
+  if (isReadOnlyAi(user)) return true;
   if (["owner", "admin", "deputy", "finance", "accountant"].includes(user.role)) return true;
   if (user.role === "partner") return normalizedPartner.userId === user.id || normalizedPartner.partnerUserId === user.id || normalizedPartner.name === user.name;
   if (!partnerRegionMatches(user, normalizedPartner)) return false;
@@ -491,6 +500,7 @@ function salesRecordAssignedTo(user, item = {}, fields = []) {
 
 function canAccessSalesLead(user, lead) {
   if (!user || !lead) return false;
+  if (isReadOnlyAi(user)) return true;
   if (["owner", "admin", "deputy", "finance", "accountant"].includes(user.role)) return true;
   if (user.role === "regional_admin") return canAccessRegion(user, lead);
   if (user.role === "direction_admin") return canAccessRegion(user, lead) && leadDirectionMatches(user, lead);
@@ -509,7 +519,7 @@ function visibleSalesLeadsFor(user, salesLeads = []) {
 }
 
 function canViewManagementFinance(user) {
-  return ["owner", "deputy", "finance", "accountant", "director", "regional_manager"].includes(user?.role);
+  return isReadOnlyAi(user) || ["owner", "deputy", "finance", "accountant", "director", "regional_manager"].includes(user?.role);
 }
 
 function canEditManagementFinance(user) {
@@ -518,7 +528,7 @@ function canEditManagementFinance(user) {
 
 function canAccessFinanceItem(user, item = {}) {
   if (!canViewManagementFinance(user)) return false;
-  if (["owner", "deputy", "finance", "accountant"].includes(user.role)) return true;
+  if (isReadOnlyAi(user) || ["owner", "deputy", "finance", "accountant"].includes(user.role)) return true;
   if (!canAccessRegion(user, item)) return false;
   if (user.role === "regional_manager") return true;
   if (user.role === "director") {
@@ -721,6 +731,7 @@ function allSalesDeals(db = {}) {
 
 function canAccessSalesDeal(user, deal) {
   if (!user || !deal) return false;
+  if (isReadOnlyAi(user)) return true;
   if (["owner", "admin", "deputy", "finance", "accountant"].includes(user.role)) return true;
   if (["regional_admin", "regional_manager"].includes(user.role)) return canAccessRegion(user, deal);
   if (["direction_admin", "director", "head_of_department"].includes(user.role)) return canAccessRegion(user, deal) && leadDirectionMatches(user, deal);
@@ -738,6 +749,7 @@ function visibleSalesDealsFor(user, db = {}) {
 
 function canAccessSalesKpiSnapshot(user, item = {}) {
   if (!user || !item) return false;
+  if (isReadOnlyAi(user)) return true;
   if (["owner", "admin", "deputy", "finance", "accountant"].includes(user.role)) return true;
   if (["regional_admin", "regional_manager", "head_of_sales", "ecp_manager"].includes(user.role)) return canAccessRegion(user, item);
   if (["direction_admin", "director", "head_of_department"].includes(user.role)) return canAccessRegion(user, item) && leadDirectionMatches(user, item);
@@ -753,7 +765,7 @@ function visibleSalesKpiSnapshotsFor(user, items = []) {
 function canAccessSalesChild(user, item = {}, db = {}) {
   const dealId = item.dealId || item.salesDealId || item.sourceId || item.leadId;
   const deal = allSalesDeals(db).find((entry) => entry.id === dealId || entry.sourceId === dealId || entry.leadId === dealId);
-  return deal ? canAccessSalesDeal(user, deal) : ["owner", "admin", "deputy"].includes(user?.role);
+  return deal ? canAccessSalesDeal(user, deal) : isReadOnlyAi(user) || ["owner", "admin", "deputy"].includes(user?.role);
 }
 
 function visibleSalesChildrenFor(user, items = [], db = {}) {
@@ -1323,6 +1335,7 @@ function normalizeIncomingExecutors(executors = []) {
 
 function canAccessExecutor(user, executor) {
   if (!user || !executor) return false;
+  if (isReadOnlyAi(user)) return true;
   if (["owner", "admin", "deputy", "finance", "accountant"].includes(user.role)) return true;
   if (user.role === "executor" || user.role === "partner") return executor.id === user.executorId || executor.userId === user.id || executor.name === user.name;
   const hasRegion = !executor.region && !executor.city ? true : canAccessRegion(user, executor);
@@ -1591,6 +1604,17 @@ const server = http.createServer(async (req, res) => {
       return;
     }
 
+    if (req.method === "GET" && route === "/api/ai-agents") {
+      const auth = requireAuth(req, res, db);
+      if (!auth) return;
+      if (authMode === "server" && !["owner", "admin", "deputy", "ai_agent"].includes(auth.user.role)) {
+        sendJson(res, 403, { ok: false, error: "Forbidden" });
+        return;
+      }
+      sendJson(res, 200, buildAgentRegistry());
+      return;
+    }
+
     if (req.method === "POST" && route === "/api/auth/login") {
       const body = await readJsonBody(req);
       const user = (db.users || []).find((item) => item.login === String(body.login || "").trim());
@@ -1706,7 +1730,7 @@ const server = http.createServer(async (req, res) => {
             salesKpiSnapshots: visibleSalesKpiSnapshotsFor(auth.user, db.salesKpiSnapshots || []),
             integrationSettings: visibleIntegrationSettingsFor(auth.user, db.integrationSettings),
             authSessions: {},
-            accessRequests: publicUsers(visibleUsersFor(auth.user, db.accessRequests || [])),
+            accessRequests: ["owner", "admin"].includes(auth.user.role) ? publicUsers(db.accessRequests || []) : [],
           }
         : db;
       sendJson(res, 200, payload);
