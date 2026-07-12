@@ -1,5 +1,6 @@
-﻿import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { createRoot } from "react-dom/client";
+import { agentRegistry as localAgentRegistry } from "../shared/agent-registry.mjs";
 import "./styles.css";
 
 const roles = [
@@ -20,6 +21,7 @@ const roles = [
   { id: "ecp_manager", name: "Управляющий ЕЦП", hint: "единый центр продаж и руководители отделов" },
   { id: "accountant", name: "Бухгалтер", hint: "счета, акты, выплаты" },
   { id: "finance", name: "Финансы", hint: "деньги, оплаты, задолженность" },
+  { id: "ai_agent", name: "AI-агент", hint: "полное чтение через интеграцию, без права изменений" },
   { id: "executor", name: "Исполнитель", hint: "только свои этапы и задачи" },
   { id: "partner", name: "Партнёр", hint: "только назначенные работы" },
 ];
@@ -42,6 +44,7 @@ const rolePermissions = {
   ecp_manager: ["viewClient", "viewOwnerDashboard"],
   accountant: ["viewFinance", "editFinance"],
   finance: ["viewFinance", "editFinance"],
+  ai_agent: ["viewAll", "viewClient", "viewFinance", "viewProductionBudget", "viewExecutorContacts", "viewOwnerDashboard"],
   executor: [],
   partner: [],
 };
@@ -133,6 +136,7 @@ const positionOptions = [
   "Сметчик",
   "Комплектатор",
   "Финансовый контроль",
+  "AI-агент / интеграция",
   "Исполнитель / проектировщик",
   "Партнёр",
 ];
@@ -574,6 +578,7 @@ const quickStats = [
 
 const menuItems = [
   { id: "dashboard", label: "Панель управления" },
+  { id: "agents", label: "AI-агенты" },
   { id: "sales", label: "Продажи / Лиды" },
   { id: "projects", label: "Проекты" },
   { id: "tasks", label: "Задачи" },
@@ -1661,6 +1666,11 @@ const appScreens = {
     eyebrow: "Управленческий срез",
     desc: "Главный экран: где горит, какие проекты просрочены, кто отвечает и что нужно сделать сегодня.",
   },
+  agents: {
+    title: "AI-агенты",
+    eyebrow: "Управляемая автоматизация",
+    desc: "Единый реестр команды AI: кто за что отвечает, что уже работает, где нужен человек и в каком порядке подключаются агенты.",
+  },
   sales: {
     title: "Продажи / Лиды",
     eyebrow: "Зеркало Bitrix24",
@@ -1897,7 +1907,8 @@ function sectionAllowed(role, sectionId) {
   const projectSections = ["projects", "projectDetail"];
   const salesSections = ["dashboard", "sales", ...projectSections, "tasks", "analytics", "client"];
   if (role === "owner" || role === "deputy") return true;
-  if (role === "admin") return ["dashboard", ...projectSections, "tasks", "executors", "partners", "integrations", "admin", "client"].includes(sectionId);
+  if (role === "admin") return ["dashboard", "agents", ...projectSections, "tasks", "executors", "partners", "integrations", "admin", "client"].includes(sectionId);
+  if (role === "ai_agent") return ["dashboard", "agents"].includes(sectionId);
   if (role === "regional_admin" || role === "direction_admin") return ["dashboard", ...projectSections, "tasks", "executors", "partners", "analytics", "admin", "client"].includes(sectionId);
   if (role === "finance" || role === "accountant") return ["dashboard", ...projectSections, "analytics", "finance"].includes(sectionId);
   if (role === "executor") return ["dashboard", "projects", "tasks"].includes(sectionId);
@@ -1926,6 +1937,7 @@ function roleScopeText(role, user) {
   if (role === "head_of_sales") return `${user?.region || "регион"} · единый центр продаж`;
   if (role === "ecp_manager") return "единый центр продаж, руководители отделов и региональные срезы";
   if (role === "finance" || role === "accountant") return "финансовые показатели доступных проектов";
+  if (role === "ai_agent") return "чтение утвержденных данных и собственного реестра без права изменений";
   if (role === "partner") return "только свои заявки, работы и выплаты";
   if (role === "executor") return "только свои проекты, задачи, уровень и выплаты";
   return "доступ по назначению";
@@ -1946,6 +1958,7 @@ function dashboardTitleForRole(role) {
   if (role === "head_of_sales") return "Панель руководителя отдела продаж";
   if (role === "ecp_manager") return "Панель управляющего ЕЦП";
   if (role === "finance" || role === "accountant") return "Панель финансов";
+  if (role === "ai_agent") return "Панель AI-агента";
   if (role === "partner") return "Панель партнёра";
   return "Сводка владельца";
 }
@@ -6552,6 +6565,171 @@ function SectionIntro({ section }) {
       <h2>{data.title}</h2>
       <p>{data.desc}</p>
     </section>
+  );
+}
+
+const agentReadinessLabels = {
+  RUNNING_LOCAL: "Работает локально",
+  MVP_READY: "MVP-контур",
+  CODE_READY: "Код готов",
+  DESIGNED: "Спроектирован",
+};
+
+const agentReadinessOrder = ["RUNNING_LOCAL", "MVP_READY", "CODE_READY", "DESIGNED"];
+
+function AgentsModule() {
+  const [registry, setRegistry] = useState(localAgentRegistry);
+  const [phase, setPhase] = useState("all");
+  const [readiness, setReadiness] = useState("all");
+  const [search, setSearch] = useState("");
+  const [selectedId, setSelectedId] = useState("A0");
+
+  useEffect(() => {
+    let alive = true;
+    apiGet("/ai-agents", localAgentRegistry).then((payload) => {
+      if (alive && payload?.agents?.length) setRegistry(payload);
+    });
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  const filteredAgents = useMemo(() => {
+    const query = search.trim().toLowerCase();
+    return registry.agents.filter((agent) => {
+      if (phase !== "all" && agent.phase !== Number(phase)) return false;
+      if (readiness !== "all" && agent.readiness !== readiness) return false;
+      if (!query) return true;
+      return [agent.id, agent.name, agent.block, agent.purpose, agent.currentState, agent.nextStep]
+        .join(" ")
+        .toLowerCase()
+        .includes(query);
+    });
+  }, [phase, readiness, registry, search]);
+
+  const selectedAgent = filteredAgents.find((agent) => agent.id === selectedId) || filteredAgents[0] || null;
+  const trainingPercent = Math.round((registry.training.indexedDocuments / registry.training.inventoriedFiles) * 100);
+
+  return (
+    <>
+      <SectionIntro section="agents" />
+
+      <section className="agent-summary-grid" aria-label="Сводка по AI-агентам">
+        <div><span>Всего в системе</span><b>{registry.summary.total}</b><small>агентов A0-A24</small></div>
+        <div className="running"><span>Работают локально</span><b>{registry.summary.runningLocal}</b><small>Hermes и база знаний</small></div>
+        <div className="mvp"><span>MVP-контур</span><b>{registry.summary.mvpReady}</b><small>логика, экраны или mock</small></div>
+        <div className="code"><span>Код готов</span><b>{registry.summary.codeReady}</b><small>нужен безопасный запуск</small></div>
+        <div><span>Спроектированы</span><b>{registry.summary.designed}</b><small>еще не работают</small></div>
+        <div className="priority"><span>Высокий приоритет</span><b>{registry.summary.highPriority}</b><small>влияют на первый контур</small></div>
+      </section>
+
+      <section className="office-card agent-training-card">
+        <div className="agent-training-head">
+          <div>
+            <span className="agent-eyebrow">Обучение Hermes</span>
+            <h3>Корпоративная база знаний собрана, но это еще не полная автоматизация</h3>
+            <p>Hermes ищет ответы в проиндексированных материалах. Пароли и секреты в обучение не загружаются.</p>
+          </div>
+          <strong>{trainingPercent}% текстового корпуса</strong>
+        </div>
+        <div className="agent-training-progress"><i style={{ width: `${trainingPercent}%` }} /></div>
+        <dl className="agent-training-stats">
+          <div><dt>Учтено файлов</dt><dd>{registry.training.inventoriedFiles}</dd></div>
+          <div><dt>Проиндексировано</dt><dd>{registry.training.indexedDocuments}</dd></div>
+          <div><dt>Учебные материалы</dt><dd>{registry.training.phoneLinkLessons}</dd></div>
+          <div><dt>Бинарные / специальные</dt><dd>{registry.training.unsupportedFiles}</dd></div>
+          <div><dt>Требуют внимания</dt><dd>{registry.training.errors + registry.training.noText}</dd></div>
+        </dl>
+        <p className="agent-training-note">{registry.training.note}</p>
+      </section>
+
+      <section className="office-card agent-phase-card">
+        <div className="agent-card-heading">
+          <div>
+            <h3>Порядок внедрения</h3>
+            <p>Идем слева направо: следующий этап не получает автономные действия, пока не проверен предыдущий.</p>
+          </div>
+          <button type="button" className={phase === "all" ? "active" : ""} onClick={() => setPhase("all")}>Все этапы</button>
+        </div>
+        <div className="agent-phase-flow">
+          {registry.phases.map((item) => (
+            <button type="button" key={item.id} className={phase === String(item.id) ? "active" : ""} onClick={() => setPhase(String(item.id))}>
+              <b>{item.id}</b>
+              <span>{item.label}</span>
+              <small>{item.objective}</small>
+            </button>
+          ))}
+        </div>
+      </section>
+
+      <section className="agent-registry-layout">
+        <div className="office-card agent-registry-card">
+          <div className="agent-card-heading">
+            <div>
+              <h3>Все AI-агенты</h3>
+              <p>Показано {filteredAgents.length} из {registry.summary.total}. Статус отражает фактическую готовность, а не обещание.</p>
+            </div>
+          </div>
+
+          <div className="agent-registry-filters">
+            <label>
+              <span>Поиск</span>
+              <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Название, блок или задача" />
+            </label>
+            <label>
+              <span>Готовность</span>
+              <select value={readiness} onChange={(event) => setReadiness(event.target.value)}>
+                <option value="all">Все статусы</option>
+                {agentReadinessOrder.map((item) => <option key={item} value={item}>{agentReadinessLabels[item]}</option>)}
+              </select>
+            </label>
+          </div>
+
+          <div className="agent-table" role="table" aria-label="Реестр AI-агентов SmetaOffice">
+            <div className="agent-table-row agent-table-head" role="row">
+              <span>Агент</span><span>Блок</span><span>Этап</span><span>Статус</span><span>Режим</span>
+            </div>
+            {filteredAgents.map((agent) => (
+              <button
+                type="button"
+                role="row"
+                key={agent.id}
+                className={cn("agent-table-row", selectedAgent?.id === agent.id && "selected")}
+                onClick={() => setSelectedId(agent.id)}
+              >
+                <span><b>{agent.id} · {agent.name}</b><small>{agent.purpose}</small></span>
+                <span data-label="Блок">{agent.block}</span>
+                <span data-label="Этап">{agent.phaseLabel}</span>
+                <span data-label="Статус"><i className={cn("agent-readiness", agent.readiness.toLowerCase())}>{agentReadinessLabels[agent.readiness]}</i></span>
+                <span data-label="Режим">{agent.mode}</span>
+              </button>
+            ))}
+            {filteredAgents.length === 0 ? <div className="empty">По выбранному фильтру агентов нет.</div> : null}
+          </div>
+        </div>
+
+        <aside className="office-card agent-detail-card">
+          {selectedAgent ? (
+            <>
+              <div className="agent-detail-head">
+                <span>{selectedAgent.id}</span>
+                <i className={cn("agent-readiness", selectedAgent.readiness.toLowerCase())}>{agentReadinessLabels[selectedAgent.readiness]}</i>
+              </div>
+              <h3>{selectedAgent.name}</h3>
+              <p>{selectedAgent.purpose}</p>
+              <dl>
+                <div><dt>Сейчас</dt><dd>{selectedAgent.currentState}</dd></div>
+                <div><dt>Следующий шаг</dt><dd>{selectedAgent.nextStep}</dd></div>
+                <div><dt>Человек подтверждает</dt><dd>{selectedAgent.humanApproval}</dd></div>
+                <div><dt>KPI</dt><dd>{selectedAgent.kpi}</dd></div>
+                <div><dt>Системы</dt><dd>{selectedAgent.systems.join(" · ")}</dd></div>
+                <div><dt>Зависимости</dt><dd>{selectedAgent.dependsOn.length ? selectedAgent.dependsOn.join(", ") : "Нет"}</dd></div>
+              </dl>
+            </>
+          ) : <div className="empty">Выберите агента.</div>}
+        </aside>
+      </section>
+    </>
   );
 }
 
@@ -12175,6 +12353,8 @@ function SmetaOfficePrototype() {
 
           {role !== "executor" && activeSection === "integrations" ? <IntegrationsModule setSalesLeads={setSalesLeads} /> : null}
 
+          {role !== "executor" && activeSection === "agents" ? <AgentsModule /> : null}
+
           {role !== "executor" && activeSection === "sales" ? (
             <SalesLeadsModule
               leads={salesLeads}
@@ -12295,5 +12475,3 @@ function SmetaOfficePrototype() {
 }
 
 createRoot(document.getElementById("root")).render(<SmetaOfficePrototype />);
-
-
