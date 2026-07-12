@@ -8,6 +8,7 @@
     "server": "node server.mjs",
     "start": "node server.mjs",
     "start:windows": "powershell -ExecutionPolicy Bypass -File ./start-dev.ps1",
+    "test": "node --test",
     "build": "vite build",
     "preview": "vite preview --host 127.0.0.1"
   },
