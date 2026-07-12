@@ -1,5 +1,5 @@
 import http from "node:http";
-import { readFile, writeFile, mkdir } from "node:fs/promises";
+import { readFile, writeFile, mkdir, rename, copyFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -62,17 +62,24 @@ async function ensureDb() {
 
 async function readDb() {
   await ensureDb();
+  const raw = await readFile(dbPath, "utf8");
   try {
-    const raw = await readFile(dbPath, "utf8");
     return { ...defaultDb, ...JSON.parse(raw) };
-  } catch {
-    return defaultDb;
+  } catch (error) {
+    const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+    try {
+      await copyFile(dbPath, path.join(dataDir, `database.corrupt-${stamp}.json`));
+    } catch {}
+    console.error("SmetaOffice database read failed; refusing to use empty fallback", error);
+    throw new Error("SmetaOffice database is corrupted. Writes are blocked until database.json is repaired.");
   }
 }
 
 async function writeDb(nextDb) {
   await ensureDb();
-  await writeFile(dbPath, JSON.stringify(nextDb, null, 2), "utf8");
+  const tmpPath = `${dbPath}.${process.pid}.${Date.now()}.tmp`;
+  await writeFile(tmpPath, JSON.stringify(nextDb, null, 2), "utf8");
+  await rename(tmpPath, dbPath);
 }
 
 async function ensureBootstrapOwner() {
