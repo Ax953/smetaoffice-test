@@ -1,0 +1,12 @@
+[Unit]
+Description=Run SmetaOffice AI project control every 15 minutes
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=15min
+AccuracySec=30s
+Persistent=true
+Unit=smetaoffice-agent-sweep.service
+
+[Install]
+WantedBy=timers.target

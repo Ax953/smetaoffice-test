@@ -5,6 +5,8 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { randomBytes, timingSafeEqual, pbkdf2Sync } from "node:crypto";
 import { buildAgentRegistry } from "./shared/agent-registry.mjs";
+import { buildAgentCommandCenter, createAgentTask } from "./shared/agent-command-center.mjs";
+import { runAgentWorkSweep } from "./shared/agent-work-monitor.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const dataDir = process.env.SMETA_DATA_DIR ? path.resolve(process.env.SMETA_DATA_DIR) : path.join(__dirname, "data");
@@ -52,6 +54,11 @@ const defaultDb = {
   syncLog: [],
   accessRequests: [],
   authSessions: {},
+  aiAgentTasks: [],
+  aiAgentEvents: [],
+  aiAgentRuns: [],
+  aiAgentChannels: [],
+  aiKnowledgeStatus: {},
 };
 
 async function ensureDb() {
@@ -127,7 +134,7 @@ function sendJson(res, status, payload) {
     "Content-Type": "application/json; charset=utf-8",
     "Access-Control-Allow-Origin": "*",
     "Access-Control-Allow-Methods": "GET,POST,PUT,PATCH,DELETE,OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type, Authorization",
+    "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Smeta-Agent-Token",
   });
   res.end(JSON.stringify(payload));
 }
@@ -1464,6 +1471,31 @@ function requireAuth(req, res, db) {
   return auth;
 }
 
+function hasValidAgentSweepToken(req) {
+  const expected = process.env.SMETA_AGENT_SWEEP_TOKEN || "";
+  const provided = String(req.headers["x-smeta-agent-token"] || "");
+  if (!expected || !provided) return false;
+  const expectedBuffer = Buffer.from(expected);
+  const providedBuffer = Buffer.from(provided);
+  return expectedBuffer.length === providedBuffer.length && timingSafeEqual(expectedBuffer, providedBuffer);
+}
+
+function requireAgentSweepAccess(req, res, db) {
+  if (authMode !== "server") {
+    return { user: { id: "local-demo", role: "owner", name: "Локальный запуск SmetaOffice" }, service: false };
+  }
+  if (hasValidAgentSweepToken(req)) {
+    return { user: { id: "agent-sweep-service", role: "system", name: "Сервисный обход Hermes" }, service: true };
+  }
+  const auth = requireAuth(req, res, db);
+  if (!auth) return null;
+  if (!["owner", "admin", "deputy"].includes(auth.user.role)) {
+    sendJson(res, 403, { ok: false, error: "Forbidden" });
+    return null;
+  }
+  return { user: auth.user, service: false };
+}
+
 function canWriteCollection(user, route) {
   if (!user || user.status === "disabled") return false;
   if (["/api/financial-periods", "/api/operational-expenses", "/api/cash-accounts"].includes(route)) return canEditManagementFinance(user);
@@ -1612,6 +1644,82 @@ const server = http.createServer(async (req, res) => {
         return;
       }
       sendJson(res, 200, buildAgentRegistry());
+      return;
+    }
+
+    if (req.method === "GET" && route === "/api/ai-command-center") {
+      const auth = requireAuth(req, res, db);
+      if (!auth) return;
+      if (authMode === "server" && !["owner", "admin", "deputy", "ai_agent"].includes(auth.user.role)) {
+        sendJson(res, 403, { ok: false, error: "Forbidden" });
+        return;
+      }
+      sendJson(
+        res,
+        200,
+        buildAgentCommandCenter({
+          registry: buildAgentRegistry(),
+          tasks: db.aiAgentTasks,
+          events: db.aiAgentEvents,
+          runs: db.aiAgentRuns,
+          channels: db.aiAgentChannels,
+          knowledge: db.aiKnowledgeStatus,
+        }),
+      );
+      return;
+    }
+
+    if (req.method === "POST" && route === "/api/ai-agent-runs/control-sweep") {
+      const auth = requireAgentSweepAccess(req, res, db);
+      if (!auth) return;
+      const sweep = runAgentWorkSweep({
+        projects: db.projects || [],
+        salesDeals: allSalesDeals(db),
+        salesLeads: db.salesLeads || [],
+        existingEvents: db.aiAgentEvents || [],
+        actor: auth.user,
+      });
+      const nextDb = {
+        ...db,
+        aiAgentRuns: [sweep.run, ...(db.aiAgentRuns || [])].slice(0, 500),
+        aiAgentTasks: [...sweep.tasks, ...(db.aiAgentTasks || [])].slice(0, 2_000),
+        aiAgentEvents: [...sweep.events, ...(db.aiAgentEvents || [])].slice(0, 2_000),
+      };
+      await writeDb(nextDb);
+      sendJson(res, 200, {
+        ok: true,
+        run: sweep.run,
+        tasksCreated: sweep.tasks.length,
+        eventsCreated: sweep.events.length,
+      });
+      return;
+    }
+
+    if (req.method === "POST" && route === "/api/ai-agent-tasks") {
+      const auth = requireAuth(req, res, db);
+      if (!auth) return;
+      if (authMode === "server" && !["owner", "admin", "deputy"].includes(auth.user.role)) {
+        sendJson(res, 403, { ok: false, error: "Forbidden" });
+        return;
+      }
+      try {
+        const body = await readJsonBody(req);
+        const created = createAgentTask({
+          input: body,
+          actor: auth.user,
+          registry: buildAgentRegistry(),
+          id: `AIT-${Date.now()}-${randomBytes(3).toString("hex").toUpperCase()}`,
+        });
+        const nextDb = {
+          ...db,
+          aiAgentTasks: [created.task, ...(db.aiAgentTasks || [])],
+          aiAgentEvents: [created.event, ...(db.aiAgentEvents || [])].slice(0, 2_000),
+        };
+        await writeDb(nextDb);
+        sendJson(res, 201, { ok: true, task: created.task });
+      } catch (error) {
+        sendJson(res, 400, { ok: false, error: error instanceof Error ? error.message : "Invalid task" });
+      }
       return;
     }
 

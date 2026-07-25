@@ -77,7 +77,10 @@ Do not put real values into GitHub.
 | head_of_sales | sales leads |
 | sales_manager | sales leads |
 | finance/accountant | finance fields later; no broad project mutation baseline yet |
+| ai_agent | read-only access to projects, public user records, executors, sales and finance; no collection writes |
 | executor/partner | no broad collection write baseline |
+
+The `ai_agent` account is intended for Hermes and other approved server-to-server integrations. Its login and password belong only in the deployment secret store. The role can read operational data after normal bearer authentication, but `canWriteCollection` never grants it write access and integration secrets remain masked. Do not use this service account in the browser because the current frontend keeps its bearer session in `localStorage`.
 
 This is still MVP-level protection. The next required step is row-level filtering on the server, so each role receives only its own projects, tasks, partners and finance scope from the API.
 

@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { agentRegistry as localAgentRegistry } from "../shared/agent-registry.mjs";
+import { buildAgentCommandCenter } from "../shared/agent-command-center.mjs";
 import "./styles.css";
 
 const roles = [
@@ -6577,158 +6578,434 @@ const agentReadinessLabels = {
 
 const agentReadinessOrder = ["RUNNING_LOCAL", "MVP_READY", "CODE_READY", "DESIGNED"];
 
-function AgentsModule() {
+const agentRuntimeLabels = {
+  working: "Работает",
+  queued: "Задача в очереди",
+  waiting_approval: "Ждёт подтверждение",
+  blocked: "Нужна помощь",
+  ready: "Готов к задаче",
+  planned: "Ещё не запущен",
+};
+
+const agentTaskStatusLabels = {
+  queued: "В очереди",
+  running: "В работе",
+  waiting_approval: "Ждёт подтверждение",
+  blocked: "Заблокировано",
+  completed: "Завершено",
+  failed: "Ошибка",
+  cancelled: "Отменено",
+};
+
+function initialCommandCenter(registry = localAgentRegistry) {
+  return buildAgentCommandCenter({
+    registry,
+    tasks: [],
+    events: [],
+    channels: [],
+    knowledge: registry.training,
+  });
+}
+
+function AgentAvatar({ agent, compact = false }) {
+  return (
+    <span className={cn("agent-person", `state-${agent.runtimeState}`, compact && "compact")} aria-hidden="true">
+      <i className="agent-person-head">{agent.id.replace("A", "")}</i>
+      <i className="agent-person-body" />
+      <i className="agent-person-status" />
+    </span>
+  );
+}
+
+function AgentsModule({ role }) {
   const [registry, setRegistry] = useState(localAgentRegistry);
+  const [center, setCenter] = useState(() => initialCommandCenter());
+  const [view, setView] = useState("office");
   const [phase, setPhase] = useState("all");
   const [readiness, setReadiness] = useState("all");
   const [search, setSearch] = useState("");
   const [selectedId, setSelectedId] = useState("A0");
+  const [taskForm, setTaskForm] = useState({
+    agentId: "A0",
+    title: "",
+    details: "",
+    priority: "normal",
+  });
+  const [taskNotice, setTaskNotice] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [sweeping, setSweeping] = useState(false);
 
   useEffect(() => {
     let alive = true;
-    apiGet("/ai-agents", localAgentRegistry).then((payload) => {
-      if (alive && payload?.agents?.length) setRegistry(payload);
+    Promise.all([
+      apiGet("/ai-agents", localAgentRegistry),
+      apiGet("/ai-command-center", initialCommandCenter()),
+    ]).then(([registryPayload, centerPayload]) => {
+      if (!alive) return;
+      if (registryPayload?.agents?.length) setRegistry(registryPayload);
+      if (centerPayload?.agents?.length) setCenter(centerPayload);
     });
     return () => {
       alive = false;
     };
   }, []);
 
+  async function refreshCenter() {
+    const payload = await apiGet("/ai-command-center", center);
+    if (payload?.agents?.length) setCenter(payload);
+    return payload;
+  }
+
+  async function submitAgentTask(event) {
+    event.preventDefault();
+    if (!taskForm.title.trim()) {
+      setTaskNotice("Напишите, что должен сделать агент.");
+      return;
+    }
+    setSubmitting(true);
+    setTaskNotice("");
+    const result = await apiPost("/ai-agent-tasks", taskForm, null);
+    if (!result?.task) {
+      setTaskNotice("Не удалось поставить задачу. Проверьте доступ к API.");
+      setSubmitting(false);
+      return;
+    }
+    setSelectedId(result.task.agentId);
+    setTaskForm((current) => ({ ...current, title: "", details: "" }));
+    setTaskNotice(`Задача ${result.task.id} поставлена в очередь профиля ${result.task.profile}.`);
+    await refreshCenter();
+    setSubmitting(false);
+  }
+
+  async function runControlSweep() {
+    setSweeping(true);
+    setTaskNotice("");
+    const result = await apiPost("/ai-agent-runs/control-sweep", {}, null);
+    if (!result?.run) {
+      setTaskNotice("Не удалось запустить обход проектов. Проверьте доступ к API.");
+      setSweeping(false);
+      return;
+    }
+    setTaskNotice(`Обход завершён: ${result.run.summary}`);
+    await refreshCenter();
+    setSweeping(false);
+  }
+
   const filteredAgents = useMemo(() => {
     const query = search.trim().toLowerCase();
-    return registry.agents.filter((agent) => {
+    return center.agents.filter((agent) => {
       if (phase !== "all" && agent.phase !== Number(phase)) return false;
       if (readiness !== "all" && agent.readiness !== readiness) return false;
       if (!query) return true;
-      return [agent.id, agent.name, agent.block, agent.purpose, agent.currentState, agent.nextStep]
+      return [agent.id, agent.name, agent.block, agent.purpose, agent.currentState, agent.nextStep, agent.currentTask?.title]
         .join(" ")
         .toLowerCase()
         .includes(query);
     });
-  }, [phase, readiness, registry, search]);
+  }, [center.agents, phase, readiness, search]);
 
   const selectedAgent = filteredAgents.find((agent) => agent.id === selectedId) || filteredAgents[0] || null;
-  const trainingPercent = Math.round((registry.training.indexedDocuments / registry.training.inventoriedFiles) * 100);
+  const canCommand = ["owner", "admin", "deputy"].includes(role);
+  const latestRun = Array.isArray(center.runs) ? center.runs[0] : null;
+  const recentIssues = Array.isArray(center.events) ? center.events.filter((event) => event.kind === "agent_sweep_issue").slice(0, 8) : [];
 
   return (
     <>
       <SectionIntro section="agents" />
 
-      <section className="agent-summary-grid" aria-label="Сводка по AI-агентам">
-        <div><span>Всего в системе</span><b>{registry.summary.total}</b><small>агентов A0-A24</small></div>
-        <div className="running"><span>Работают локально</span><b>{registry.summary.runningLocal}</b><small>Hermes и база знаний</small></div>
-        <div className="mvp"><span>MVP-контур</span><b>{registry.summary.mvpReady}</b><small>логика, экраны или mock</small></div>
-        <div className="code"><span>Код готов</span><b>{registry.summary.codeReady}</b><small>нужен безопасный запуск</small></div>
-        <div><span>Спроектированы</span><b>{registry.summary.designed}</b><small>еще не работают</small></div>
-        <div className="priority"><span>Высокий приоритет</span><b>{registry.summary.highPriority}</b><small>влияют на первый контур</small></div>
-      </section>
-
-      <section className="office-card agent-training-card">
-        <div className="agent-training-head">
-          <div>
-            <span className="agent-eyebrow">Обучение Hermes</span>
-            <h3>Корпоративная база знаний собрана, но это еще не полная автоматизация</h3>
-            <p>Hermes ищет ответы в проиндексированных материалах. Пароли и секреты в обучение не загружаются.</p>
-          </div>
-          <strong>{trainingPercent}% текстового корпуса</strong>
+      <section className="agent-command-bar" aria-label="Управление Центром агентов">
+        <div>
+          <span className="agent-eyebrow">Командный пункт SmetaOffice</span>
+          <strong>{center.metrics.working} работают · {center.metrics.queued} в очереди · {center.metrics.waitingApproval} ждут решения</strong>
         </div>
-        <div className="agent-training-progress"><i style={{ width: `${trainingPercent}%` }} /></div>
-        <dl className="agent-training-stats">
-          <div><dt>Учтено файлов</dt><dd>{registry.training.inventoriedFiles}</dd></div>
-          <div><dt>Проиндексировано</dt><dd>{registry.training.indexedDocuments}</dd></div>
-          <div><dt>Учебные материалы</dt><dd>{registry.training.phoneLinkLessons}</dd></div>
-          <div><dt>Бинарные / специальные</dt><dd>{registry.training.unsupportedFiles}</dd></div>
-          <div><dt>Требуют внимания</dt><dd>{registry.training.errors + registry.training.noText}</dd></div>
-        </dl>
-        <p className="agent-training-note">{registry.training.note}</p>
-      </section>
-
-      <section className="office-card agent-phase-card">
-        <div className="agent-card-heading">
-          <div>
-            <h3>Порядок внедрения</h3>
-            <p>Идем слева направо: следующий этап не получает автономные действия, пока не проверен предыдущий.</p>
-          </div>
-          <button type="button" className={phase === "all" ? "active" : ""} onClick={() => setPhase("all")}>Все этапы</button>
-        </div>
-        <div className="agent-phase-flow">
-          {registry.phases.map((item) => (
-            <button type="button" key={item.id} className={phase === String(item.id) ? "active" : ""} onClick={() => setPhase(String(item.id))}>
-              <b>{item.id}</b>
-              <span>{item.label}</span>
-              <small>{item.objective}</small>
-            </button>
-          ))}
+        <div className="agent-view-switch" role="tablist" aria-label="Представление Центра агентов">
+          <button type="button" className={view === "office" ? "active" : ""} onClick={() => setView("office")}>Рабочий офис</button>
+          <button type="button" className={view === "tasks" ? "active" : ""} onClick={() => setView("tasks")}>Задачи</button>
+          <button type="button" className={view === "registry" ? "active" : ""} onClick={() => setView("registry")}>Реестр</button>
         </div>
       </section>
 
-      <section className="agent-registry-layout">
-        <div className="office-card agent-registry-card">
-          <div className="agent-card-heading">
-            <div>
-              <h3>Все AI-агенты</h3>
-              <p>Показано {filteredAgents.length} из {registry.summary.total}. Статус отражает фактическую готовность, а не обещание.</p>
-            </div>
-          </div>
+      <section className="agent-live-stats" aria-label="Живое состояние AI-команды">
+        <div><span>AI-команда</span><b>{center.metrics.totalAgents}</b><small>бизнес-ролей</small></div>
+        <div className="working"><span>Сейчас работают</span><b>{center.metrics.working}</b><small>выполняют задачу</small></div>
+        <div className="queue"><span>Очередь</span><b>{center.metrics.activeTasks}</b><small>активных поручений</small></div>
+        <div className="approval"><span>Нужно решение</span><b>{center.metrics.waitingApproval}</b><small>подтверждения владельца</small></div>
+        <div className="knowledge"><span>База знаний</span><b>{center.knowledge.progressPercent}%</b><small>{center.knowledge.indexedDocuments} документов</small></div>
+      </section>
 
-          <div className="agent-registry-filters">
-            <label>
-              <span>Поиск</span>
-              <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Название, блок или задача" />
-            </label>
-            <label>
-              <span>Готовность</span>
-              <select value={readiness} onChange={(event) => setReadiness(event.target.value)}>
-                <option value="all">Все статусы</option>
-                {agentReadinessOrder.map((item) => <option key={item} value={item}>{agentReadinessLabels[item]}</option>)}
-              </select>
-            </label>
-          </div>
-
-          <div className="agent-table" role="table" aria-label="Реестр AI-агентов SmetaOffice">
-            <div className="agent-table-row agent-table-head" role="row">
-              <span>Агент</span><span>Блок</span><span>Этап</span><span>Статус</span><span>Режим</span>
-            </div>
-            {filteredAgents.map((agent) => (
-              <button
-                type="button"
-                role="row"
-                key={agent.id}
-                className={cn("agent-table-row", selectedAgent?.id === agent.id && "selected")}
-                onClick={() => setSelectedId(agent.id)}
-              >
-                <span><b>{agent.id} · {agent.name}</b><small>{agent.purpose}</small></span>
-                <span data-label="Блок">{agent.block}</span>
-                <span data-label="Этап">{agent.phaseLabel}</span>
-                <span data-label="Статус"><i className={cn("agent-readiness", agent.readiness.toLowerCase())}>{agentReadinessLabels[agent.readiness]}</i></span>
-                <span data-label="Режим">{agent.mode}</span>
-              </button>
-            ))}
-            {filteredAgents.length === 0 ? <div className="empty">По выбранному фильтру агентов нет.</div> : null}
-          </div>
+      <section className="agent-sweep-panel" aria-label="Контроль проектов AI-агентами">
+        <div>
+          <span className="agent-eyebrow">Контроль проектов</span>
+          <h3>Что агенты реально проверили</h3>
+          <p>
+            Обход читает проекты SmetaOffice и создаёт внутренние сигналы: просрочки, отсутствие исполнителя,
+            отсутствие отчёта клиенту, непривязанную папку и финансовые зоны YELLOW/RED.
+          </p>
         </div>
+        <div className="agent-sweep-summary">
+          <div><span>Последний обход</span><b>{latestRun ? new Date(latestRun.createdAt).toLocaleString("ru-RU") : "не запускался"}</b></div>
+          <div><span>Проверено проектов</span><b>{latestRun?.counts?.projectsChecked ?? 0}</b></div>
+          <div><span>Найдено проблем</span><b>{latestRun?.counts?.issues ?? 0}</b></div>
+          <div><span>Критично</span><b>{latestRun?.counts?.critical ?? 0}</b></div>
+        </div>
+        <button type="button" disabled={!canCommand || sweeping} onClick={runControlSweep}>
+          {sweeping ? "Проверяю..." : "Запустить обход проектов"}
+        </button>
+        <small>Внешние сообщения в Telegram/WhatsApp пока выключены: агенты создают только внутренние черновики и события.</small>
+      </section>
 
-        <aside className="office-card agent-detail-card">
-          {selectedAgent ? (
-            <>
-              <div className="agent-detail-head">
-                <span>{selectedAgent.id}</span>
-                <i className={cn("agent-readiness", selectedAgent.readiness.toLowerCase())}>{agentReadinessLabels[selectedAgent.readiness]}</i>
+      {view === "office" ? (
+        <section className="agent-office-layout">
+          <div className="agent-office-map" aria-label="Рабочий офис AI-агентов">
+            <div className="agent-office-map-head">
+              <div>
+                <span className="agent-eyebrow">Живая схема</span>
+                <h3>Рабочие места AI-команды</h3>
+                <p>Состояние каждого сотрудника рассчитывается по его очереди и событиям.</p>
               </div>
-              <h3>{selectedAgent.name}</h3>
-              <p>{selectedAgent.purpose}</p>
-              <dl>
-                <div><dt>Сейчас</dt><dd>{selectedAgent.currentState}</dd></div>
-                <div><dt>Следующий шаг</dt><dd>{selectedAgent.nextStep}</dd></div>
-                <div><dt>Человек подтверждает</dt><dd>{selectedAgent.humanApproval}</dd></div>
-                <div><dt>KPI</dt><dd>{selectedAgent.kpi}</dd></div>
-                <div><dt>Системы</dt><dd>{selectedAgent.systems.join(" · ")}</dd></div>
-                <div><dt>Зависимости</dt><dd>{selectedAgent.dependsOn.length ? selectedAgent.dependsOn.join(", ") : "Нет"}</dd></div>
-              </dl>
-            </>
-          ) : <div className="empty">Выберите агента.</div>}
-        </aside>
-      </section>
+              <button type="button" onClick={refreshCenter}>Обновить</button>
+            </div>
+            <div className="agent-workplace-grid">
+              {center.workplaces.map((workplace) => {
+                const workplaceAgents = center.agents.filter((agent) => workplace.agents.includes(agent.id));
+                return (
+                  <article className={cn("agent-workplace", `zone-${workplace.id}`)} key={workplace.id}>
+                    <header>
+                      <span>{workplace.short}</span>
+                      <div><b>{workplace.name}</b><small>{workplaceAgents.length} сотрудников</small></div>
+                    </header>
+                    <div className="agent-desks">
+                      {workplaceAgents.map((agent) => (
+                        <button
+                          type="button"
+                          key={agent.id}
+                          className={cn("agent-desk", selectedAgent?.id === agent.id && "selected")}
+                          onClick={() => {
+                            setSelectedId(agent.id);
+                            setTaskForm((current) => ({ ...current, agentId: agent.id }));
+                          }}
+                          title={`${agent.name}: ${agentRuntimeLabels[agent.runtimeState]}`}
+                        >
+                          <AgentAvatar agent={agent} />
+                          <span><b>{agent.name}</b><small>{agentRuntimeLabels[agent.runtimeState]}</small></span>
+                          {agent.currentTask ? <em>{agent.currentTask.title}</em> : null}
+                        </button>
+                      ))}
+                    </div>
+                  </article>
+                );
+              })}
+            </div>
+          </div>
+
+          <aside className="agent-command-dock">
+            <div className="agent-selected-card">
+              {selectedAgent ? (
+                <>
+                  <div className="agent-selected-head">
+                    <AgentAvatar agent={selectedAgent} />
+                    <div>
+                      <span>{selectedAgent.id} · профиль {selectedAgent.profile}</span>
+                      <h3>{selectedAgent.name}</h3>
+                      <i className={cn("agent-runtime-pill", selectedAgent.runtimeState)}>
+                        {agentRuntimeLabels[selectedAgent.runtimeState]}
+                      </i>
+                    </div>
+                  </div>
+                  <p>{selectedAgent.purpose}</p>
+                  <dl>
+                    <div><dt>Рабочее место</dt><dd>{selectedAgent.workplace.name}</dd></div>
+                    <div><dt>Текущая задача</dt><dd>{selectedAgent.currentTask?.title || "Ожидает поручение"}</dd></div>
+                    <div><dt>Контроль человека</dt><dd>{selectedAgent.humanApproval}</dd></div>
+                  </dl>
+                </>
+              ) : null}
+            </div>
+
+            <div className="agent-events-card">
+              <div>
+                <span className="agent-eyebrow">Журнал контроля</span>
+                <h3>Последние сигналы</h3>
+              </div>
+              {recentIssues.map((event) => (
+                <button type="button" key={event.id} onClick={() => setSelectedId(event.agentId)}>
+                  <b>{event.title || event.message}</b>
+                  <small>{event.projectName || event.projectId || "SmetaOffice"} · {event.severity || "info"}</small>
+                </button>
+              ))}
+              {recentIssues.length === 0 ? <p>После первого обхода здесь появятся найденные проблемы по проектам.</p> : null}
+            </div>
+
+            <form className="agent-task-form" onSubmit={submitAgentTask}>
+              <div>
+                <span className="agent-eyebrow">Новое поручение</span>
+                <h3>Поставить задачу агенту</h3>
+              </div>
+              <label>
+                <span>Исполнитель</span>
+                <select
+                  value={taskForm.agentId}
+                  disabled={!canCommand || submitting}
+                  onChange={(event) => {
+                    setTaskForm((current) => ({ ...current, agentId: event.target.value }));
+                    setSelectedId(event.target.value);
+                  }}
+                >
+                  {center.agents.map((agent) => <option key={agent.id} value={agent.id}>{agent.id} · {agent.name}</option>)}
+                </select>
+              </label>
+              <label>
+                <span>Что сделать</span>
+                <input
+                  value={taskForm.title}
+                  disabled={!canCommand || submitting}
+                  maxLength={160}
+                  placeholder="Например: подготовить вопросы по новому лиду"
+                  onChange={(event) => setTaskForm((current) => ({ ...current, title: event.target.value }))}
+                />
+              </label>
+              <label>
+                <span>Контекст и ограничения</span>
+                <textarea
+                  value={taskForm.details}
+                  disabled={!canCommand || submitting}
+                  maxLength={4000}
+                  rows={4}
+                  placeholder="Какие данные использовать и какой результат нужен"
+                  onChange={(event) => setTaskForm((current) => ({ ...current, details: event.target.value }))}
+                />
+              </label>
+              <label>
+                <span>Приоритет</span>
+                <select
+                  value={taskForm.priority}
+                  disabled={!canCommand || submitting}
+                  onChange={(event) => setTaskForm((current) => ({ ...current, priority: event.target.value }))}
+                >
+                  <option value="low">Низкий</option>
+                  <option value="normal">Обычный</option>
+                  <option value="high">Высокий</option>
+                  <option value="critical">Критический</option>
+                </select>
+              </label>
+              <button type="submit" disabled={!canCommand || submitting}>{submitting ? "Ставлю в очередь..." : "Поставить задачу"}</button>
+              <small>Агент может готовить только внутренний черновик. Сообщения, деньги и изменения систем требуют отдельного подтверждения.</small>
+              {!canCommand ? <p className="agent-task-notice">В режиме {role} постановка задач недоступна.</p> : null}
+              {taskNotice ? <p className="agent-task-notice">{taskNotice}</p> : null}
+            </form>
+          </aside>
+        </section>
+      ) : null}
+
+      {view === "tasks" ? (
+        <section className="agent-task-workspace">
+          <div className="office-card agent-task-board">
+            <div className="agent-card-heading">
+              <div><h3>Очередь поручений</h3><p>Здесь отображаются только зафиксированные задачи, а не условная активность.</p></div>
+              <button type="button" onClick={refreshCenter}>Обновить</button>
+            </div>
+            <div className="agent-task-list">
+              {center.tasks.map((task) => {
+                const agent = center.agents.find((item) => item.id === task.agentId);
+                return (
+                  <button type="button" key={task.id} onClick={() => setSelectedId(task.agentId)}>
+                    <AgentAvatar agent={agent || { id: task.agentId, runtimeState: "queued" }} compact />
+                    <span><b>{task.title}</b><small>{task.id} · {agent?.name || task.agentId} · профиль {task.profile}</small></span>
+                    <i className={cn("agent-task-status", task.status)}>{agentTaskStatusLabels[task.status] || task.status}</i>
+                  </button>
+                );
+              })}
+              {center.tasks.length === 0 ? <div className="empty">Поручений пока нет. Первую задачу можно поставить в «Рабочем офисе».</div> : null}
+            </div>
+          </div>
+          <aside className="office-card agent-approval-panel">
+            <h3>Ожидают решения</h3>
+            <strong>{center.approvals.length}</strong>
+            <p>Внешние действия не выполняются, пока ответственный человек их не подтвердит.</p>
+            {center.approvals.map((task) => <div key={task.id}><b>{task.title}</b><small>{task.id}</small></div>)}
+          </aside>
+        </section>
+      ) : null}
+
+      {view === "registry" ? (
+        <>
+          <section className="office-card agent-training-card">
+            <div className="agent-training-head">
+              <div>
+                <span className="agent-eyebrow">Обучение Hermes</span>
+                <h3>Корпоративная база знаний</h3>
+                <p>Hermes ищет ответы в разрешённых материалах. Пароли, токены и секреты в индекс не загружаются.</p>
+              </div>
+              <strong>{center.knowledge.progressPercent}% текстового корпуса</strong>
+            </div>
+            <div className="agent-training-progress"><i style={{ width: `${center.knowledge.progressPercent}%` }} /></div>
+            <dl className="agent-training-stats">
+              <div><dt>Учтено файлов</dt><dd>{center.knowledge.inventoriedFiles}</dd></div>
+              <div><dt>Проиндексировано</dt><dd>{center.knowledge.indexedDocuments}</dd></div>
+              <div><dt>Предупреждения</dt><dd>{center.knowledge.warnings.length}</dd></div>
+            </dl>
+          </section>
+
+          <section className="office-card agent-phase-card">
+            <div className="agent-card-heading">
+              <div><h3>Порядок внедрения</h3><p>Автономность повышается только после проверки предыдущего контура.</p></div>
+              <button type="button" className={phase === "all" ? "active" : ""} onClick={() => setPhase("all")}>Все этапы</button>
+            </div>
+            <div className="agent-phase-flow">
+              {registry.phases.map((item) => (
+                <button type="button" key={item.id} className={phase === String(item.id) ? "active" : ""} onClick={() => setPhase(String(item.id))}>
+                  <b>{item.id}</b><span>{item.label}</span><small>{item.objective}</small>
+                </button>
+              ))}
+            </div>
+          </section>
+
+          <section className="agent-registry-layout">
+            <div className="office-card agent-registry-card">
+              <div className="agent-registry-filters">
+                <label><span>Поиск</span><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Название, блок или задача" /></label>
+                <label>
+                  <span>Готовность</span>
+                  <select value={readiness} onChange={(event) => setReadiness(event.target.value)}>
+                    <option value="all">Все статусы</option>
+                    {agentReadinessOrder.map((item) => <option key={item} value={item}>{agentReadinessLabels[item]}</option>)}
+                  </select>
+                </label>
+              </div>
+              <div className="agent-table" role="table" aria-label="Реестр AI-агентов SmetaOffice">
+                <div className="agent-table-row agent-table-head" role="row">
+                  <span>Агент</span><span>Профиль</span><span>Этап</span><span>Состояние</span><span>Режим</span>
+                </div>
+                {filteredAgents.map((agent) => (
+                  <button type="button" role="row" key={agent.id} className={cn("agent-table-row", selectedAgent?.id === agent.id && "selected")} onClick={() => setSelectedId(agent.id)}>
+                    <span><b>{agent.id} · {agent.name}</b><small>{agent.purpose}</small></span>
+                    <span data-label="Профиль">{agent.profile}</span>
+                    <span data-label="Этап">{agent.phaseLabel}</span>
+                    <span data-label="Состояние"><i className={cn("agent-runtime-pill", agent.runtimeState)}>{agentRuntimeLabels[agent.runtimeState]}</i></span>
+                    <span data-label="Режим">{agent.mode}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+            <aside className="office-card agent-detail-card">
+              {selectedAgent ? (
+                <>
+                  <div className="agent-detail-head"><span>{selectedAgent.id}</span><i>{selectedAgent.profile}</i></div>
+                  <h3>{selectedAgent.name}</h3>
+                  <p>{selectedAgent.purpose}</p>
+                  <dl>
+                    <div><dt>Фактическое состояние</dt><dd>{agentRuntimeLabels[selectedAgent.runtimeState]}</dd></div>
+                    <div><dt>Сейчас</dt><dd>{selectedAgent.currentTask?.title || selectedAgent.currentState}</dd></div>
+                    <div><dt>Следующий шаг</dt><dd>{selectedAgent.nextStep}</dd></div>
+                    <div><dt>Человек подтверждает</dt><dd>{selectedAgent.humanApproval}</dd></div>
+                    <div><dt>KPI</dt><dd>{selectedAgent.kpi}</dd></div>
+                  </dl>
+                </>
+              ) : <div className="empty">Выберите агента.</div>}
+            </aside>
+          </section>
+        </>
+      ) : null}
     </>
   );
 }
@@ -12353,7 +12630,7 @@ function SmetaOfficePrototype() {
 
           {role !== "executor" && activeSection === "integrations" ? <IntegrationsModule setSalesLeads={setSalesLeads} /> : null}
 
-          {role !== "executor" && activeSection === "agents" ? <AgentsModule /> : null}
+          {role !== "executor" && activeSection === "agents" ? <AgentsModule role={role} /> : null}
 
           {role !== "executor" && activeSection === "sales" ? (
             <SalesLeadsModule

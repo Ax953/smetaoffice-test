@@ -193,15 +193,15 @@ const definitions = [
 export const agentCatalog = definitions.map((agent) => ({ ...agent, phaseLabel: phaseLabel(agent.phase) }));
 
 export const trainingSnapshot = {
-  snapshotAt: "2026-07-13T00:06:23+03:00",
-  inventoriedFiles: 918,
-  indexedDocuments: 416,
+  snapshotAt: "2026-07-24T21:24:36+03:00",
+  inventoriedFiles: 2951,
+  indexedDocuments: 964,
   phoneLinkLessons: 65,
-  unsupportedFiles: 498,
-  errors: 2,
-  noText: 2,
+  unsupportedFiles: 882,
+  errors: 3,
+  noText: 1101,
   status: "READY_WITH_EXCEPTIONS",
-  note: "Учебные тексты, регламенты, дорожные карты и материалы Яндекс.Диска доступны Hermes. Четыре файла требуют отдельной обработки: два без текста и два поврежденных/тяжелых.",
+  note: "Корпоративная база на NAS проиндексирована по разрешенным папкам. Неподдерживаемые и нетекстовые файлы оставлены в index.jsonl для OCR и специальной обработки.",
 };
 
 export function buildAgentRegistry(now = new Date()) {
@@ -223,4 +223,4 @@ export function buildAgentRegistry(now = new Date()) {
   };
 }
 
-export const agentRegistry = buildAgentRegistry(new Date("2026-07-13T00:06:23+03:00"));
+export const agentRegistry = buildAgentRegistry(new Date("2026-07-24T21:24:36+03:00"));

@@ -19,7 +19,8 @@ test("agent registry contains the complete A0-A24 implementation map", () => {
     designed: 11,
     highPriority: 17,
   });
-  assert.equal(registry.training.inventoriedFiles, 918);
-  assert.equal(registry.training.indexedDocuments, 416);
+  assert.equal(registry.training.inventoriedFiles, 2951);
+  assert.equal(registry.training.indexedDocuments, 964);
   assert.equal(registry.training.phoneLinkLessons, 65);
+  assert.equal(registry.training.noText, 1101);
 });

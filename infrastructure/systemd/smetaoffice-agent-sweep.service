@@ -1,0 +1,17 @@
+[Unit]
+Description=SmetaOffice AI project control sweep
+After=network-online.target smetaoffice.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/smetaoffice
+EnvironmentFile=/etc/smetaoffice-agent-sweep.env
+ExecStart=/usr/bin/node /opt/smetaoffice/scripts/run-agent-control-sweep.mjs
+User=root
+Group=root
+
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+NoNewPrivileges=true
